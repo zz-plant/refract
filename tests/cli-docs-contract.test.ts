@@ -35,7 +35,7 @@ const commands = program.commands as readonly Command[];
 const longFlags = (command: Command) => command.options.flatMap((option) => (option.long ? [option.long] : []));
 
 describe("the CLI reference covers the CLI", () => {
-  const reference = read("apps/docs/docs/cli.md");
+  const reference = read("apps/docs/src/content/docs/cli.md");
   const documented = sections(reference, /^## `refract ([a-z]+)`$/, /^## /);
   const shared = sections(reference, /^## (Global options|Analyzer options)$/, /^## /);
   const sharedText = [...shared.values()].join("\n");
@@ -85,7 +85,7 @@ describe("the MCP documentation covers the MCP server", () => {
   const toolNames = TOOLS.map((tool) => tool.name).sort();
   const parameters = (tool: (typeof TOOLS)[number]) => Object.keys(tool.inputSchema.properties);
 
-  describe.each(["docs/mcp.md", "apps/docs/docs/mcp.md"])("%s", (path) => {
+  describe.each(["docs/mcp.md", "apps/docs/src/content/docs/mcp.md"])("%s", (path) => {
     const documented = sections(read(path), /^### `([a-z_]+)`$/, /^#{1,3} /);
 
     it("has a section for each tool and none for a tool that does not exist", () => {

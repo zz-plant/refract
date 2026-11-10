@@ -1,5 +1,5 @@
 {
-	"*.{js,ts,tsx,jsx,mjs,cjs}": [
+	"*.{js,ts,tsx,jsx,mjs,cjs,astro}": [
 		"npx biome check --write --no-errors-on-unmatched"
 	],
 	"*.{json,yaml,yml}": ["npx biome check --write --no-errors-on-unmatched"]

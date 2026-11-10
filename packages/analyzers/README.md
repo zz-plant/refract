@@ -70,4 +70,4 @@ const ids = events.map((e) => createEventIdentity(e));
 
 For everything `refract analyze` prints, add `buildPageMoveEvents(windowPageMoves(...))` before and `correlateTalkRevisions(revisions, talkRevisions)` after `buildRevisionEvents`, then annotate all of them together.
 
-[Refract](https://github.com/refract-org/refract) · [Docs](https://refract-org.github.io/refract/) · [npm](https://www.npmjs.com/package/@refract-org/analyzers)
+[Refract](https://github.com/refract-org/refract) · [Docs](https://zz-plant.github.io/refract/) · [npm](https://www.npmjs.com/package/@refract-org/analyzers)

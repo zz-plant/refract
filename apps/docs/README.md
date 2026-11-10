@@ -4,7 +4,7 @@ Public documentation for [Refract](https://github.com/refract-org/refract), a te
 
 ---
 
-**Live at:** [refract-org.github.io/refract](https://refract-org.github.io/refract/)
+**Live at:** [zz-plant.github.io/refract](https://zz-plant.github.io/refract/)
 
 ## Quick start
 
@@ -12,11 +12,22 @@ Public documentation for [Refract](https://github.com/refract-org/refract), a te
 npx @refract-org/cli@0.6.0 analyze "Bitcoin" --from 369361755 --to 369393212 --depth detailed --json
 ```
 
-See [quickstart](https://refract-org.github.io/refract/quickstart/) for a full walkthrough.
+See [quickstart](https://zz-plant.github.io/refract/quickstart/) for a full walkthrough.
 
-The [review](https://refract-org.github.io/refract/review/) and
+The [review](https://zz-plant.github.io/refract/review/) and
 history-range pages read `docs/review.md` and `docs/usage.md` at the repository
 root directly. Edit those canonical sources to change the published guides.
+
+## Working on the site
+
+The site is built with [Starlight](https://starlight.astro.build/). From this directory:
+
+```bash
+bun run dev     # http://localhost:4321/refract/ with live reload
+bun run test    # builds the site, then checks links, titles and descriptions
+```
+
+[Contributing to the docs](./src/content/docs/contributing-docs.md) covers page conventions.
 
 ## Packages
 
@@ -29,7 +40,7 @@ root directly. Edit those canonical sources to change the published guides.
 | `@refract-org/mcp` | [![npm](https://img.shields.io/npm/v/@refract-org/mcp)](https://www.npmjs.com/package/@refract-org/mcp) | AGPL-3.0 | MCP tool definitions and server; the executable is `refract mcp` in `@refract-org/cli` |
 | `@refract-org/eval` | [![npm](https://img.shields.io/npm/v/@refract-org/eval)](https://www.npmjs.com/package/@refract-org/eval) | AGPL-3.0 | Evaluation harness |
 | `@refract-org/persistence` | Not published | AGPL-3.0 | SQLite storage |
-| Observable recipe | — | — | [Copy-paste pattern](./docs/sdk.md#observable-framework-data-loader) for Observable Framework data loaders |
+| Observable recipe | — | — | [Copy-paste pattern](./src/content/docs/sdk.md#observable-framework-data-loader) for Observable Framework data loaders |
 
 ## Project status
 

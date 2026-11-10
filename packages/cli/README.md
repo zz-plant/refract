@@ -13,7 +13,7 @@ npm install -g @refract-org/cli
 refract init
 ```
 
-[Documentation](https://refract-org.github.io/refract/) · [CLI reference](https://refract-org.github.io/refract/cli/)
+[Documentation](https://zz-plant.github.io/refract/) · [CLI reference](https://zz-plant.github.io/refract/cli/)
 
 ## Commands
 

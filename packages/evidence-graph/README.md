@@ -37,4 +37,4 @@ import type { EvidenceEvent, Revision } from "@refract-org/evidence-graph";
 import { createClaimIdentity, createVerificationBundle } from "@refract-org/evidence-graph";
 ```
 
-[Refract](https://github.com/refract-org/refract) · [Docs](https://refract-org.github.io/refract/) · [npm](https://www.npmjs.com/package/@refract-org/evidence-graph)
+[Refract](https://github.com/refract-org/refract) · [Docs](https://zz-plant.github.io/refract/) · [npm](https://www.npmjs.com/package/@refract-org/evidence-graph)

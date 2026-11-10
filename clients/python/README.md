@@ -64,11 +64,11 @@ for doc in loader.load():
 
 The loader reads the page's available history, so try a short page first. Events with high revert counts, citation churn, or edit clusters score lower, and `min_stability` drops those below the value you pass.
 
-`refract_eval` maps exported events to model-evaluation records, with `build_leakage_benchmark("events.jsonl", cutoff="2024-06-01")` and `check_provenance("events.jsonl", "example.org")`. See the [Python SDK guide](https://refract-org.github.io/refract/python-sdk/) for more.
+`refract_eval` maps exported events to model-evaluation records, with `build_leakage_benchmark("events.jsonl", cutoff="2024-06-01")` and `check_provenance("events.jsonl", "example.org")`. See the [Python SDK guide](https://zz-plant.github.io/refract/python-sdk/) for more.
 
 ## Review workflow
 
-The core `review` command has a separate saved-report format and acknowledgment loop. This adapter currently wraps `analyze` and `export`; it does not provide a review method. Use the CLI and the [review guide](https://refract-org.github.io/refract/review/) for that workflow.
+The core `review` command has a separate saved-report format and acknowledgment loop. This adapter currently wraps `analyze` and `export`; it does not provide a review method. Use the CLI and the [review guide](https://zz-plant.github.io/refract/review/) for that workflow.
 
 `RefractError` is raised for nonzero CLI exits. An analysis event list alone does not describe complete source coverage. For coverage-sensitive review, retain and inspect the core review report instead.
 

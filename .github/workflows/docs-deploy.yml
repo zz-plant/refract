@@ -1,15 +1,17 @@
 name: Deploy docs site
 
 # Publishes apps/docs to this repository's GitHub Pages site,
-# https://refract-org.github.io/refract/. The site used to deploy from the
-# refract-docs repository at /refract-docs/; that address now serves a
-# redirect-only site pointing each old page at its new one.
+# https://zz-plant.github.io/refract/. SITE_URL in apps/docs/site.mjs must
+# match it: canonical links, the sitemap and Open Graph URLs are built from it.
+# The site's earlier addresses under refract-org.github.io no longer serve.
 on:
   push:
     branches: [main]
     paths:
       - apps/docs/**
       - docs/**
+      # The site's logo is the brand mark itself.
+      - assets/brand/**
       - package.json
       - bun.lock
       - .github/workflows/docs-deploy.yml

@@ -14,15 +14,15 @@ adapter provide optional ways to consume its output.
 | `refract` `clients/python/` | Python subprocess adapter and notebook integrations | CLI flags and NDJSON output | `python.yml`: wheel build and install, `pytest` against the CLI built from the same commit, Python 3.10 and 3.12 |
 
 The docs site deploys from this repository (`docs-deploy.yml`) to
-<https://refract-org.github.io/refract/>. The [refract-docs](https://github.com/refract-org/refract-docs),
-[refract-ui](https://github.com/refract-org/refract-ui) and
-[refract-py](https://github.com/refract-org/refract-py) sources were imported
-into `apps/docs/`, `apps/ui/` and `clients/python/` with their history.
-refract-docs now publishes only a redirect site, which sends each
-`/refract-docs/` page to the same page under `/refract/`.
+<https://zz-plant.github.io/refract/>. The repository moved from the refract-org
+organization to zz-plant; GitHub redirects its old repository URLs, but the old
+Pages addresses under `refract-org.github.io` no longer serve anything. The
+refract-docs, refract-ui and refract-py sources were imported into `apps/docs/`,
+`apps/ui/` and `clients/python/` with their history; as of 2026-11-10 those three
+repositories are no longer on GitHub.
 
-This inventory was checked on 2026-10-26. All three former supporting repos are
-archived; active development is in this repository. The organization has no current
+This inventory was checked on 2026-11-10. Active development is in this
+repository. The organization has no current
 `refract-labs` or `refract-demo-data` repository. Datasets live in `demo-data/`;
 runnable onboarding and review examples live in `docs/examples/`.
 
@@ -147,7 +147,7 @@ remain consumer contracts throughout the migration.
 
 ## Position in the revisable-delegation loop
 
-Refract holds the **detect mismatch** step in the [STD-07 Revisable Delegation Record](https://ethotechnics.org/standards/std-07-revisable-delegation-record) loop, emitting structured `EvidenceEvent` records over source revisions. It identifies what changed without deciding whether a change matters: downstream consumers supply the predicate and the context. [`refract delegation`](https://refract-org.github.io/refract/cli/#refract-delegation) writes STD-07 discrepancy records for another system to read; you state the subject, the assumption at stake, and which events count.
+Refract holds the **detect mismatch** step in the [STD-07 Revisable Delegation Record](https://ethotechnics.org/standards/std-07-revisable-delegation-record) loop, emitting structured `EvidenceEvent` records over source revisions. It identifies what changed without deciding whether a change matters: downstream consumers supply the predicate and the context. [`refract delegation`](https://zz-plant.github.io/refract/cli/#refract-delegation) writes STD-07 discrepancy records for another system to read; you state the subject, the assumption at stake, and which events count.
 
 - **Wired to**: [NextConsensus](https://nextconsensus.com) and [Ambit](https://github.com/zz-plant/ambit) via [`refract-and-nextconsensus.md`](./refract-and-nextconsensus.md) and [`repository-boundary.md`](./repository-boundary.md).
 - **Siblings**: [Ambit](https://github.com/zz-plant/ambit) (capability and authorization), [Whether](https://github.com/zz-plant/whether) (act), [Ethotechnics](https://ethotechnics.org) (the record shape and vocabulary).

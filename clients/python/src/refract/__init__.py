@@ -213,7 +213,7 @@ class Refract:
                 "The Refract CLI is required but not found.\n"
                 "Install it: npm install -g @refract-org/cli\n"
                 "Or ensure Node.js is installed: https://nodejs.org\n"
-                "Docs: https://refract-org.github.io/refract/install/"
+                "Docs: https://zz-plant.github.io/refract/install/"
             )
         if result.returncode != 0:
             raise RefractError(

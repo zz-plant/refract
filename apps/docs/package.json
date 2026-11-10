@@ -10,20 +10,25 @@
 		"url": "git+https://github.com/refract-org/refract.git",
 		"directory": "apps/docs"
 	},
-	"homepage": "https://refract-org.github.io/refract/",
+	"homepage": "https://zz-plant.github.io/refract/",
 	"bugs": {
 		"url": "https://github.com/refract-org/refract/issues"
 	},
 	"scripts": {
-		"build": "node build.mjs",
+		"dev": "astro dev",
+		"build": "astro build",
+		"preview": "astro preview",
 		"test": "vitest run",
 		"lint": "biome check .",
 		"format": "biome format --write ."
 	},
 	"devDependencies": {
+		"@astrojs/markdown-satteri": "0.4.8",
+		"@astrojs/starlight": "0.42.10",
 		"@biomejs/biome": "^2.5.15",
 		"@expo-google-fonts/roboto": "^0.4.3",
 		"@resvg/resvg-js": "^2.6.2",
+		"astro": "7.4.10",
 		"marked": "^15.0.12",
 		"vitest": "^4.1.11"
 	}

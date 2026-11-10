@@ -1,8 +1,6 @@
-import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { promisify } from "node:util";
+import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
 	CARD_HEIGHT,
@@ -12,17 +10,15 @@ import {
 	socialCardSvg,
 	wrapText,
 } from "../social-card.mjs";
+import { DIST_DIR, pageSlugs, renderedPathForSlug } from "./site";
 
-const ROOT_DIR = resolve(__dirname, "..");
-const DIST_DIR = join(ROOT_DIR, "dist");
-const SITE_URL = "https://refract-org.github.io/refract/";
+const SITE_URL = "https://zz-plant.github.io/refract/";
 const SITE_DESCRIPTION =
 	"A git log for Wikipedia: see how a page's sentences, citations, and structure changed, revision by revision, as data you can check.";
 // Pages that use the site description: the home page by design, and pages with
 // no prose paragraph to describe them (the build logs these).
 const SITE_DESCRIPTION_PAGES = ["glossary", "index"];
 const SOCIAL_CARD_URL = `${SITE_URL}social-card.png`;
-const execFileAsync = promisify(execFile);
 
 type Page = { slug: string; title: string; html: string };
 type JsonLdNode = Record<string, unknown> & { "@type": string };
@@ -50,7 +46,10 @@ function decodeEntities(text: string): string {
 }
 
 function metaContents(html: string, attr: string, key: string): string[] {
-	const pattern = new RegExp(`<meta ${attr}="${key}" content="([^"]*)">`, "g");
+	const pattern = new RegExp(
+		`<meta ${attr}="${key}" content="([^"]*)"\\s*/?>`,
+		"g",
+	);
 	return Array.from(html.matchAll(pattern), (match) =>
 		decodeEntities(match[1]),
 	);
@@ -79,7 +78,7 @@ function stringsIn(value: unknown): string[] {
 
 function canonicals(html: string): string[] {
 	return Array.from(
-		html.matchAll(/<link rel="canonical" href="([^"]*)">/g),
+		html.matchAll(/<link rel="canonical" href="([^"]*)"\s*\/?>/g),
 		(match) => decodeEntities(match[1]),
 	);
 }
@@ -104,17 +103,12 @@ describe("technical SEO", () => {
 	const pages: Page[] = [];
 
 	beforeAll(async () => {
-		await execFileAsync(process.execPath, ["build.mjs"], { cwd: ROOT_DIR });
-		// The search index lists every rendered page; claims-e2e checks that.
-		const searchIndex = JSON.parse(
-			await readFile(join(DIST_DIR, "search-index.json"), "utf-8"),
-		) as Array<{ slug: string; title: string }>;
-		for (const { slug, title } of searchIndex) {
-			const file =
-				slug === "index"
-					? join(DIST_DIR, "index.html")
-					: join(DIST_DIR, slug, "index.html");
-			pages.push({ slug, title, html: await readFile(file, "utf-8") });
+		// A page's title is the visible text of its H1, which Starlight prints
+		// from the frontmatter title (or from a core guide's own H1).
+		for (const slug of await pageSlugs()) {
+			const html = await readFile(renderedPathForSlug(slug), "utf-8");
+			const h1 = html.match(/<h1 [^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "";
+			pages.push({ slug, title: textOf(h1), html });
 		}
 		expect(pages.length).toBeGreaterThan(1);
 	});
@@ -127,8 +121,7 @@ describe("technical SEO", () => {
 
 	it("titles each page with the visible text of its H1", () => {
 		for (const { slug, title, html } of pages) {
-			const h1 = html.match(/<h1 [^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "";
-			expect(title, slug).toBe(textOf(h1));
+			expect(title, slug).not.toBe("");
 			const documentTitle = title.startsWith("Refract")
 				? title
 				: `${title} — Refract`;
@@ -165,7 +158,7 @@ describe("technical SEO", () => {
 		for (const { slug, html } of pages) {
 			if (SITE_DESCRIPTION_PAGES.includes(slug)) continue;
 			const description = descriptionOf(html);
-			const main = html.match(/<main class="content">([\s\S]*?)<\/main>/);
+			const main = html.match(/<main[^>]*>([\s\S]*?)<\/main>/);
 			const body = textOf(main?.[1] ?? "");
 			const cut = description.endsWith("…");
 			const prefix = cut ? description.slice(0, -1) : description;
@@ -278,9 +271,7 @@ describe("technical SEO", () => {
 		expect(website.description).toBe(
 			metaContents(home?.html ?? "", "name", "description")[0],
 		);
-		expect(source.codeRepository).toBe(
-			"https://github.com/refract-org/refract",
-		);
+		expect(source.codeRepository).toBe("https://github.com/zz-plant/refract");
 		expect(website.about).toEqual({ "@id": source["@id"] });
 	});
 
@@ -305,8 +296,19 @@ describe("technical SEO", () => {
 		}
 	});
 
-	it("lists every page once in sitemap.xml, with no guessed lastmod", async () => {
-		const sitemap = await readFile(join(DIST_DIR, "sitemap.xml"), "utf-8");
+	it("keeps sitemap.xml as an index of the generated sitemap", async () => {
+		for (const file of ["sitemap.xml", "sitemap-index.xml"]) {
+			const index = await readFile(join(DIST_DIR, file), "utf-8");
+			expect(index, file).toContain("<sitemapindex");
+			const locs = Array.from(index.matchAll(/<loc>([^<]*)<\/loc>/g), (m) =>
+				decodeEntities(m[1]),
+			);
+			expect(locs, file).toEqual([`${SITE_URL}sitemap-0.xml`]);
+		}
+	});
+
+	it("lists every page once in the sitemap, with no guessed lastmod", async () => {
+		const sitemap = await readFile(join(DIST_DIR, "sitemap-0.xml"), "utf-8");
 		const locs = Array.from(sitemap.matchAll(/<loc>([^<]*)<\/loc>/g), (m) =>
 			decodeEntities(m[1]),
 		);
@@ -315,7 +317,7 @@ describe("technical SEO", () => {
 			true,
 		);
 		expect(sitemap).toContain(
-			'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+			'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
 		);
 		expect(sitemap).not.toContain("<lastmod>");
 		expect(new Set(locs).size).toBe(locs.length);
@@ -366,7 +368,7 @@ describe("social card", () => {
 		const png = renderSocialCard({
 			name: "Refract",
 			description,
-			address: "refract-org.github.io/refract",
+			address: "zz-plant.github.io/refract",
 		});
 		expect(pngSize(Buffer.from(png))).toEqual({ width: 1200, height: 630 });
 	});
