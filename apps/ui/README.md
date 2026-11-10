@@ -56,4 +56,4 @@ reports have different structures. Use the CLI to review and acknowledge a repor
 
 ---
 
-[Refract Engine](https://github.com/refract-org/refract) · [Docs](https://refract-org.github.io/refract/) · [npm](https://www.npmjs.com/org/refract-org)
+[Refract Engine](https://github.com/refract-org/refract) · [Docs](https://zz-plant.github.io/refract/) · [npm](https://www.npmjs.com/org/refract-org)

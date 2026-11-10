@@ -45,5 +45,5 @@
   This starts a local server; Ctrl+C stops it.
 
   Walkthrough and recipes: https://github.com/refract-org/refract/blob/main/docs/recipes.md
-  Full docs: https://refract-org.github.io/refract/
+  Full docs: https://zz-plant.github.io/refract/
 

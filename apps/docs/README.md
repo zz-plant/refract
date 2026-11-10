@@ -4,7 +4,7 @@ Public documentation for [Refract](https://github.com/refract-org/refract), a te
 
 ---
 
-**Live at:** [refract-org.github.io/refract](https://refract-org.github.io/refract/)
+**Live at:** [zz-plant.github.io/refract](https://zz-plant.github.io/refract/)
 
 ## Quick start
 
@@ -12,9 +12,9 @@ Public documentation for [Refract](https://github.com/refract-org/refract), a te
 npx @refract-org/cli@0.6.0 analyze "Bitcoin" --from 369361755 --to 369393212 --depth detailed --json
 ```
 
-See [quickstart](https://refract-org.github.io/refract/quickstart/) for a full walkthrough.
+See [quickstart](https://zz-plant.github.io/refract/quickstart/) for a full walkthrough.
 
-The [review](https://refract-org.github.io/refract/review/) and
+The [review](https://zz-plant.github.io/refract/review/) and
 history-range pages read `docs/review.md` and `docs/usage.md` at the repository
 root directly. Edit those canonical sources to change the published guides.
 

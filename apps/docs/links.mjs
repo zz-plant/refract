@@ -66,7 +66,7 @@ export function rewriteCanonicalLink(href, sourcePath) {
 function rewriteCanonicalImage(href, sourcePath) {
 	return rewriteCanonicalLink(href, sourcePath).replace(
 		`${SOURCE_REPOSITORY}/blob/`,
-		"https://raw.githubusercontent.com/refract-org/refract/",
+		`${SOURCE_REPOSITORY.replace("https://github.com/", "https://raw.githubusercontent.com/")}/`,
 	);
 }
 

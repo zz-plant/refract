@@ -1,13 +1,13 @@
 // Facts about the published site, shared by the Astro config, the routes that
 // render engine files, and the tests.
 
-export const SITE_URL = "https://refract-org.github.io/refract/";
+export const SITE_URL = "https://zz-plant.github.io/refract/";
 // GitHub Pages serves this repository's site under /refract/.
 export const BASE = "/refract/";
 export const SITE_NAME = "Refract";
 export const SITE_DESCRIPTION =
 	"A git log for Wikipedia: see how a page's sentences, citations, and structure changed, revision by revision, as data you can check.";
-export const SOURCE_REPOSITORY = "https://github.com/refract-org/refract";
+export const SOURCE_REPOSITORY = "https://github.com/zz-plant/refract";
 // Where the docs pages live in the repository.
 export const PAGES_PATH = "apps/docs/src/content/docs";
 

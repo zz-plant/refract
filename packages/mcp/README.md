@@ -28,4 +28,4 @@ Name the scoped package: the unscoped npm package `refract` is an unrelated proj
 | `cron` | Reads a pages file, runs analysis once, and reports new events |
 | `classify` | Asks a model to classify one observation boundary; it is the only tool that uses a model |
 
-[MCP setup and parameters](https://refract-org.github.io/refract/mcp/) · [Repository](https://github.com/refract-org/refract)
+[MCP setup and parameters](https://zz-plant.github.io/refract/mcp/) · [Repository](https://github.com/refract-org/refract)

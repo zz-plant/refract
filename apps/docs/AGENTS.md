@@ -20,7 +20,7 @@ bun run test         # Builds once, then Vitest checks the built site
 - **Linter/Formatter:** Biome
 - **Tests:** Vitest
 - **Pre-commit:** the repository root's Husky hook runs lint-staged, which uses this directory's `.lintstagedrc.json`
-- **CI:** `.github/workflows/docs-site.yml` at the repository root; `docs-deploy.yml` publishes `main` to https://refract-org.github.io/refract/
+- **CI:** `.github/workflows/docs-site.yml` at the repository root; `docs-deploy.yml` publishes `main` to https://zz-plant.github.io/refract/
 - **Commit style:** Conventional Commits
 
 ## Verification

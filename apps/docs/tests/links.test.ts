@@ -15,7 +15,7 @@ import {
 } from "./site";
 
 const SITE_BASE = BASE.replace(/\/$/, "");
-const SITE_URL = `https://refract-org.github.io${BASE}`;
+const SITE_URL = `https://zz-plant.github.io${BASE}`;
 
 // Every link and image in a Markdown file or an HTML page.
 function extractLinks(content: string): string[] {

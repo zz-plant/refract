@@ -8,7 +8,7 @@
 
 See how a page's sentences, citations, and structure changed, revision by revision, as data you can check. Runs locally, with no API key or model.
 
-[Documentation](https://refract-org.github.io/refract/) · [CLI reference](https://refract-org.github.io/refract/cli/) · [Compared to XTools and WikiBlame](https://refract-org.github.io/refract/compare/)
+[Documentation](https://zz-plant.github.io/refract/) · [CLI reference](https://zz-plant.github.io/refract/cli/) · [Compared to XTools and WikiBlame](https://zz-plant.github.io/refract/compare/)
 
 [![CI](https://github.com/refract-org/refract/actions/workflows/ci.yml/badge.svg)](https://github.com/refract-org/refract/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/refract-org/refract)](https://github.com/refract-org/refract/releases)

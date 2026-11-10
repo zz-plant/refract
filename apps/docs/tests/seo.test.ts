@@ -12,7 +12,7 @@ import {
 } from "../social-card.mjs";
 import { DIST_DIR, pageSlugs, renderedPathForSlug } from "./site";
 
-const SITE_URL = "https://refract-org.github.io/refract/";
+const SITE_URL = "https://zz-plant.github.io/refract/";
 const SITE_DESCRIPTION =
 	"A git log for Wikipedia: see how a page's sentences, citations, and structure changed, revision by revision, as data you can check.";
 // Pages that use the site description: the home page by design, and pages with
@@ -271,9 +271,7 @@ describe("technical SEO", () => {
 		expect(website.description).toBe(
 			metaContents(home?.html ?? "", "name", "description")[0],
 		);
-		expect(source.codeRepository).toBe(
-			"https://github.com/refract-org/refract",
-		);
+		expect(source.codeRepository).toBe("https://github.com/zz-plant/refract");
 		expect(website.about).toEqual({ "@id": source["@id"] });
 	});
 
@@ -370,7 +368,7 @@ describe("social card", () => {
 		const png = renderSocialCard({
 			name: "Refract",
 			description,
-			address: "refract-org.github.io/refract",
+			address: "zz-plant.github.io/refract",
 		});
 		expect(pngSize(Buffer.from(png))).toEqual({ width: 1200, height: 630 });
 	});

@@ -6,7 +6,7 @@
 2. **Run the gate**: `bun run build && bun run typecheck && bun run test` — all must pass before you start
 3. **Pick a task**: [Good first issues](https://github.com/refract-org/refract/labels/good%20first%20issue) are scoped for new contributors. If none fit, start a [discussion](https://github.com/refract-org/refract/discussions) about what you would like to work on.
 4. **Read the architecture**: [ARCHITECTURE.md](./ARCHITECTURE.md) — 5 minutes, saves hours of wrong turns
-5. **Build a custom analyzer**: [Tutorial](https://refract-org.github.io/refract/tutorials/custom-analyzer/) steps through the full cycle
+5. **Build a custom analyzer**: [Tutorial](https://zz-plant.github.io/refract/tutorials/custom-analyzer/) steps through the full cycle
 6. **Run `bun run ci` before opening a PR**: build + lint + typecheck + boundaries + test. All must pass.
 
 ### What packages need what

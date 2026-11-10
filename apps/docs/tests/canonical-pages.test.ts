@@ -11,13 +11,13 @@ describe("canonical core guides", () => {
 		expect(html).toContain("Understand coverage and recovery");
 		expect(html).toContain("An incomplete report cannot be acknowledged.");
 		expect(html).toContain(
-			"https://github.com/refract-org/refract/blob/main/docs/examples/review.json",
+			"https://github.com/zz-plant/refract/blob/main/docs/examples/review.json",
 		);
 		expect(html).toContain(
 			"<title>Review the sources you rely on — Refract</title>",
 		);
 		expect(html).toContain(
-			'href="https://github.com/refract-org/refract/edit/main/docs/review.md"',
+			'href="https://github.com/zz-plant/refract/edit/main/docs/review.md"',
 		);
 		expect(readFileSync(join(DIST_DIR, "core-onboarding.svg"))).toEqual(
 			readFileSync(join(REPO_DIR, "docs/examples/onboarding.svg")),
@@ -37,7 +37,7 @@ describe("canonical core guides", () => {
 				"docs/usage.md",
 			),
 		).toBe(
-			"https://github.com/refract-org/refract/blob/main/packages/evidence-graph/src/schemas/revision.ts",
+			"https://github.com/zz-plant/refract/blob/main/packages/evidence-graph/src/schemas/revision.ts",
 		);
 		expect(rewriteCanonicalLink("#local", "docs/review.md")).toBe("#local");
 		expect(

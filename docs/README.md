@@ -3,7 +3,7 @@
 Refract is a git log for Wikipedia. See how Wikipedia text and citations
 changed since your last review, with text and revision links to inspect.
 
-The [documentation site](https://refract-org.github.io/refract/) has the CLI reference,
+The [documentation site](https://zz-plant.github.io/refract/) has the CLI reference,
 tutorials, and integration guides. This directory holds the guides maintained with the engine.
 
 ## Getting Started

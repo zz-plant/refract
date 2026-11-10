@@ -12,6 +12,7 @@
     "url": "git+https://github.com/refract-org/refract.git",
     "directory": "packages/mcp"
   },
+  "homepage": "https://zz-plant.github.io/refract/",
   "files": ["dist", "src"],
   "scripts": {
     "build": "tsc",

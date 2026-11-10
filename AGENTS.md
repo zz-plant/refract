@@ -52,7 +52,7 @@ MCP package README, or `.well-known/mcp/server-card.json` changing with it.
 - **packages/cli**: CLI tool (`refract` command)
 - **packages/persistence**: SQLite storage (bun:sqlite)
 - **packages/eval**: Evaluation harness
-- **apps/docs**: Public documentation site (CC-BY-4.0), published to https://refract-org.github.io/refract/ by `docs-deploy.yml`. Private workspace; `bun run lint|test|build` from its directory; CI is `docs-site.yml`.
+- **apps/docs**: Public documentation site (CC-BY-4.0), published to https://zz-plant.github.io/refract/ by `docs-deploy.yml`. Private workspace; `bun run lint|test|build` from its directory; CI is `docs-site.yml`.
 - **apps/ui**: Browser-only file viewer. Private workspace that imports evidence-graph's event types as types only; CI is `viewer.yml`, which also runs on evidence-graph and `docs/examples` changes.
 
 - **clients/python**: Python adapter over the CLI (Hatch, pytest, Python 3.10+). Not a workspace; CI is `python.yml`, which runs it against the CLI built from the same commit.
