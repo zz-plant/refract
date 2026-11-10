@@ -12,7 +12,7 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dirname, "..");
 const MARK = join(ROOT, "assets/brand/refract-mark.svg");
-const SITES = [join(ROOT, "apps/ui/public"), join(ROOT, "apps/docs/assets")];
+const SITES = [join(ROOT, "apps/ui/public"), join(ROOT, "apps/docs/public")];
 const TILE = "#0c0f1a";
 
 // The source's default colors are for light backgrounds, which is what a

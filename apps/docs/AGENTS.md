@@ -6,14 +6,17 @@ Refract-docs is the public documentation site for the Refract project — an ope
 
 ```bash
 bun install          # at the repository root; installs every workspace
-bun run build        # Build static HTML — docs/ → dist/
+bun run dev          # http://localhost:4321/refract/ with live reload
+bun run build        # Astro + Starlight build to dist/
 bun run lint         # Biome check
-bun run test         # Vitest (verifies docs compile)
+bun run test         # Builds once, then Vitest checks the built site
 ```
 
 ## Tooling
 
 - **Package manager:** Bun, through the repository root's workspace and lockfile
+- **Site:** Astro with Starlight; Markdown through Astro's Sätteri processor, with `links.mjs` as an mdast plugin
+- **Search:** Pagefind, built by Starlight into `dist/pagefind/`
 - **Linter/Formatter:** Biome
 - **Tests:** Vitest
 - **Pre-commit:** the repository root's Husky hook runs lint-staged, which uses this directory's `.lintstagedrc.json`
@@ -24,28 +27,31 @@ bun run test         # Vitest (verifies docs compile)
 
 ```bash
 bun run lint     # Biome check
-bun run test     # Build verification
+bun run test     # Build, then links, titles, descriptions, JSON-LD and sitemap
 bun run build    # Production build
 ```
+
+`tests/seo.test.ts` requires each page's `description` to quote the page's
+own text. `tests/links.test.ts` checks every source link and every link in the
+built pages, anchors included.
 
 ## Repository structure
 
 ```
-README.md                     # Landing page
-AGENTS.md                     # This file
-docs/
-  index.md                    # Homepage
-  quickstart.md               # Quick start guide
-  concepts.md                 # Architecture concepts
-  schema.md                   # Event schema reference
-  cli.md                      # CLI command reference
-  sdk.md                      # SDK / package reference
-  boundary.md                 # What Refract is and is not
-  tutorials/
-    wikipedia-history.md      # Tutorial: Track Wikipedia changes
-    fandom-canon.md           # Tutorial: Track Fandom canon changes
-    citation-churn.md         # Tutorial: Monitor citation churn
-    dispute-timeline.md       # Tutorial: Build a dispute timeline
+astro.config.mjs              # Starlight config: sidebar, head tags, theme CSS
+site.mjs                      # Site URL, name, description, core guides and assets
+links.mjs                     # .md links → page URLs; core guide titles from their H1
+social-card.mjs               # Renders the Open Graph card PNG
+src/content/docs/             # One Markdown page per URL (title + description frontmatter)
+  index.md                    # Home page (splash template, hero actions)
+  tutorials/                  # Tutorials
+src/content.config.ts         # docs collection, plus the core guides from ../../docs
+src/pages/[guide].astro       # /review/ and /usage/, from docs/review.md and docs/usage.md
+src/pages/*.ts                # social-card.png, core-onboarding.svg, sitemap.xml
+src/route-data.ts             # JSON-LD, og:type, escaped titles
+src/styles/custom.css         # Theme tokens and home page cards
+public/                       # Diagrams, screenshots, icons, notebook (served as-is)
+tests/                        # Vitest; tests/build.ts builds the site once first
 ```
 
 ## Documentation principles
@@ -65,9 +71,8 @@ docs/
 - Lead with "git log for Wikipedia". "Deterministic observation engine" is the technical description, for pages about how it works.
 - L1/L2/L3 references are legacy — prefer "deterministic" / "observation layer".
 
-## Build
+## Adding a page
 
-```bash
-node build.mjs      # builds static HTML from docs/ → dist/
-bun run test        # runs build (verifies docs compile without errors)
-```
+Create `src/content/docs/<slug>.md` with `title` and `description` frontmatter,
+then add it to the `sidebar` in `astro.config.mjs`. Link other pages by their
+`.md` file and core guides by their file in the repository's `docs/`.

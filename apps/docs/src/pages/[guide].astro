@@ -1,0 +1,35 @@
+---
+// The repository's review and usage guides, rendered from docs/ at the
+// repository root so the site and the repository never disagree.
+
+import { getCollection, render } from "astro:content";
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+import { CORE_GUIDES, SOURCE_REPOSITORY } from "../../site.mjs";
+
+export async function getStaticPaths() {
+	const guides = await getCollection("guides");
+	return guides.map((entry) => ({
+		params: { guide: entry.id },
+		props: { entry },
+	}));
+}
+
+const { entry } = Astro.props;
+const { Content, headings, remarkPluginFrontmatter } = await render(entry);
+const source = CORE_GUIDES[entry.id as keyof typeof CORE_GUIDES];
+---
+
+<StarlightPage
+	frontmatter={{
+		title: remarkPluginFrontmatter.title,
+		description: remarkPluginFrontmatter.description,
+		editUrl: `${SOURCE_REPOSITORY}/edit/main/${source}`,
+	}}
+	headings={headings}
+>
+	<Content />
+	<p>
+		Source guide: <a href={`${SOURCE_REPOSITORY}/blob/main/${source}`}>{source}</a>.
+		This guide retains the core repository's license.
+	</p>
+</StarlightPage>

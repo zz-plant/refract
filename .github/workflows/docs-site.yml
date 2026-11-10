@@ -9,6 +9,8 @@ on:
     paths:
       - apps/docs/**
       - docs/**
+      # The site's logo is the brand mark itself.
+      - assets/brand/**
       - package.json
       - bun.lock
       - .github/workflows/docs-site.yml
@@ -17,6 +19,8 @@ on:
     paths:
       - apps/docs/**
       - docs/**
+      # The site's logo is the brand mark itself.
+      - assets/brand/**
       - package.json
       - bun.lock
       - .github/workflows/docs-site.yml

@@ -41,7 +41,7 @@ bun run lint       # biome lint packages/
 ```
 
 `tests/cli-docs-contract.test.ts` fails when a command, flag, or MCP tool changes
-without `apps/docs/docs/cli.md`, `packages/cli/README.md`, both MCP pages, the
+without `apps/docs/src/content/docs/cli.md`, `packages/cli/README.md`, both MCP pages, the
 MCP package README, or `.well-known/mcp/server-card.json` changing with it.
 
 ## Architecture

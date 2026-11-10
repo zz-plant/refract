@@ -22,3 +22,6 @@ opencode.json
 .codex/
 .agent/
 .wrangler/
+
+# Astro
+.astro/

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed
+- **The docs site is built with Starlight.** `apps/docs` moves from a hand-written `build.mjs` to Astro 7 and Starlight 0.42, which add a light theme beside the dark one, full-text search with Pagefind, previous and next links, and an edit link on every page. All 55 pages keep their URLs, titles, descriptions, canonical links, Open Graph tags and JSON-LD; `sitemap.xml` now indexes Starlight's `sitemap-0.xml`. Pages live in `apps/docs/src/content/docs/` with their title and description as frontmatter. Links to the review and usage guides name `docs/review.md` and `docs/usage.md`, so they also work on GitHub.
+
 ### Fixed
 - **`publish.yml` waits for each package to reach installers before publishing the next.** During the 0.6.0 publish, `ingestion` 0.3.4 appeared on the registry before the `evidence-graph` 0.5.3 it requires, and a clean `npm install @refract-org/cli` failed with ETARGET until the two matched. Each new version must now appear in both forms of its packument that installers read. One that does not appear within 10 minutes counts as a failure and holds back the packages that depend on it. The job's time limit rises from 30 to 75 minutes to fit these waits.
 

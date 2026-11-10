@@ -6,7 +6,7 @@ const ROOT = join(import.meta.dirname, "..");
 const bytes = (path: string) => readFileSync(join(ROOT, path));
 const text = (path: string) => bytes(path).toString("utf8");
 
-const SITES = ["apps/ui/public", "apps/docs/assets"];
+const SITES = ["apps/ui/public", "apps/docs/public"];
 const RENDERED = ["favicon.ico", "apple-touch-icon.png", "icon-192.png", "icon-512.png"];
 const REGENERATE = "out of date: run `bun run assets:brand`";
 
@@ -48,12 +48,18 @@ describe("brand assets", () => {
     for (const icon of manifest.icons) expect(bytes(`${site}/${icon.src}`).length).toBeGreaterThan(0);
   });
 
-  it.each(["apps/ui/index.html", "apps/docs/build.mjs"])("%s links the icon set and draws the current mark", (page) => {
-    const source = text(page);
-    for (const name of ["favicon.ico", "favicon.svg", "apple-touch-icon.png", "site.webmanifest"]) {
-      expect(source).toContain(`${name}"`);
-    }
+  const ICON_LINKS = ["favicon.ico", "favicon.svg", "apple-touch-icon.png", "site.webmanifest"];
+
+  it("apps/ui/index.html links the icon set and draws the current mark", () => {
+    const source = text("apps/ui/index.html");
+    for (const name of ICON_LINKS) expect(source).toContain(`${name}"`);
     for (const data of pathData(MARK)) expect(source).toContain(data);
+  });
+
+  it("the docs site links the icon set and shows the mark itself as its logo", () => {
+    const config = text("apps/docs/astro.config.mjs");
+    for (const name of ICON_LINKS) expect(config).toMatch(new RegExp(`${name.replace(".", "\\.")}["\`]`));
+    expect(config).toContain('logo: { src: "../../assets/brand/refract-mark.svg" }');
   });
 
   it("the social card draws the current logo", () => {
