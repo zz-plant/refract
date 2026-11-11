@@ -67,6 +67,6 @@ When a MAJOR bump becomes necessary, the release notes will include a migration 
 
 ## Related
 
-- [Event schema reference](schema.md) — full `EvidenceEvent` structure
+- [Event schema reference](https://zz-plant.github.io/refract/schema/) — full `EvidenceEvent` structure
 - [COMPATIBILITY.md](COMPATIBILITY.md) — cross-repo version matrix
-- [Downstream integration](downstream.md) — production patterns for consuming events
+- [Downstream integration](https://zz-plant.github.io/refract/downstream/) — production patterns for consuming events
