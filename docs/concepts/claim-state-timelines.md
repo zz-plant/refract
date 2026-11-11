@@ -108,4 +108,4 @@ can use alongside the text.
 
 - [Repository boundary](../repository-boundary.md) — what Refract does and does not do
 - [Refract and NextConsensus](../refract-and-nextconsensus.md) — how the two systems fit together
-- [Quick start](../../README.md#quick-start) — get started with `refract analyze`
+- [Install](../../README.md#install) — get started with `refract analyze`
