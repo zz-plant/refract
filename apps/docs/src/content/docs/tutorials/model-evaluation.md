@@ -252,7 +252,7 @@ Every finding includes:
 
 ```bash
 refract --version
-# 0.6.0
+# 0.6.1
 
 git log -1 --format="%H" -- packages/evidence-graph packages/analyzers
 # a1b2c3d4e5f6...

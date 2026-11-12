@@ -9,7 +9,7 @@ Public documentation for [Refract](https://github.com/refract-org/refract), a te
 ## Quick start
 
 ```bash
-npx @refract-org/cli@0.6.0 analyze "Bitcoin" --from 369361755 --to 369393212 --depth detailed --json
+npx @refract-org/cli@0.6.1 analyze "Bitcoin" --from 369361755 --to 369393212 --depth detailed --json
 ```
 
 See [quickstart](https://zz-plant.github.io/refract/quickstart/) for a full walkthrough.

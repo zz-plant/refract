@@ -71,7 +71,7 @@ refract analyze "Bitcoin" --from 369361755 --to 369393212 --similarity 0.85 --js
   "eventCount": 47,
   "uniqueEditorCount": 9,
   "merkleRoot": "a1b2c3d4...",
-  "analyzerVersion": "0.6.0",
+  "analyzerVersion": "0.6.1",
   "coverage": { ... }
 }
 ```

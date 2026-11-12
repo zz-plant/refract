@@ -1,6 +1,6 @@
 {
   "name": "@refract-org/evidence-graph",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "type": "module",
   "private": false,
   "description": "Canonical Refract schemas for evidence events, claims, revisions, sources, timelines, and reports",

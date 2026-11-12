@@ -41,62 +41,62 @@
     },
     "packages/analyzers": {
       "name": "@refract-org/analyzers",
-      "version": "0.5.3",
+      "version": "0.5.4",
       "dependencies": {
-        "@refract-org/evidence-graph": "^0.5.3",
+        "@refract-org/evidence-graph": "^0.5.4",
       },
     },
     "packages/cli": {
       "name": "@refract-org/cli",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "bin": {
         "refract": "dist/src/cli.js",
         "wikihistory": "dist/src/cli.js",
       },
       "dependencies": {
-        "@refract-org/analyzers": "^0.5.3",
-        "@refract-org/evidence-graph": "^0.5.3",
-        "@refract-org/ingestion": "^0.3.4",
+        "@refract-org/analyzers": "^0.5.4",
+        "@refract-org/evidence-graph": "^0.5.4",
+        "@refract-org/ingestion": "^0.3.5",
         "@refract-org/mcp": "^0.1.1",
         "commander": "^12.0.0",
       },
       "optionalDependencies": {
-        "@refract-org/eval": "^0.2.2",
+        "@refract-org/eval": "^0.2.3",
         "parquetjs-lite": "^0.8.7",
       },
     },
     "packages/eval": {
       "name": "@refract-org/eval",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "dependencies": {
-        "@refract-org/evidence-graph": "^0.5.3",
+        "@refract-org/evidence-graph": "^0.5.4",
       },
     },
     "packages/evidence-graph": {
       "name": "@refract-org/evidence-graph",
-      "version": "0.5.3",
+      "version": "0.5.4",
     },
     "packages/ingestion": {
       "name": "@refract-org/ingestion",
-      "version": "0.3.4",
+      "version": "0.3.5",
       "dependencies": {
-        "@refract-org/evidence-graph": "^0.5.3",
+        "@refract-org/evidence-graph": "^0.5.4",
       },
     },
     "packages/mcp": {
       "name": "@refract-org/mcp",
       "version": "0.1.1",
       "dependencies": {
-        "@refract-org/analyzers": "^0.5.3",
-        "@refract-org/evidence-graph": "^0.5.3",
-        "@refract-org/ingestion": "^0.3.4",
+        "@refract-org/analyzers": "^0.5.4",
+        "@refract-org/evidence-graph": "^0.5.4",
+        "@refract-org/ingestion": "^0.3.5",
       },
     },
     "packages/persistence": {
       "name": "@refract-org/persistence",
       "version": "0.1.1",
       "dependencies": {
-        "@refract-org/evidence-graph": "^0.5.3",
+        "@refract-org/evidence-graph": "^0.5.4",
       },
     },
   },

@@ -1,6 +1,6 @@
 {
   "name": "@refract-org/analyzers",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "type": "module",
   "private": false,
   "description": "Deterministic analyzers for public revision histories: section diffs, claim events, citation changes, reverts, talk-page signals, templates, categories, and wikilinks",
@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@refract-org/evidence-graph": "^0.5.3"
+    "@refract-org/evidence-graph": "^0.5.4"
   },
   "devDependencies": {}
 }

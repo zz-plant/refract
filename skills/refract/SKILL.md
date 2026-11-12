@@ -35,7 +35,7 @@ and the [CLI reference](https://zz-plant.github.io/refract/cli/) explains them.
 
 Use a page title, not a URL. `--api URL` selects another MediaWiki instance.
 Always pass `--json` to `analyze` from a terminal session: without it, `analyze`
-opens the browser explorer and keeps its server running. `review` needs 0.6.0 or
+opens the browser explorer and keeps its server running. `review` needs 0.6.1 or
 later: [review guide](https://zz-plant.github.io/refract/review/).
 
 ## MCP tools

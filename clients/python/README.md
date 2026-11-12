@@ -6,7 +6,7 @@ Python adapter for [Refract](https://github.com/refract-org/refract), maintained
 
 ```bash
 pip install "git+https://github.com/refract-org/refract.git#subdirectory=clients/python"
-npm install -g @refract-org/cli@0.6.0
+npm install -g @refract-org/cli@0.6.1
 ```
 
 Python 3.10+ and Node.js 20+ are required. The adapter looks for `refract` on PATH, then falls back to `npx @refract-org/cli`, which may download the CLI. Install the CLI explicitly when you need a controlled version. Fetching source histories requires network access.

@@ -1,6 +1,6 @@
 {
   "name": "@refract-org/eval",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "private": false,
   "description": "Evaluation harness for validating Refract analyzers against public benchmark pages and labeled claim-history examples",
@@ -25,7 +25,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@refract-org/evidence-graph": "^0.5.3"
+    "@refract-org/evidence-graph": "^0.5.4"
   },
   "devDependencies": {}
 }

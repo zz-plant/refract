@@ -1,20 +1,20 @@
 ---
 title: "Quick start"
-description: "Compare two source revisions, inspect the observations, and save events for your tools. This walkthrough uses published CLI version 0.6.0."
+description: "Compare two source revisions, inspect the observations, and save events for your tools. This walkthrough uses CLI version 0.6.1."
 ---
 
-Compare two source revisions, inspect the observations, and save events for your tools. This walkthrough uses published CLI version 0.6.0.
+Compare two source revisions, inspect the observations, and save events for your tools. This walkthrough uses CLI version 0.6.1.
 
 ## Install
 
 Use Node.js 20+ and npm:
 
 ```bash
-npm install -g @refract-org/cli@0.6.0
+npm install -g @refract-org/cli@0.6.1
 refract --version
 ```
 
-Fetching Wikipedia histories requires an internet connection. You can also run a command with `npx @refract-org/cli@0.6.0` without a global installation; npx downloads the package when needed. See [installation](install.md) for other options.
+Fetching Wikipedia histories requires an internet connection. You can also run a command with `npx @refract-org/cli@0.6.1` without a global installation; npx downloads the package when needed. See [installation](install.md) for other options.
 
 ## Compare a known span
 
