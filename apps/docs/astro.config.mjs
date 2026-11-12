@@ -12,6 +12,7 @@ import {
 	SOURCE_REPOSITORY,
 } from "./site.mjs";
 import { CARD_HEIGHT, CARD_WIDTH } from "./social-card.mjs";
+import { viewer } from "./viewer.mjs";
 
 const docsDir = fileURLToPath(new URL("./src/content/docs", import.meta.url));
 const repoDir = fileURLToPath(new URL("../..", import.meta.url));
@@ -34,6 +35,8 @@ export default defineConfig({
 		}),
 	},
 	integrations: [
+		// The browser-only viewer from apps/ui, published at viewer/.
+		viewer(),
 		starlight({
 			title: SITE_NAME,
 			description: SITE_DESCRIPTION,

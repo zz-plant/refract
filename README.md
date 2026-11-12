@@ -123,7 +123,7 @@ A citation does not establish that a statement is supported, and changed wording
 | MCP | An agent needs to request histories and receive structured observations | `refract mcp` |
 | Python | You work in Python and want events as dataclasses, DataFrames, or LangChain documents | `pip install "git+https://github.com/refract-org/refract.git#subdirectory=clients/python"` |
 | Agent skill | Your coding agent should know which command answers which question | `cp -R skills/refract ~/.claude/skills/` |
-| Viewer | You want to browse an exported file in a browser | [`apps/ui`](./apps/ui) |
+| Viewer | You want to browse an exported file in a browser | [Hosted viewer](https://zz-plant.github.io/refract/viewer/); source in [`apps/ui`](./apps/ui) |
 
 [Library adapter and data integrations](./docs/integrations.md) · [MCP setup](./docs/mcp.md) · [Agent skill](./skills/refract/SKILL.md) · [Private wiki access](./docs/usage.md#other-mediawiki-instances)
 

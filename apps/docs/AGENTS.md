@@ -42,6 +42,7 @@ astro.config.mjs              # Starlight config: sidebar, head tags, theme CSS
 site.mjs                      # Site URL, name, description, core guides and assets
 links.mjs                     # .md links → page URLs; core guide titles from their H1
 social-card.mjs               # Renders the Open Graph card PNG
+viewer.mjs                    # Builds apps/ui into dist/viewer/ after the site build
 src/content/docs/             # One Markdown page per URL (title + description frontmatter)
   index.md                    # Home page (splash template, hero actions)
   tutorials/                  # Tutorials

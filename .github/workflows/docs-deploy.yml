@@ -12,6 +12,9 @@ on:
       - docs/**
       # The site's logo is the brand mark itself.
       - assets/brand/**
+      # The site builds the viewer into viewer/ (apps/docs/viewer.mjs). Its
+      # event types are erased at build time, so evidence-graph is not listed.
+      - apps/ui/**
       - package.json
       - bun.lock
       - .github/workflows/docs-deploy.yml

@@ -4,7 +4,11 @@ Standalone visualization for the [Refract](https://github.com/refract-org/refrac
 
 Load a JSONL file of Refract events to see them as a timeline with word-level diffs, citation and revert charts, talk page activity, and a list of the fields the events carry. Everything runs in the browser; there is no backend.
 
-## Quick start
+## Open it
+
+The viewer is published at https://zz-plant.github.io/refract/viewer/. Sample data loads automatically. Drag a JSONL file onto the upload zone to inspect your own data; the file is parsed in the browser tab and never uploaded.
+
+## Develop it
 
 The viewer lives in `apps/ui` of the Refract repository:
 
@@ -16,7 +20,7 @@ cd apps/ui
 bun run dev
 ```
 
-Open `http://localhost:5173`. Sample data loads automatically. Drag a JSONL file onto the upload zone to inspect your own data.
+Open `http://localhost:5173`. `bun run build` writes a copy based at `/refract/viewer/`, the path the docs site serves it from; the docs build (`apps/docs/viewer.mjs`) builds it into the site.
 
 Event types come from `@refract-org/evidence-graph` as types only, so `bun run build` here type-checks against the engine. Run `bun run build` at the repository root first, which emits those declarations.
 

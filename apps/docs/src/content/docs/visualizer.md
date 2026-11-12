@@ -7,7 +7,13 @@ Browser-only app for exploring exported Refract event lines. The file is read in
 
 ![Refract UI: timeline, word-level diff, and citation panels](assets/refract-ui-screenshot.png)
 
-## Quick start
+## Open the viewer
+
+Open [the hosted viewer](https://zz-plant.github.io/refract/viewer/). Sample data loads immediately. Drag your own `.jsonl` file onto the upload zone to inspect it. The page is static: the file is parsed in your browser tab and never uploaded.
+
+## Develop the viewer
+
+To change the viewer, run it from a clone of the repository:
 
 ```bash
 git clone https://github.com/refract-org/refract
@@ -17,7 +23,7 @@ cd apps/ui
 bun run dev
 ```
 
-Open `http://localhost:5173`. Sample data loads immediately. Drag your own `.jsonl` file onto the upload zone to inspect it.
+The dev server runs at `http://localhost:5173`.
 
 ## Generate data to visualize
 

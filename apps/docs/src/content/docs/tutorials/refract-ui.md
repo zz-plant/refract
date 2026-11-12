@@ -12,7 +12,6 @@ event breakdowns — using the standalone Refract UI.
 
 - [Node.js](https://nodejs.org) 20+ or [Bun](https://bun.sh) v1.2+
 - [Refract CLI](https://www.npmjs.com/package/@refract-org/cli) (`npx @refract-org/cli` works)
-- Clone of the [Refract repository](https://github.com/refract-org/refract); the viewer is in `apps/ui`
 
 Refract UI is a zero-dependency web app (vanilla TS + Vite). It runs entirely in your
 browser — no server, no API key, no data leaves your machine.
@@ -33,19 +32,12 @@ given `--json`; without it the command prints a report the viewer cannot load.
 The bounds select a two-revision span. Which of the 26 event types appear depends
 on what changed in the span you export.
 
-### 2. Start Refract UI
+### 2. Open Refract UI
 
-In a second terminal:
-
-```bash
-cd refract
-bun install
-cd apps/ui
-bun run dev
-```
-
-Open `http://localhost:5173`. Sample data loads on first visit — you will see a populated
-timeline immediately.
+Open [the hosted viewer](https://zz-plant.github.io/refract/viewer/). Sample data loads
+on first visit — you will see a populated timeline immediately. To work on the viewer
+itself, run it from a clone instead; [Refract UI](../visualizer.md#develop-the-viewer)
+has the commands.
 
 ### 3. Load your data
 
@@ -126,4 +118,4 @@ relationships between event types become visible at a glance.
 - [Complete end-to-end workflow](../complete-workflow.md) — analyze, export, query, visualize
 - [Track Wikipedia changes](wikipedia-history.md) — build a claim timeline
 - [Analytics with DuckDB](../analytics.md) — query the raw data
-- [Refract UI source](https://github.com/refract-org/refract/tree/main/apps/ui) — run it locally
+- [Refract UI source](https://github.com/refract-org/refract/tree/main/apps/ui) — develop the viewer
