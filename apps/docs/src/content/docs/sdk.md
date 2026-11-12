@@ -33,14 +33,15 @@ for (const event of events) event.eventId = createEventIdentity(event);
 
 ## Storage
 
-`@refract-org/persistence` is not on npm: import it from a source checkout, under Bun.
+`@refract-org/persistence` is not on npm: import it from a source checkout, under Bun. It stores revisions and claim records, which is what the CLI's `--cache` uses. It has no event table: write events to NDJSON, or to your own table (see [Downstream](downstream.md#production-ingestion)).
 
 ```typescript
 import { Persistence } from "@refract-org/persistence";
 
 const db = new Persistence({ dbPath: "refract.db" });
-await db.insertEvents(events);
-const saved = await db.getEvents({ pageTitle: "Earth" });
+db.insertRevisions(revisions);
+const saved = db.getRevisions("Earth"); // newest first, up to 100 unless you pass `limit`
+db.close();
 ```
 
 ## Package reference
@@ -61,9 +62,9 @@ Key exports:
 - Types: `EventType`, `EvidenceLayer`, `PolicyDimension`, `Depth`, `AnalyzerConfig`
 - Utilities: `createClaimIdentity`, `createEventIdentity`
 - Merkle tree: `createReplayManifest`, `buildMerkleTree`, `getMerkleProof`, `verifyMerkleProof`
-- `AnalyzerConfig`: configurable thresholds and windows for analyzers — similarity threshold for sentence matching, time windows for clusters and talk correlation, revert patterns, spike factors. Consumers pass their own config at each boundary; Refract records the effective parameters in `FactProvenance.parameters`.
+- `AnalyzerConfig`: the shape of the thresholds and windows analyzers take — similarity threshold for sentence matching, time windows for clusters and talk correlation, revert patterns, spike factors. Each analyzer function takes its own part of it as an options argument (see [`@refract-org/analyzers`](#refract-organalyzers)).
 - `DEFAULT_ANALYZER_CONFIG`: frozen default values for all configurable parameters
-- `FactProvenance.parameters`: optional record of analyzer parameters (strings, numbers, booleans) — set when non-default config is used, enabling transparent provenance
+- `FactProvenance`: a shape for recording which analyzer, version and parameters produced a fact. Refract's own events do not fill it in; a consumer that needs it records it when storing events (see [Downstream](downstream.md#3-factprovenance-for-auditability)).
 
 No prompt engineering, no interpretation schema — consumers define their own taxonomy at each configurable boundary.
 
@@ -76,8 +77,10 @@ import { MediaWikiClient } from "@refract-org/ingestion";
 import type { RevisionFetcher, AuthConfig } from "@refract-org/ingestion";
 
 const client = new MediaWikiClient({ apiUrl: "https://en.wikipedia.org/w/api.php" });
-const revisions = await client.fetchRevisions("Earth");
+const revisions = await client.fetchRevisions("Earth", { limit: 50 });
 ```
+
+`fetchRevisions` returns the newest revisions first. Without `limit` (or a `start`/`end` or revision-ID range) it pages through the page's whole history.
 
 Key exports: `MediaWikiClient` (class), `RevisionFetcher` (interface), `AuthConfig`
 
@@ -163,27 +166,42 @@ console.log("Concentration index:", network.sourceConcentrationIndex);
 console.log("Domain breakdown:", network.domainDistribution);
 ```
 
-All analyzers share a common pattern: extract from wikitext, then diff two extractions. The diffs are change records (`SectionChange`, `CitationChange`, `TemplateChange`), not events; `buildRevisionEvents` (0.5.1+) turns a revision history into `EvidenceEvent`s. Every analyzer accepts an optional `AnalyzerConfig` — thresholds, patterns, and windows that can be tuned per domain. The effective config is recorded in each event's `FactProvenance.parameters` when non-default values are used.
+The section, citation and template analyzers share a pattern: extract from wikitext, then diff two extractions. The diffs are change records (`SectionChange`, `CitationChange`, `TemplateChange`), not events; `buildRevisionEvents` (0.5.1+) turns a revision history into `EvidenceEvent`s.
+
+The functions that take thresholds, patterns or windows take the matching part of `AnalyzerConfig` as their last argument:
+
+| Function | Options |
+|---|---|
+| `buildRevisionEvents(revisions, options)` | `similarityThreshold` for sentence matching (default 0.8), `depth`, `protectionLogs`, `revertPatterns`, `sectionRename` |
+| `sectionDiffer.diffSections(before, after, options)` | `renameDetection` (`exact` by default, `similarity` or `none`), `similarityThreshold` (default 0.8) |
+| `revertDetector.isRevert(comment, options)`, `revertDetector.detectRevertChain(revisions, options)` | `patterns` (`RegExp[]`) |
+| `classifyHeuristic(comment, sizeDelta, options)` | `AnalyzerConfig["heuristic"]`: size thresholds, vandalism and sourcing patterns |
+| `detectEditClusters(revisions, options)` | `windowMs` (default 1 hour), `minSize` (default 3) |
+| `detectTalkActivitySpikes(talkRevisions, articleRevisions, options, referenceTime)` | `AnalyzerConfig["talkSpike"]`: lookback window, spike factor. `referenceTime` ends the lookback window; without it the window ends now |
+| `correlateTalkRevisions(articleRevisions, talkRevisions, options)` | `windowBeforeMs` (default 7 days), `windowAfterMs` (default 3 days) |
+| `parseTalkThreads(wikitext, options)` | `AnalyzerConfig["talkParser"]` |
+
+`citationTracker.diffCitations` and `templateTracker.diffTemplates` take no options.
 
 ```typescript
-import { sectionDiffer, citationTracker, revertDetector, templateTracker, detectEditClusters } from "@refract-org/analyzers";
-import type { SectionDiffer, CitationTracker, RevertDetector, TemplateTracker } from "@refract-org/analyzers";
+import { detectEditClusters, revertDetector } from "@refract-org/analyzers";
 import type { AnalyzerConfig } from "@refract-org/evidence-graph";
 
-// Configure per-domain thresholds
 const config: AnalyzerConfig = {
-  section: { similarityThreshold: 0.8 },
+  revert: { patterns: [/\brevert/i, /\brv\b/i] },
   editCluster: { windowMs: 30 * 60 * 1000, minSize: 2 },
 };
 
-// Pass alongside standard calls
-const changes = sectionDiffer.diffSections(before, after, config.section);
+const isRevert = revertDetector.isRevert("rv unexplained removal", config.revert); // true
+const clusters = detectEditClusters(revisions, config.editCluster); // edit_cluster_detected events
 ```
+
+The events do not record which options produced them. Store the options with the events if you need to reproduce a run.
 
 Key exports:
 - **Event pipeline** (0.5.1+): `buildRevisionEvents`, `annotateEvents`, and the per-pair steps `parseContent`, `computeStructuralDiffs`, `detectEditorialSignals`
 - Instances: `sectionDiffer`, `citationTracker`, `revertDetector`, `templateTracker`, `protectionTracker`
-- Builders: `buildSectionLineage`, `buildSourceLineage`, `buildClaimLineage`, `buildWikilinkEvents`, `buildPageMoveEvents`, `buildTalkThreadEvents`, `buildCategoryEvents`, `buildParamChangeEvents`
+- Builders: `buildSectionLineage`, `buildSourceLineage`, `buildWikilinkEvents`, `buildPageMoveEvents`, `buildTalkThreadEvents`, `buildCategoryEvents`, `buildParamChangeEvents`
 - Classifiers: `classifyHeuristic`
 - Parsers: `sanitizeWikitext`, `extractHeadingMap`, `extractWikilinks`, `extractCategories`, `countCitations`, `countKeywordMentions`, `deriveSectionHeading`, `findSectionForText` and `buildSectionCharMap` (0.5.1+)
 - Cross-revision: `correlateTalkRevisions`, `diffObservations`, `parseTalkThreads`, `diffTalkThreads`, `diffTemplateParams`, `diffCategories`, `diffWikilinks`
@@ -196,16 +214,20 @@ The `refract` / `wikihistory` CLI tool (17 commands: analyze, claim, classify, c
 
 ### `@refract-org/persistence`
 
-SQLite storage adapter (uses `bun:sqlite`). Not published to npm: import it from a
+SQLite storage adapter for revisions and claim records (uses `bun:sqlite`). Not published to npm: import it from a
 source checkout, under Bun.
 
 ```typescript
 import { Persistence } from "@refract-org/persistence";
 
 const db = new Persistence({ dbPath: "refract.db" });
-await db.insertEvents(events);
-const events = await db.getEvents({ pageTitle: "Earth" });
+db.insertRevisions(revisions);
+const cached = db.getRevisions("Earth", { limit: 50, direction: "older" }); // newest first
+const known = db.hasRevision(cached[0].revId);
+db.close();
 ```
+
+Methods: `insertRevision`, `insertRevisions`, `getRevisions`, `hasRevision`, `getLatestTimestamp`, `insertClaim`, `getClaims`, `close`. All are synchronous.
 
 Key exports: `Persistence` (class), `PersistenceAdapter` (interface), `PersistenceConfig`
 
@@ -237,10 +259,11 @@ export class RefractLoader {
     }
     const { Database } = await import("bun:sqlite");
     const db = new Database(this.path, { readonly: true });
-    const events = db.query("SELECT * FROM evidence_events").all();
+    // The tables @refract-org/persistence creates.
     const revisions = db.query("SELECT * FROM revisions").all();
+    const claims = db.query("SELECT * FROM claims").all();
     db.close();
-    return { events, revisions };
+    return { revisions, claims };
   }
 }
 
@@ -253,7 +276,7 @@ Usage in Observable:
 
 ```js
 import { refractLoader } from "./data-loader.ts";
-const data = refractLoader({ path: "./bitcoin-analysis.json" });
+const data = await refractLoader({ path: "./bitcoin-analysis.json" }).load();
 ```
 
 ---

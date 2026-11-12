@@ -19,21 +19,23 @@ on any language edition and compare results.
 ## Step 1: Analyze a page on German Wikipedia
 
 ```bash
-refract analyze "COVID-19" --api https://de.wikipedia.org/w/api.php --depth detailed
+refract analyze "COVID-19" --api https://de.wikipedia.org/w/api.php --depth brief --json \
+  | jq -r .eventType | sort | uniq -c | sort -rn | head -4
 ```
 
-Output is identical in structure to English Wikipedia — same 26 event types, same
-`EvidenceEvent` schema, same deterministic guarantees. Only the page content differs:
+`brief` reads the latest 20 revisions. Output is identical in structure to English
+Wikipedia — same event types, same `EvidenceEvent` schema. Only the page content
+differs. A run on 2026-11-11 printed:
 
 ```
-Analysis Results
-  Page:    COVID-19
-  Events:  247
-
-[2020-03-15T12:00:00Z] sentence_first_seen (rev 123456789→123456790)
-  Section: Symptome
-  • COVID-19 kann zu Symptomen wie Fieber, Husten und Atemnot führen.
+ 157 section_reorganized
+  23 template_parameter_changed
+  17 sentence_removed
+  12 sentence_modified
 ```
+
+Titles are per wiki: the German article on Earth is "Erde". A title that does not
+exist yields no events and no error.
 
 ## Step 2: Compare across editions
 
@@ -42,12 +44,15 @@ Export both language editions and compare:
 ```bash
 refract analyze "COVID-19" \
   --api https://en.wikipedia.org/w/api.php \
-  --depth detailed -c > covid-en.jsonl
+  --depth brief --json > covid-en.jsonl
 
 refract analyze "COVID-19" \
   --api https://de.wikipedia.org/w/api.php \
-  --depth detailed -c > covid-de.jsonl
+  --depth brief --json > covid-de.jsonl
 ```
+
+`--json` is what makes the files NDJSON. For the changed text as well as the event
+types, replace `--depth brief` with a `--from <revId> --to <revId>` range on each wiki.
 
 Query for differences with DuckDB:
 
@@ -63,11 +68,12 @@ Or use `refract diff` for structured cross-wiki comparison:
 refract diff "COVID-19" \
   --wiki-a https://en.wikipedia.org/w/api.php \
   --wiki-b https://de.wikipedia.org/w/api.php \
-  --depth detailed
+  --depth brief
 ```
 
-`refract diff` compares the same topic across wikis and surfaces statistical outliers
-via z-score detection.
+`refract diff` prints side-by-side event counts for the same title on each wiki. Its
+z-score outlier list cannot show anything with fewer than five wikis; see the
+[cross-wiki tutorial](cross-wiki-diff.md#reading-the-output).
 
 ## Step 3: Track a claim across language editions
 
@@ -81,8 +87,9 @@ refract claim "COVID-19" --text "erstmals in Wuhan" \
   --api https://de.wikipedia.org/w/api.php
 ```
 
-Compare when each edition first added the claim, whether it was removed, and whether
-talk page discussion accompanied the change.
+Compare when each edition first matched the passage and whether it later disappeared.
+`claim` reads the latest 50 revisions unless you give `--limit` or a `--from`/`--to`
+range, so "first" means first within those.
 
 ## Step 4: Forensic depth on non-English pages
 
@@ -91,11 +98,12 @@ All depth levels work identically:
 ```bash
 refract analyze "COVID-19" \
   --api https://de.wikipedia.org/w/api.php \
-  --depth forensic -c
+  --from <revId> --to <revId> \
+  --depth forensic --json
 ```
 
-Forensic depth enables talk page correlation, edit cluster detection, and sentence
-modification tracking — the same structural analysis, regardless of language.
+Forensic depth adds both revisions' full wikitext to every event. The analyzers and
+event types are the same at every depth, regardless of language.
 
 ## Supported language editions
 
@@ -117,15 +125,16 @@ Any MediaWiki instance that exposes an `api.php` endpoint is supported. This inc
 
 ## Caching across wikis
 
-The cache stores revisions per API endpoint, so analyzing the same page on different
-wikis doesn't interfere:
+The revision cache (`-c`) is skipped whenever `--api` is given, so a run against
+another language edition always fetches from the wiki.
+
+`refract cron` keeps its observations by page title only. When monitoring the same
+title on two wikis, give each its own `--cache-dir`:
 
 ```bash
-refract analyze "Earth" --api https://en.wikipedia.org/w/api.php -c
-refract analyze "Earth" --api https://de.wikipedia.org/w/api.php -c
+refract cron pages.txt --api https://de.wikipedia.org/w/api.php --cache-dir ~/.refract-cron/de
+refract cron pages.txt --api https://fr.wikipedia.org/w/api.php --cache-dir ~/.refract-cron/fr
 ```
-
-Each wiki's data is stored separately. Use `--cache-dir` to change the cache location.
 
 ## Next steps
 

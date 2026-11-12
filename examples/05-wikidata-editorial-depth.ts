@@ -28,10 +28,9 @@ const DEPTH = 20;
 
 const client = new MediaWikiClient({ minDelayMs: 200 });
 
-const revisions = await client.fetchRevisions(PAGE, {
-  direction: "newer",
-  limit: DEPTH,
-});
+// The default direction returns the newest revisions first; reverse them
+// so each pair below runs from the earlier revision to the later one.
+const revisions = (await client.fetchRevisions(PAGE, { limit: DEPTH })).reverse();
 
 console.log(`Wikidata tells you the current citation for "${PAGE}".`);
 console.log(`Refract tells you the citation history:`);

@@ -1,12 +1,13 @@
 # Historical Wikipedia Demo Data
 
-Public Wikipedia pages covering real historical events, technology histories, and public policy topics.
+Hand-written events about public Wikipedia pages on technology histories and public policy topics.
 
 ## Contents
 
 - `technology-histories/` — Pages about computing, internet, and engineering history
 - `public-policy/` — Public policy and legislative history pages
-- `events.jsonl` — Sample event timeline placeholder
+- `events.jsonl` — Seven summary events across the two subdirectories
+- `sample-covid-events.jsonl` — Ten events with fact provenance fields and no `#` header line
 
 ## Types of observation signals
 

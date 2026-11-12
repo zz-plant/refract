@@ -15,8 +15,8 @@ what sentence similarity means "modified," what activity level constitutes a spi
 Refract ships with mechanical defaults that work offline. But at any of 5 typed
 boundaries, you can plug in a model.
 
-The event records which path was taken in `FactProvenance.parameters`. The audit
-trail is transparent regardless of who supplied the judgment.
+Each classification result says which path was taken in its `source` field:
+`"default"` or `"model"`.
 
 ## Step 1: See the default heuristics
 
@@ -30,13 +30,16 @@ Output:
 ```json
 {
   "boundary": "revert",
-  "output": { "isRevert": true, "rationale": "comment matches revert pattern" },
+  "output": { "isRevert": true },
+  "confidence": 0.85,
   "source": "default"
 }
 ```
 
-`source: "default"` means the mechanical heuristic (6 regex patterns) made the
-decision. No API call was made.
+`source: "default"` means the mechanical rule made the decision: the comment
+matches one of the six patterns `refract analyze` uses for `revert_detected`
+(`revert…`, `undid revision`, `rvv`, `rollback`, `restore…`, `[[WP:ROLLBACK]]`). No API call was made. The `confidence` of a default result is a fixed
+number per rule, not a measurement.
 
 ## Step 2: Plug in a model
 
@@ -48,7 +51,10 @@ export REFRACT_INFERENCE_ENDPOINT="https://api.openai.com/v1/chat/completions"
 export REFRACT_INFERENCE_MODEL="gpt-4o-mini"
 ```
 
-Or pass them as flags:
+A model is called only when an API key is set, by the variable or by `--api-key`.
+Without one the default rule answers, whatever `--endpoint` and `--model` say.
+
+Or pass the endpoint and model as flags:
 
 ```bash
 refract classify revert \
@@ -93,7 +99,8 @@ ollama serve
 refract classify revert \
   --input '{"comment":"undo previous edit"}' \
   --endpoint http://localhost:11434/v1/chat/completions \
-  --model llama3
+  --model llama3 \
+  --api-key ollama   # Ollama ignores the value, but Refract needs one to call a model
 ```
 
 ### Anthropic (via proxy)
@@ -122,39 +129,27 @@ refract classify sentence_similarity \
   --model gpt-4o-mini
 ```
 
-The default uses word-overlap ratio (threshold 0.8). The model considers semantic
-meaning. Same input, different reasoning, both recorded.
+The default uses word-overlap ratio (threshold 0.8) and returns `isSameClaim` and
+`matchRatio`. The model considers semantic meaning. Same input, different
+reasoning, and each result names its `source`.
 
 ## Step 5: Audit which path was taken
 
-When a model classifies a boundary during a full page analysis, the event records
-the path:
+`refract classify` classifies one input at a time. `refract analyze` and
+`refract export` never call a model: their events come from the mechanical rules,
+and they do not record a classification.
+
+The audit trail is the classification result. Save it next to the input:
 
 ```bash
-refract analyze "COVID-19" --depth forensic --report > report.json
+refract classify revert \
+  --input '{"comment":"rv unexplained removal"}' \
+  --model gpt-4o-mini > classification.json
 ```
 
-Check `FactProvenance.parameters` in the output:
-
-```json
-{
-  "deterministicFacts": [{
-    "fact": "revert_detected",
-    "provenance": {
-      "analyzer": "revert-detector",
-      "version": "0.5.1",
-      "parameters": {
-        "similaritySource": "model",
-        "modelName": "gpt-4o-mini"
-      }
-    }
-  }]
-}
-```
-
-`similaritySource: "model"` means the model was used. `similaritySource: "default"`
-means the mechanical heuristic was used. Every event carries this audit trail — you
-always know who made the judgment.
+`"source": "model"` in that file means the model answered. `"source": "default"`
+means the mechanical rule answered, which is also what you get when no API key
+is set.
 
 ## Step 6: Use the MCP server for agent-driven classification
 
@@ -171,18 +166,18 @@ Connect any MCP client and ask:
 > "Classify the most recent edit to the ChatGPT page — is it a revert, a major addition,
 > or a minor edit? Use the model for classification."
 
-The agent calls `refract classify heuristic` via MCP, the host LLM classifies, and
-the result is recorded with provenance.
+The agent calls the `classify` tool via MCP, the host LLM classifies, and the
+result carries `source: "model"`.
 
 ## The 5 BYO-inference boundaries
 
 | Boundary | Default (mechanical) | Model question |
 |---|---|---|
-| `revert` | 6 regex patterns | "Is this edit comment a revert?" |
+| `revert` | The six `revert_detected` patterns: `revert…`, `undid revision`, `rvv`, `rollback`, `restore…`, `[[WP:ROLLBACK]]` | "Is this edit comment a revert?" |
 | `sentence_similarity` | Word-overlap ratio (0.8) | "Are these two sentences the same claim?" |
 | `heuristic` | Size thresholds + comment patterns | "What kind of edit is this?" |
 | `template_signal` | Name-to-type lookup | "What policy signal does this template represent?" |
-| `activity_spike` | 3x moving average | "Is this a meaningful spike in talk activity?" |
+| `activity_spike` | Count at or above the `threshold` in the input | "Is this a meaningful spike in talk activity?" |
 
 ## Next steps
 

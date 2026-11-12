@@ -31,7 +31,7 @@ for event in events:
     print(event.before, event.after)
 ```
 
-The kwargs become CLI flags; values should be strings. This span compares two Wikipedia revisions from 2010-06-21. Inspect `citation_removed` and the corresponding source diff. A citation change alone does not establish whether a statement is supported.
+The kwargs become CLI flags; values should be strings. `analyze` defaults to `depth="brief"`, the latest 20 revisions. Without bounds, `detailed` and `forensic` read the whole history, and the adapter stops the CLI after 120 seconds with `subprocess.TimeoutExpired`. This span compares two Wikipedia revisions from 2010-06-21. Inspect `citation_removed` and the corresponding source diff. A citation change alone does not establish whether a statement is supported.
 
 Use `Refract(binary="/absolute/path/to/refract")` to select an installed CLI. A built core entry point also works: `Refract(binary="/absolute/path/to/refract/packages/cli/dist/src/cli.js")` runs it with Node.
 
@@ -44,7 +44,7 @@ print(df.groupby("event_type").size())
 events = r.export("Bitcoin", format="ndjson", **bounds)
 ```
 
-`as_frame=True` creates flattened rows with event type, revision IDs, section, timestamp, event ID, schema version, and the first fact's analyzer metadata. An empty result has no rows and may have no columns. The dataclasses expose selected event fields; they do not retain every enrichment field from the original NDJSON. Keep the original CLI export when you need the complete record.
+`as_frame=True` creates flattened rows with event type, revision IDs, section, timestamp, event ID, schema version, layer, and the first fact with its detail and analyzer name and version. The event ID is filled for `export` and empty for `analyze`, whose `--json` output has no `eventId`. The analyzer columns are empty because the CLI attaches no provenance to facts today. Rows have no `before` or `after` text. An empty result has no rows and may have no columns. The dataclasses expose selected event fields; they do not retain every enrichment field from the original NDJSON. Keep the original CLI export when you need the complete record.
 
 ## LangChain and evaluation modules
 
@@ -57,12 +57,12 @@ pip install "refract-py[langchain] @ git+https://github.com/refract-org/refract.
 ```python
 from refract_langchain import RefractLoader
 
-loader = RefractLoader(page="Bitcoin", depth="detailed", min_stability=0.5)
+loader = RefractLoader(page="Bitcoin", depth="brief", min_stability=0.5)
 for doc in loader.load():
     print(doc.metadata["event_type"], doc.metadata["stability_score"])
 ```
 
-The loader reads the page's available history, so try a short page first. Events with high revert counts, citation churn, or edit clusters score lower, and `min_stability` drops those below the value you pass.
+The loader takes `page`, `depth`, `api_url` and `min_stability`, not revision bounds. `brief` reads the latest 20 revisions. `detailed` and `forensic` read the page's whole history, so keep those for a short page. `stability_score` is set by event type: removed sentences 0.0, reverts and edit clusters 0.2, modified sentences 0.5, first-seen sentences 0.9, everything else 0.8. `min_stability` drops documents below the value you pass.
 
 `refract_eval` maps exported events to model-evaluation records, with `build_leakage_benchmark("events.jsonl", cutoff="2024-06-01")` and `check_provenance("events.jsonl", "example.org")`. See the [Python SDK guide](https://zz-plant.github.io/refract/python-sdk/) for more.
 
@@ -70,7 +70,7 @@ The loader reads the page's available history, so try a short page first. Events
 
 The core `review` command has a separate saved-report format and acknowledgment loop. This adapter currently wraps `analyze` and `export`; it does not provide a review method. Use the CLI and the [review guide](https://zz-plant.github.io/refract/review/) for that workflow.
 
-`RefractError` is raised for nonzero CLI exits. An analysis event list alone does not describe complete source coverage. For coverage-sensitive review, retain and inspect the core review report instead.
+`RefractError` is raised for nonzero CLI exits. A page with no revisions is not one: the CLI exits zero and the result is an empty list. An analysis event list alone does not describe complete source coverage. For coverage-sensitive review, retain and inspect the core review report instead.
 
 ## Data integrations
 

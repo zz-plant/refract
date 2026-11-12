@@ -1,14 +1,14 @@
 ---
 title: "Track changes to a Wikipedia article over time"
-description: "Use Refract to analyze the full revision history of a Wikipedia page and understand what changed, when, and what kind of change it was."
+description: "Use Refract to analyze the revision history of a Wikipedia page and understand what changed, when, and what kind of change it was."
 ---
 
 ## Goal
 
-Use Refract to analyze the full revision history of a Wikipedia page and understand what
+Use Refract to analyze the revision history of a Wikipedia page and understand what
 changed, when, and what kind of change it was.
 
-The analysis is deterministic, and its output is reproducible byte for byte.
+The analysis is deterministic: the same revision range produces the same events.
 
 ## Steps
 
@@ -17,45 +17,44 @@ The analysis is deterministic, and its output is reproducible byte for byte.
 Zero install:
 
 ```bash
-npx @refract-org/cli analyze "Earth" --depth detailed
+npx @refract-org/cli analyze "Earth" --depth brief --json
 ```
 
 Or with a local install:
 
 ```bash
 bun add @refract-org/cli
-refract analyze "Earth" --depth detailed -c
+refract analyze "Earth" --depth brief --json
 ```
 
-The `-c` flag enables caching so subsequent runs skip already-fetched revisions. This
-is essential for large pages or repeated analysis.
+`--depth brief` reads the latest 20 revisions and leaves the changed text out of each
+event. `detailed`, the default, includes the text, and without a range reads the whole
+history: tens of thousands of revisions for this page. Step 3 shows how to give a range.
+
+The `-c` flag caches revisions in SQLite. It needs Bun and a source checkout, and a
+cached range is reused only when both `--from` and `--to` are given.
 
 ### 2. Read the output
 
-`refract analyze` prints one JSON event per line to stdout. Each event represents a
-single observed change at a revision boundary. For example:
+With `--json`, `refract analyze` prints one JSON event per line to stdout. Without it
+the command prints a text summary, or opens the explorer in an interactive terminal.
+Each event represents a single observed change at a revision boundary. For example
+(text values illustrative, enrichment fields left out):
 
 ```json
 {
-  "eventId": "a3f5c2e1b7d409fa",
   "eventType": "section_reorganized",
-  "fromRevisionId": 1280110001,
-  "toRevisionId": 1280110100,
+  "fromRevisionId": 1250019297,
+  "toRevisionId": 1251058746,
   "section": "Geology",
-  "before": "",
-  "after": "== Geology ==\nEarth's crust consists of tectonic plates...",
-  "timestamp": "2024-11-25T12:00:00Z",
-  "layer": "observed",
+  "before": "Earth's crust consists of tectonic plates...",
+  "after": "Earth's crust consists of several tectonic plates...",
   "deterministicFacts": [
-    {
-      "fact": "Section Geology added with 3 paragraphs",
-      "provenance": {
-        "analyzer": "section-differ",
-        "version": "0.5.1",
-        "inputHashes": []
-      }
-    }
-  ]
+    { "fact": "section_changed", "detail": "change=modified" }
+  ],
+  "layer": "observed",
+  "timestamp": "2024-10-14T00:00:00Z",
+  "schemaVersion": "0.5.0"
 }
 ```
 
@@ -64,27 +63,29 @@ Key fields to read:
 - **`section`**: where in the page the change happened
 - **`before` / `after`**: the text before and after the change
 - **`deterministicFacts`**: why the engine produced this event — always mechanical
-- **`layer`**: `"observed"` means directly extracted from the diff; other layers
-  (`"policy_coded"`, `"model_interpretation"`) are set by downstream consumers
+- **`layer`**: `"observed"` means directly extracted from the diff; `"policy_coded"`
+  marks events matched against a rule, such as `revert_detected`;
+  `"model_interpretation"` is set by downstream consumers
 
 ### 3. Scope to a specific revision range
 
 Large pages can produce thousands of events. Narrow the range with `--from` and `--to`:
 
 ```bash
-refract analyze "Earth" --from 1250000000 --to 1260000000 --depth detailed
+refract analyze "Earth" --from 1250019297 --to 1258622167 --depth detailed --json
 ```
 
-Or filter by time with `--since`:
+That range is 23 revisions from late 2024. Or filter by time with `--since`, which
+reads every revision from that moment to the newest:
 
 ```bash
-refract analyze "Earth" --since 2024-01-01 --depth detailed
+refract analyze "Earth" --since 2024-01-01 --depth detailed --json
 ```
 
 ### 4. View results in a browser
 
 ```bash
-refract explore "Earth"
+refract explore "Earth" --from 1250019297 --to 1258622167
 ```
 
 Opens a local web server (default port 8899) with an interactive timeline, evidence
@@ -94,23 +95,26 @@ table, and diff viewer. Press Ctrl+C to stop.
 
 ```bash
 # Line-delimited JSON for tools
-refract export "Earth" --format ndjson > earth-events.jsonl
+refract export "Earth" --from 1250019297 --to 1258622167 --format ndjson > earth-events.jsonl
 
 # CSV for spreadsheets
-refract export "Earth" --format csv > earth-events.csv
+refract export "Earth" --from 1250019297 --to 1258622167 --format csv > earth-events.csv
 
 # Bundle with a SHA-256 hash of its contents
-refract export "Earth" --bundle > earth-bundle.json
+refract export "Earth" --from 1250019297 --to 1258622167 --bundle > earth-bundle.json
 ```
+
+`export` runs at `detailed` depth and, without a range, reads the whole history.
 
 ### 6. Track a specific claim
 
 ```bash
-refract claim "Earth" --text "Earth is the third planet from the Sun" -c
+refract claim "Earth" --text "Earth is the third planet from the Sun"
 ```
 
-This shows every revision where that sentence was added, modified, removed, or
-reintroduced — the full lifecycle of a claim.
+This shows the matching sentence in each of the latest 50 revisions, and when the
+passage was first matched, changed, removed or reintroduced within them. `--limit`
+reads more revisions; `--from` and `--to` select an earlier range.
 
 ## Understanding what you see
 
@@ -133,13 +137,13 @@ changed — Refract flags this as a change in editorial emphasis.
 
 ## Troubleshooting
 
-- **Rate limits**: Wikipedia's API limits request frequency. Use `-c` to cache
-  revisions and avoid re-fetching on repeat runs.
+- **Rate limits**: Wikipedia's API limits request frequency. Keep runs to a revision
+  range; Refract retries a `429` after the server's `Retry-After`.
 - **Large pages**: Pages with thousands of revisions produce many events. Use
   `--from` / `--to` or `--since` to scope to a date range.
 - **Other wikis**: Point `--api` to any MediaWiki instance:
   ```bash
-  refract analyze "Erde" --api https://de.wikipedia.org/w/api.php
+  refract analyze "Erde" --api https://de.wikipedia.org/w/api.php --depth brief --json
   ```
 - **Too much output**: Pipe to a file instead of stdout, or use `refract export`
   for structured formats.

@@ -28,10 +28,11 @@ export type EventType =
 ```
 
 Keep the union alphabetically grouped within its category. Bump the
-`EVENT_SCHEMA_VERSION` minor version:
+`EVENT_SCHEMA_VERSION` minor version in the same file. It is `"0.5.0"` today, so
+a new event type makes it:
 
 ```typescript
-export const EVENT_SCHEMA_VERSION = "0.5.0";
+export const EVENT_SCHEMA_VERSION = "0.6.0";
 ```
 
 Build to verify the type propagates:
@@ -93,18 +94,19 @@ export { detectRedirects } from "./redirect-detector.js";
 
 ## Step 3: Integrate with the CLI
 
-In `packages/cli/src/commands/analyze.ts`, add the analyzer to the forensic depth
-pipeline (or create a new depth level if appropriate):
+`packages/cli/src/commands/analyze.ts` assembles a page's events in one place:
+page moves, then `buildRevisionEvents` for the per-pair diffs, then talk-page
+correlation. Add your analyzer's events there, after the `buildRevisionEvents`
+call:
 
 ```typescript
 import { detectRedirects } from "@refract-org/analyzers";
 
-// In the forensic depth block:
-if (depth === "forensic") {
-  const redirectEvents = detectRedirects(revisions);
-  events.push(...redirectEvents);
-}
+// sortedRevs is the page's revisions, oldest first.
+events.push(...detectRedirects(sortedRevs));
 ```
+
+To run it only at one depth, wrap the call in a check on `eventDepth`.
 
 ## Step 4: Write tests
 
@@ -119,6 +121,7 @@ function makeRev(revId: number, content: string, timestamp = "2026-01-01T00:00:0
   return {
     revId, content, comment: "", timestamp,
     pageId: 1, pageTitle: "Test", user: undefined,
+    size: content.length, minor: false,
   };
 }
 
@@ -187,9 +190,10 @@ refract eval --page "Wikipedia:Redirect"
 bun run ci
 ```
 
-This runs: `build && lint && typecheck && check:boundaries && test`. All must pass.
-If your analyzer introduces exports that cross package boundaries incorrectly,
-`check:boundaries` will catch it.
+This runs the build, `biome ci`, the typecheck, `check:boundaries`, the tests and
+the release check (`check:release -- --pack`). All must pass. If your analyzer
+introduces exports that cross package boundaries incorrectly, `check:boundaries`
+will catch it.
 
 ## Step 7: Update documentation
 

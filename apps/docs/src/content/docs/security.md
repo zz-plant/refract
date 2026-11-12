@@ -5,17 +5,26 @@ description: "When using --cache, revision content is persisted to ~/.wikihistor
 
 ## Credential exposure
 
-CLI flags containing credentials (`--api-key`, `--api-password`) are visible in process listings. Use environment variables instead:
+CLI flags containing credentials (`--api-key`, `--api-password`) are visible in process listings.
 
-### MediaWiki auth (global `--api-key`)
+### MediaWiki auth (`--api-key`)
 
-Used for authenticated API access to private wikis. Applies globally across `analyze`, `claim`, `export`, and `cron`:
+Used for authenticated API access to private wikis. `analyze`, `claim`, `export`, `cron`, `snapshot`, `watch`, `review`, `visualize`, `explore` and `delegation` accept the flags; `diff` does not.
 
-| CLI flag | Environment variable |
-|----------|---------------------|
-| `--api-key` | `REFRACT_MEDIAWIKI_API_KEY` |
-| `--api-user` | `REFRACT_MEDIAWIKI_API_USER` |
-| `--api-password` | `REFRACT_MEDIAWIKI_API_PASSWORD` |
+| CLI flag | Sent as |
+|----------|---------|
+| `--api-key` | `Authorization: Bearer <token>` |
+| `--api-user` with `--api-password` | `Authorization: Basic <base64>` |
+
+The CLI reads these credentials from the flags only. To keep a token out of shell history and scripts, hold it in a variable of your own and pass it on the command line:
+
+```bash
+refract analyze "Page" --api https://wiki.example.org/w/api.php --api-key "$MY_WIKI_TOKEN"
+```
+
+The expanded value still appears in the process listing while the command runs.
+
+Two environment variables are read: `REFRACT_OAUTH_CLIENT_ID` and `REFRACT_OAUTH_CLIENT_SECRET`. When both are set they are sent as `X-OAuth-Client-Id` and `X-OAuth-Client-Secret` headers on every request.
 
 ### Inference provider auth (`refract classify --api-key`)
 
@@ -33,7 +42,7 @@ When using `--cache`, revision content is persisted to `~/.wikihistory/refract.d
 
 ## Network
 
-Refract makes outbound HTTPS requests to the configured MediaWiki API. Authentication tokens are sent as `Authorization` or `x-api-key` headers. All traffic is encrypted in transit.
+Refract makes outbound requests to the configured MediaWiki API. Authentication tokens are sent in the `Authorization` header. Traffic is encrypted when the `--api` URL is `https://`; an `http://` URL is accepted and sends credentials in the clear.
 
 Bundled evidence files (`--bundle`) are neither signed nor encrypted — they contain plaintext event data and a SHA-256 hash of their contents, which anyone who edits the file can recompute.
 

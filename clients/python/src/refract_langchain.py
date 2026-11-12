@@ -45,9 +45,10 @@ class RefractLoader(BaseLoader):
         page: Wikipedia page title.
         depth: Analysis depth (brief, detailed, forensic).
         api_url: MediaWiki API URL (default: English Wikipedia).
-        min_stability: Minimum stability score (0-1) to include. Events
-            with high revert counts, citation churn, or edit clusters
-            score lower. Default 0 (include all).
+        min_stability: Minimum stability score (0-1) to include. The score
+            is set by event type: removed sentences 0.0, reverts and edit
+            clusters 0.2, modified sentences 0.5, first-seen sentences 0.9,
+            everything else 0.8. Default 0 (include all).
     """
 
     def __init__(
@@ -82,7 +83,10 @@ class RefractLoader(BaseLoader):
         return {cid: sum(v) / len(v) for cid, v in scores.items()}
 
     def lazy_load(self) -> Iterator[Document]:
-        events = self._client.export(self.page, format="ndjson")
+        # analyze, not export: the CLI's export is fixed at detailed depth, so the
+        # depth argument had no effect, and api_url was never passed on at all.
+        flags = {"api": self.api_url} if self.api_url else {}
+        events = self._client.analyze(self.page, depth=self.depth, **flags)
         stability = self._compute_stability(events)
 
         for e in events:

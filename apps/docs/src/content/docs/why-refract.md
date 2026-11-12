@@ -16,11 +16,12 @@ change — when a sentence first appeared, when sources were added or removed, w
 edits were reverted, and when talk page discussions accompanied the changes.
 
 ```bash
-refract claim "Theranos" --text "revolutionary blood testing" -c
+refract claim "Theranos" --text "revolutionary blood testing"
 ```
 
-Result: a verifiable timeline of when the claim was added, who softened it, when
-the sources disappeared, and when the article was tagged with dispute templates.
+Result: each of the latest 50 revisions in which the passage matched, with the
+matching sentence and revision ID. `--from` and `--to` cover an earlier range. Citation
+and template changes around the passage come from `refract analyze` over the same range.
 
 ### Data scientists and OSINT analysts
 
@@ -29,21 +30,22 @@ custom parsers, no fragile heuristics. Refract outputs standard NDJSON that Duck
 Python pandas, and any JSON tool can consume directly.
 
 ```bash
-refract analyze "Bitcoin" --depth forensic --since 2024-01-01 > bitcoin.jsonl
-duckdb -c "SELECT event_type, count(*) FROM 'bitcoin.jsonl' GROUP BY 1 ORDER BY 2 DESC"
+refract analyze "Bitcoin" --from 369361755 --to 369393212 --json > bitcoin.jsonl
+duckdb -c "SELECT \"eventType\", count(*) FROM 'bitcoin.jsonl' GROUP BY 1 ORDER BY 2 DESC"
 ```
 
 ### ML engineers building RAG or training data
 
 You need provenance signals for retrieved text. Is this claim stable? Has it been
-contested? Is the supporting source still in the article? Refract attaches claim
-stability metadata to every chunk so your retrieval system can weight results by
-provenance quality, not just embedding similarity.
+contested? Is the supporting source still in the article? Refract's events record when
+a sentence first appeared, changed or was removed. Your pipeline derives stability
+from them and weights results by it.
 
 ```python
-# Filter training data to stable, well-sourced claims
-stable_claims = df[(df["eventType"] == "sentence_first_seen") 
-                   & (df["is_contested"] == False)]
+# Sentences first seen in the analyzed range and never removed within it
+removed = set(df[df["eventType"] == "sentence_removed"]["before"])
+first_seen = df[df["eventType"] == "sentence_first_seen"]
+stable_claims = first_seen[~first_seen["after"].isin(removed)]
 ```
 
 ### Regulatory and policy monitors
@@ -83,8 +85,9 @@ from another's.
 
 ```bash
 refract diff "Darth_Vader" \
-  --wiki-a https://starwars.fandom.com/api.php \
-  --wiki-b https://clone-wars.fandom.com/api.php
+  --wiki-a https://lego.fandom.com/api.php \
+  --wiki-b https://battlefront.fandom.com/api.php \
+  --depth brief
 ```
 
 ## What makes Refract different
@@ -92,7 +95,7 @@ refract diff "Darth_Vader" \
 | Refract | Alternatives |
 |---------|-------------|
 | **Deterministic** — same input, same output, every run. Byte-for-byte identical. | Most tools depend on model calls, heuristic sampling, or non-reproducible computation |
-| **Provenance-tagged** — every event records which analyzer, what version, what parameters | Most tools produce output without an audit trail |
+| **Provenance-tagged** — every event records the revision pair, section and timestamp it was observed at, and the facts that triggered it | Most tools produce output without an audit trail |
 | **26 event types** — sentence lifecycle, citations, templates, reverts, sections, categories, wikilinks, talk pages, edit clusters, protection changes | Most tools track 1–3 signal types |
 | **BYO-inference** — every analyzer threshold is a pluggable function. Defaults work offline. Plug a model where you need one. | Most tools are either all-model or no-model, not selectable per boundary |
 | **Hash-verifiable** — evidence bundles carry a SHA-256 hash, replay manifests a Merkle root | Most tools export no hash to check a copy against |
@@ -111,11 +114,11 @@ refract diff "Darth_Vader" \
 # Brief analysis
 npx @refract-org/cli analyze "Earth" --depth brief
 
-# Detailed analysis
-npx @refract-org/cli analyze "Bitcoin" --depth detailed
+# Detailed analysis of one revision range
+npx @refract-org/cli analyze "Bitcoin" --from 369361755 --to 369393212 --depth detailed --json
 
-# Browse the events in a local web UI
-refract explore "Bitcoin"
+# Browse the same events in a local web UI
+refract explore "Bitcoin" --from 369361755 --to 369393212
 ```
 
 The [complete workflow](complete-workflow.md) walks through one use case in 5 steps.

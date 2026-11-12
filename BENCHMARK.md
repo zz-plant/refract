@@ -30,10 +30,16 @@ These 10 pages are selected for high editorial activity, diverse event types, an
 ### Setup
 
 ```bash
+manifest=benchmarks/ground-truth/manifest.json
+start=$(jq -r .windowStart "$manifest")
 for page in COVID-19 Bitcoin GPT-4 Climate_change "Donald_Trump" CRISPR "COVID-19_pandemic" Russia "Tesla,_Inc." Earth; do
-  refract analyze "$page" --depth detailed -c > "benchmark-${page// /_}.jsonl"
+  last=$(jq -r --arg p "$page" '.pages[] | select(.page == ($p | gsub("_"; " "))) | .lastRevisionId' "$manifest")
+  refract analyze "$page" --depth detailed --since "$start" --to "$last" --json > "benchmark-${page// /_}.jsonl"
 done
 ```
+
+`--json` makes the output one event per line. `--since` and `--to` hold each run to the
+manifest's window; without them `analyze` reads the page's whole history.
 
 ### Submission format
 

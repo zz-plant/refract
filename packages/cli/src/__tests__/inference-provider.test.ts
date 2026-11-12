@@ -38,6 +38,26 @@ describe("OpenAICompatibleProvider default inference", () => {
     });
   });
 
+  it("judges a revert by the rule analysis uses for revert_detected", async () => {
+    const provider = new OpenAICompatibleProvider({});
+    const isRevert = async (comment: string) => (await provider.infer("revert", { comment })).output.isRevert;
+
+    expect(await isRevert("Undid revision 123 by Example")).toBe(true);
+    // The edit-type heuristic's wider pattern called this a revert; analysis does not.
+    expect(await isRevert("rv unexplained removal")).toBe(false);
+  });
+
+  it("applies the default rule to input that omits optional fields", async () => {
+    const provider = new OpenAICompatibleProvider({});
+
+    await expect(provider.infer("activity_spike", {})).resolves.toEqual({
+      boundary: "activity_spike",
+      output: { isSpike: false },
+      confidence: 0.5,
+      source: "default",
+    });
+  });
+
   it("uses deterministic edit heuristics without an API key", async () => {
     const provider = new OpenAICompatibleProvider({});
 

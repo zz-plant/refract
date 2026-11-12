@@ -8,14 +8,18 @@ can query it directly with SQL — no loading step, no schema definition, no ext
 needed.
 
 **Quick start**: Refract ships a [`refract-analytics.sql`](https://github.com/refract-org/refract/blob/main/examples/refract-analytics.sql) file with pre-built views.
-Load it and query immediately:
+The views read `events.jsonl` in the working directory, so export to that name first:
 
 ```bash
-duckdb -c ".read examples/refract-analytics.sql" -c "SELECT * FROM contested_claims;"
+refract export "Bitcoin" --from 369361755 --to 369393212 --format ndjson > events.jsonl
+duckdb -c ".read examples/refract-analytics.sql" -c "SELECT * FROM section_activity;"
 ```
 
 Views included: `contested_claims`, `citation_churn_by_month`, `section_activity`,
 `event_type_distribution`, `talk_content_ratio`.
+
+Events carry no claim identifier. `contested_claims` keys a sentence by its section
+and text, and lists the ones that were modified, removed or reintroduced.
 
 ## Install DuckDB
 
@@ -37,6 +41,12 @@ duckdb -c "SELECT count(*) FROM 'bitcoin-events.jsonl'"
 
 DuckDB's JSON scanner detects column names and types automatically from the first
 batch of records. No CREATE TABLE or INSERT step.
+
+Without `--from` and `--to`, `export` reads the page's whole history. Bound the
+range, as in the quick start above, for a short run.
+
+Column names are the event's own camelCase keys: `eventType`, `fromRevisionId`,
+`toRevisionId`. The queries below quote them so results keep that spelling.
 
 ## Event type distribution
 
@@ -77,7 +87,9 @@ updating, not necessarily instability.
 
 ## Find the most contested sections
 
-Contested sections have both reverts and edit clusters:
+`revert_detected` and `edit_cluster_detected` describe a whole revision, so their
+`section` is the empty string. This query lists that row beside the sections' own
+counts:
 
 ```sql
 SELECT section,
@@ -87,8 +99,7 @@ SELECT section,
        count(*) as total_events
 FROM 'bitcoin-events.jsonl'
 GROUP BY section
-HAVING reverts > 0 OR clusters > 0
-ORDER BY (reverts + clusters) DESC;
+ORDER BY total_events DESC;
 ```
 
 ## Track a specific claim's lifecycle
@@ -106,7 +117,7 @@ ORDER BY timestamp;
 
 ```sql
 SELECT section, timestamp, "eventType",
-       count(*) OVER (PARTITION BY section ORDER BY to_revision_id)
+       count(*) OVER (PARTITION BY section ORDER BY "toRevisionId")
          as cumulative_events
 FROM 'bitcoin-events.jsonl'
 ORDER BY section, timestamp;
@@ -135,37 +146,36 @@ echo "Bitcoin" > pages.txt
 echo "Ethereum" >> pages.txt
 echo "Dogecoin" >> pages.txt
 
-# Batch analyze
-refract analyze --pages-file pages.txt --depth detailed -c
-
-# Export all
-refract export "Bitcoin" --format ndjson > events.jsonl
-refract export "Ethereum" --format ndjson >> events.jsonl
-refract export "Dogecoin" --format ndjson >> events.jsonl
+# Export each page to its own file
+mkdir -p pages
+while read page; do
+  refract export "$page" --format ndjson > "pages/$page.jsonl"
+done < pages.txt
 ```
 
-Then compare across pages:
+An event does not name its page, so keep one file per page and let DuckDB add the
+file name as a column:
 
 ```sql
-SELECT page_title,
+SELECT regexp_extract(filename, '([^/]+)\.jsonl$', 1) as page,
        count(*) as events,
        count(*) FILTER (WHERE "eventType" = 'revert_detected') as reverts,
        count(*) FILTER (WHERE "eventType" LIKE 'citation_%') as citation_churn
-FROM 'events.jsonl'
-GROUP BY page_title
+FROM read_json_auto('pages/*.jsonl', filename = true, union_by_name = true)
+GROUP BY page
 ORDER BY events DESC;
 ```
 
 ## Validation
 
 ```bash
-# Count events — should match refract analyze output
+# Count events — one per line of the export
 duckdb -c "SELECT count(*) FROM 'events.jsonl'"
 
 # Verify event types are valid
 duckdb -c "SELECT DISTINCT \"eventType\" FROM 'events.jsonl' ORDER BY \"eventType\""
 
-# Check for empty sections
+# Count events with no section (reverts, edit clusters, talk correlations)
 duckdb -c "SELECT count(*) FROM 'events.jsonl' WHERE section = ''"
 ```
 

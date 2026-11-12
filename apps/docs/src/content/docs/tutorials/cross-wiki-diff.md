@@ -23,34 +23,41 @@ in how knowledge is maintained. Refract can detect these divergences mechanicall
 refract diff "Douglas_Adams" \
   --wiki-a https://en.wikipedia.org/w/api.php \
   --wiki-b https://de.wikipedia.org/w/api.php \
-  --depth detailed
+  --depth brief
 ```
 
 Refract fetches both pages, runs the full deterministic pipeline on each, and prints
 side-by-side counts of sections, citations, templates, reverts, categories, wikilinks,
 and event types.
 
+At `brief`, the latest 20 revisions of each wiki are compared. `detailed` (the default)
+and `forensic` read each wiki's whole history; `diff` has no `--from` or `--to`.
+
 ### 2. Compare competing Fandom wikis
 
 ```bash
 refract diff "Darth_Vader" \
-  --wiki-a https://starwars.fandom.com/api.php \
-  --wiki-b https://clone-wars.fandom.com/api.php \
-  --depth forensic
+  --wiki-a https://lego.fandom.com/api.php \
+  --wiki-b https://battlefront.fandom.com/api.php \
+  --depth brief
 ```
 
-Forensic depth enables edit cluster and talk page correlation on both wikis — showing
-not just what differs, but how contested the differences are.
+The title must be a page on every wiki. Redirects are not followed: on
+`starwars.fandom.com`, "Darth_Vader" redirects to "Anakin Skywalker", and `diff` would
+compare the redirect page's own history.
 
 ### 3. Compare three wikis at once
 
 ```bash
-refract diff "climate_change" \
+refract diff "Bitcoin" \
   --wiki-a https://en.wikipedia.org/w/api.php \
   --wiki-b https://de.wikipedia.org/w/api.php \
   --wiki-c https://fr.wikipedia.org/w/api.php \
-  --depth detailed
+  --depth brief
 ```
+
+Up to six wikis can be compared (`--wiki-a` to `--wiki-f`). A wiki that has no page
+under the title shows zeros in its column; the command does not fail.
 
 ### 4. Measure shared text
 
@@ -92,15 +99,21 @@ on 2026-11-04, whose counts will differ from yours:
 ```
 
 HHI is the source concentration of each wiki's citations; `[concentrated]` marks a high
-value. An event-type breakdown follows, then any counts more than two standard deviations
-from the mean across wikis.
+value. An event-type breakdown follows.
+
+An outliers section lists counts whose z-score across the wikis exceeds 2 in absolute
+value. It needs at least three wikis, and with the population standard deviation the
+largest possible |z| among n wikis is √(n−1): 1.41 for three, 1.73 for four, 2 for five.
+In practice nothing is listed below five wikis, and with five only by rounding.
 
 The summary holds counts. To compare individual events, export each wiki and compare the files:
 
 ```bash
-refract export "Bitcoin" --api https://en.wikipedia.org/w/api.php --format ndjson > a.ndjson
-refract export "Bitcoin" --api https://simple.wikipedia.org/w/api.php --format ndjson > b.ndjson
+refract export "Bitcoin" --api https://en.wikipedia.org/w/api.php --from <revId> --to <revId> --format ndjson > a.ndjson
+refract export "Bitcoin" --api https://simple.wikipedia.org/w/api.php --from <revId> --to <revId> --format ndjson > b.ndjson
 ```
+
+Revision IDs are per wiki. Without a range, `export` reads the whole history.
 
 Differences to look for in those events:
 - **Event present on one wiki but not the other** → content divergence
@@ -115,7 +128,7 @@ These examples show kinds of difference to find in the exported events; `refract
 ### Detecting canon divergence (Fandom)
 
 When two Fandom wikis cover the same fictional universe with different canon policies,
-`refract diff` catches the moment of divergence:
+the exported events show the moment of divergence:
 
 ```
 Wiki A: category_removed "Canon characters" at rev 1234
@@ -151,12 +164,14 @@ Wiki B (Simple): 45 events, 8 revisions, detailed depth
 ## Troubleshooting
 
 - **One wiki returns no results**: Verify the page title is exact — different wikis
-  may use different naming conventions (e.g., "Douglas_Adams" vs. "Douglas Adams").
-  Try the page title on each wiki individually first with `refract analyze`.
-- **Rate limits when hitting 3+ wikis**: Use `-c` on each individual analyze call
-  to cache results, then run `refract diff` with cached data.
-- **Custom API endpoints**: Any MediaWiki instance works. For private wikis, pass
-  auth credentials with `--api-key`, `--api-user`, or `--api-password`.
+  may use different titles (English "Climate change" is German "Klimawandel"), and a
+  missing title yields a column of zeros, not an error. Try the title on each wiki
+  first with `refract analyze --depth brief`.
+- **Rate limits when hitting 3+ wikis**: `refract diff` does not use the revision
+  cache. Use `--depth brief` to keep each wiki to 20 revisions.
+- **Custom API endpoints**: Any public MediaWiki instance works. `refract diff` has no
+  auth flags; for a private wiki, run `refract export` with `--api-key` on each wiki
+  and compare the files.
 
 ## Next steps
 

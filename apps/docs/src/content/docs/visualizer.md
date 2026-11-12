@@ -32,7 +32,7 @@ and available inputs; choosing a depth does not ensure every type appears.
 
 ### Timeline
 
-Every event in chronological order. Click any event to see the diff. Filter by event type with the tag buttons in the toolbar.
+Every event in the order the file lists them. Click any event to see the diff. Filter by event type with the tag buttons in the toolbar.
 
 ### Diff Viewer
 
@@ -40,11 +40,11 @@ Word-level diff of `before` → `after` for the selected event. Removed text is 
 
 ### Citation Churn
 
-Bar chart of citation additions, removals, and replacements per revision, plus a sortable table of every citation change.
+Bar chart of citation additions, removals, and replacements per revision, plus a table of every citation change.
 
 ### Certainty Timeline
 
-Confidence scores over time for model-interpreted events. Dots are color-coded: green (≥70%), yellow (40–69%), red (<40%).
+The panel titled "Model confidence": one dot per event on the `model_interpretation` layer, placed by its confidence score. Dots are color-coded: green (≥70%), yellow (40–69%), red (<40%). Events exported by the CLI are on the `observed` layer, so the panel is empty for them.
 
 ### Disputes
 

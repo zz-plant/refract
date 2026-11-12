@@ -21,14 +21,17 @@ browser — no server, no API key, no data leaves your machine.
 
 ### 1. Generate analysis data
 
-Run a Refract analysis and export it as NDJSON:
+Export a bounded history as NDJSON:
 
 ```bash
-refract analyze "Bitcoin" --depth forensic > bitcoin-events.jsonl
+refract export "Bitcoin" --from 369361755 --to 369393212 --format ndjson > bitcoin-events.ndjson
 ```
 
-Use `--depth forensic` to get the full 26 event types (citation changes, reverts, edit
-clusters, talk page activity, category shifts — everything the visualizer can display).
+The viewer reads one event per line. `refract analyze` writes the same lines when
+given `--json`; without it the command prints a report the viewer cannot load.
+
+The bounds select a two-revision span. Which of the 26 event types appear depends
+on what changed in the span you export.
 
 ### 2. Start Refract UI
 
@@ -46,71 +49,77 @@ timeline immediately.
 
 ### 3. Load your data
 
-Drag `bitcoin-events.jsonl` from your file manager onto the upload zone in the browser
-toolbar. Refract UI parses the file, validates event types against the
-`@refract-org/evidence-graph` schema, and populates every panel.
+Drag `bitcoin-events.ndjson` from your file manager onto the upload zone in the
+toolbar, or click the zone to pick the file. Refract UI parses each line, checks the
+event type against `@refract-org/evidence-graph` and the fields every event needs,
+and fills every panel. Lines it rejects are listed under the upload zone.
 
 ## What you see
 
-### Timeline (top-left)
+### Revision timeline (left)
 
-Every event plotted on a horizontal axis by revision timestamp. Hover for event type and
-section. Click any event to populate the diff panel. Filter by event type using the
-dropdown in the toolbar.
+A list of every event in the order the file has them, with its type, a one-line
+summary, timestamp, revision IDs and section. Click an event to show it in the diff
+panel. The tag buttons in the toolbar turn event types on and off; every panel and
+the export follow the filter.
 
-### Diff (top-right, middle-right)
+### Diff (right, top)
 
-When you click an event, `before` and `after` snapshots appear side by side. For
-`sentence_modified` events, the changed text is highlighted.
+A word-level diff of the selected event's `before` and `after` text in one block.
+Removed words are red and added words are green.
 
-### Citation churn (top-center-right)
+### Citation churn (right, middle)
 
-Bar chart of citation activity over time — additions in green, removals in red. Watch for
-spikes that correlate with revert clusters — a page edit war where sources are being
-added and stripped in rapid succession.
+A bar chart with one group per revision: citations added, removed and replaced.
 
-### Certainty timeline (top-right)
+### Model confidence (right, bottom)
 
-When you export events with `--depth forensic` on Refract v0.5.0+, each event carries
-enrichment fields (`certaintyProfile`, `directionSignal`, `editMagnitude`). The certainty
-timeline plots how confident the language was over time. Drops in certainty often precede
-reverts or disputes.
+One dot per event on the `model_interpretation` layer, placed by its
+`modelInterpretation.confidence`. Events exported by the CLI are on the `observed`
+layer and carry no confidence, so for a CLI export this panel reads "No model
+interpretations with confidence scores found."
 
-### Row 2 — Disputes, Sources, Word-level diffs, Schema
+### Row 2 — Disputes, Wording changes, Source changes, Event schema
 
 | Panel | What it shows |
 |-------|--------------|
-| **Revert clusters** | Groups of edits reverted together, with timestamps and revision IDs |
-| **Edit velocity** | Edits-per-day bar chart — spikes indicate concentrated editing activity |
-| **Talk page timeline** | Thread activity over time, correlated against main-page event density |
-| **Source change table** | Every citation added, removed, or replaced, with the URL and revision |
-| **Wording diff card** | When a sentence was modified in-place, see the exact text change |
-| **Schema viewer** | Raw event count by type — quick glance at which analyzers fired most |
+| **Revert clusters** | `revert_detected` events grouped by revision and section, with the count and the facts recorded |
+| **Events per day** | Bar chart of events per day, with a second bar for that day's reverts |
+| **Talk page activity** | Talk page events in the file, with timestamp and revision |
+| **Wording changes** | One card per sentence event (first seen, modified, removed, reintroduced) with its before and after text |
+| **Source changes** | A table of every citation added, removed, or replaced: date, type, section, detail |
+| **Event schema** | Every top-level field in the loaded events, with its types and the share of events that have it |
+
+### Export
+
+The toolbar's export control downloads the filtered events as JSON, JSONL, or CSV.
 
 ## Interpretation example
 
-Say you run `refract diff "Bitcoin" --wiki-a ... --wiki-b ...` and load the output into
-Refract UI:
+Say you load an export that covers an edit war:
 
-1. **Timeline** shows the two wikis' events overlaid — one color per wiki.
-2. **Citation churn** reveals Wiki B has 3× more citation turnover.
-3. **Revert clusters** in Wiki A's timeline align with edit velocity spikes — edit-warring
-   without resolution.
-4. **Certainty timeline** drops sharply on Wiki B after a controversial edit, then slowly
-   recovers as more sources appear.
+1. **Revert clusters** lists the reverted revisions; **Events per day** shows the days
+   they fall on.
+2. Turn on only the `citation_*` tags. **Citation churn** shows which revisions added
+   and removed sources, and **Source changes** lists each one.
+3. Click a `sentence_modified` event in the timeline. The diff panel shows the words
+   that changed.
 
 Without the visualizer, you would spot these patterns by reading raw JSON. With it, the
 relationships between event types become visible at a glance.
 
 ## Troubleshooting
 
-- **"No events loaded"**: Make sure your file uses NDJSON format (`--format ndjson`).
-  Refract UI expects one JSON object per line with `eventType` and `timestamp` fields.
-- **Empty panels**: Some panels require specific event types. Citation churn needs
-  `citation_added` or `citation_removed` events. Run `--depth forensic` to get the full
-  set.
-- **File size**: Very large analyses (1000+ revisions) may load slowly. Use `--depth
-  detailed` instead and export a narrower revision range with `--from` and `--to`.
+- **"No valid events found."**: The file has no line the viewer accepts. Export with
+  `--format ndjson`, or pass `--json` to `refract analyze`. Each line must be one JSON
+  object with `eventType`, `fromRevisionId`, `toRevisionId`, `timestamp`, `section`,
+  `before`, `after` and `deterministicFacts`.
+- **"Imported N events (M errors)"**: Some lines were rejected, such as a `#` comment
+  line. The first ten are listed with their line numbers.
+- **Empty panels**: Some panels need specific event types. Citation churn needs
+  `citation_added`, `citation_removed` or `citation_replaced` events.
+- **File size**: A long history may load slowly. Export a narrower revision range
+  with `--from` and `--to`.
 
 ## Next steps
 

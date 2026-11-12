@@ -12,9 +12,19 @@ Usage:
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Optional
+
+
+def _parse_time(value: str) -> datetime:
+    """Parse an ISO 8601 date or timestamp; one without an offset is read as UTC.
+
+    Event timestamps end in "Z" and a cutoff is usually a bare date, and Python
+    refuses to compare an aware datetime with a naive one.
+    """
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 @dataclass
@@ -41,7 +51,7 @@ def build_leakage_benchmark(
     cutoff: str,
     min_claim_length: int = 20,
 ) -> list[LeakageRecord]:
-    cutoff_dt = datetime.fromisoformat(cutoff)
+    cutoff_dt = _parse_time(cutoff)
     events = _load_events(events_path)
     records = []
 
@@ -52,7 +62,7 @@ def build_leakage_benchmark(
         if len(after) < min_claim_length:
             continue
 
-        ts = datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00"))
+        ts = _parse_time(event["timestamp"])
         records.append(LeakageRecord(
             claim_text=after,
             first_seen=event["timestamp"],
@@ -70,7 +80,7 @@ def build_recency_benchmark(
     knowledge_date: str,
 ) -> dict:
     events = _load_events(events_path)
-    kd = datetime.fromisoformat(knowledge_date)
+    kd = _parse_time(knowledge_date)
 
     claims_at_date = []
     claims_missing = []
@@ -78,7 +88,7 @@ def build_recency_benchmark(
     for event in events:
         if event.get("eventType") not in ("sentence_first_seen", "sentence_modified", "sentence_reintroduced"):
             continue
-        ts = datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00"))
+        ts = _parse_time(event["timestamp"])
         if ts <= kd:
             claims_at_date.append(event.get("after", ""))
         else:

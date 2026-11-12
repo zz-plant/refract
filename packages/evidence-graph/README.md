@@ -18,8 +18,8 @@ bun add @refract-org/evidence-graph
 
 ### Functions
 
-- `createClaimIdentity(pageTitle, claimText)` — deterministic hash for claim dedup
-- `createEventIdentity(pageTitle, eventType, revisionRange)` — deterministic event fingerprint
+- `createClaimIdentity({ text, section, pageTitle, pageId, version? })` — returns a `ClaimIdentity` (`claimId`, `identityKey`, `pageTitle`, `pageId`); `claimId` is a deterministic hash for claim dedup
+- `createEventIdentity(event)` — deterministic 16-hex-character fingerprint of an `EvidenceEvent`
 
 ### Verification bundles (0.5.1+)
 

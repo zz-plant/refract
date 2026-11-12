@@ -43,11 +43,11 @@ Wikipedia API → Fetch → Analyze → Report → (optional) Validate
 
 ## Depth levels
 
-The `--depth` flag controls how many analyzers run:
+The `--depth` flag controls how much text each event carries. Every level runs the same analyzers and emits the same event types:
 
-- **`brief`** — section differ only. Quick check for any change.
-- **`detailed`** (default) — all standard analyzers (section, citation, revert, template).
-- **`forensic`** — includes cross-revision correlation, metadata trackers, and cluster detection. Use for full audit or export.
+- **`brief`** — `before` and `after` are left empty, and without a range only the latest 20 revisions are read.
+- **`detailed`** (default) — events carry the changed text.
+- **`forensic`** — as `detailed`, plus both revisions' full wikitext on every event. Output is large; give it a revision range.
 
 See [depth reference](depth.md).
 
@@ -66,6 +66,8 @@ The pipeline produces timed `EvidenceEvent` objects with 26 event types, all mec
 - **Protection events**: `protection_changed`
 - **Talk page events**: `talk_page_correlated`, `talk_thread_opened`, `talk_thread_archived`, `talk_reply_added`
 
+`refract analyze` and `refract export` take the talk events from the ten talk-page edits that precede the last analyzed revision, so a long range sees only the most recent discussion.
+
 The event schema includes a `modelInterpretation` field and `model_interpretation` evidence layer — these are never set by Refract's deterministic engine. They exist for downstream consumers to attach semantic analysis without modifying the event stream.
 
 Analyzers accept configurable parameters (similarity thresholds, time windows, revert patterns) via `AnalyzerConfig`, passed from the CLI or SDK. This allows users to tune detection sensitivity without modifying analyzer code.
@@ -78,7 +80,7 @@ See [schema.md](schema.md) for the full reference.
 
 ## Configurable heuristics / BYO-inference boundaries
 
-Every analyzer threshold encodes an interpretive judgment — what counts as a revert, how close edits must be to form a cluster, what sentence similarity means "modified" vs "removed and added." These thresholds accept optional overrides via `AnalyzerConfig`, and the effective parameters are recorded in `FactProvenance.parameters` when non-default values are used.
+Every analyzer threshold encodes an interpretive judgment — what counts as a revert, how close edits must be to form a cluster, what sentence similarity means "modified" vs "removed and added." These thresholds accept optional overrides via `AnalyzerConfig`. The `FactProvenance` type has a `parameters` field for recording them; facts on events from `refract analyze` and `refract export` carry `fact` and `detail` only.
 
 Each threshold is a **BYO-inference boundary** — a typed function signature where a model can replace the default heuristic:
 
@@ -90,7 +92,7 @@ Each threshold is a **BYO-inference boundary** — a typed function signature wh
 | Edit cluster detection | Time window + min size | "Are these edits semantically related?" |
 | Heuristic classification | Size thresholds + comment patterns | "What kind of edit is this?" |
 
-The defaults work offline with no configuration required. Consumers supply a model at any boundary, and the event's `FactProvenance.parameters` records the path taken — `similaritySource: "model"` or `"default"` — keeping the audit trail transparent regardless.
+The defaults work offline with no configuration required. Consumers supply a model at any boundary through the library, and can record the path taken — `similaritySource: "model"` or `"default"` — in `FactProvenance.parameters`.
 
 This is the architectural spine: Refract stays purely mechanical, but the boundaries where judgment enters are explicit, typed, and versioned. Foundation model improvements automatically benefit consumers without Refract changing.
 

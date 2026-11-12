@@ -23,17 +23,25 @@ npm install -g @refract-org/cli
 
 Or use `npx` — the SDK falls back to it automatically.
 
+The client stops the CLI after 120 seconds. This tutorial uses `brief` depth, which
+reads the latest 20 revisions. `detailed` and `forensic` read the whole history
+unless you pass `since` or revision bounds, which is too long for a page this size.
+
 ## Step 1: Analyze a page and get typed objects
 
 The SDK converts NDJSON `eventType` (camelCase) to pandas `event_type` (snake_case) for Python conventions. DataFrames use `event_type`, Python dataclasses use `eventType`.
 
 ```python
+import json
+from dataclasses import asdict
+
+import pandas as pd
 from refract import Refract
 
 r = Refract()
 
-# Analyze at forensic depth for maximum signal
-events = r.analyze("COVID-19", depth="forensic")
+# The latest 20 revisions
+events = r.analyze("COVID-19", depth="brief")
 
 print(f"Found {len(events)} events")
 print(f"First event: {events[0].eventType} at {events[0].timestamp}")
@@ -46,8 +54,8 @@ Each event is a typed `EvidenceEvent` dataclass with `.eventType`, `.timestamp`,
 ## Step 2: Load into pandas as a DataFrame
 
 ```python
-# Direct DataFrame export with flattened fields
-df = r.analyze("COVID-19", depth="forensic", as_frame=True)
+# The same events, one row each
+df = r.analyze("COVID-19", depth="brief", as_frame=True)
 
 print(df.columns)
 # Index(['timestamp', 'event_type', 'from_revision_id', 'to_revision_id',
@@ -57,8 +65,12 @@ print(df.columns)
 print(df.head())
 ```
 
-The `as_frame=True` flag returns a pandas DataFrame with nested fields (deterministic
-facts, provenance) flattened into columns. No manual transformation needed.
+The `as_frame=True` flag returns a pandas DataFrame. `fact` and `fact_detail` come
+from the event's first deterministic fact.
+
+`event_id` is empty for `analyze` and filled for `export`. `analyzer_name` and
+`analyzer_version` are empty because the CLI attaches no provenance to facts today.
+The frame has no `before` or `after` column; read the text from the dataclasses.
 
 ## Step 3: Analyze event type distribution
 
@@ -114,22 +126,27 @@ section_activity = df.groupby("section").agg(
 print(section_activity.head(10))
 ```
 
-Sections with high revert counts and low talk activity are edit-warred. Sections with
-high revert counts and high talk activity are actively deliberated. The DataFrame
-makes this distinction visible at a glance.
+`revert_detected`, `edit_cluster_detected` and `talk_page_correlated` describe a whole
+revision, so they are counted on the row whose `section` is the empty string. The
+named rows show where sentence and citation changes concentrate.
 
 ## Step 6: Export for further analysis
 
 ```python
-# Export as flat CSV
-df_flat = r.export("COVID-19", format="ndjson", flatten=True, as_frame=True)
-df_flat.to_csv("covid-events.csv", index=False)
+# Save the flat rows as CSV
+df.to_csv("covid-events.csv", index=False)
 
-# Or export as raw NDJSON for DuckDB
-events_raw = r.export("COVID-19", format="ndjson")
+# Save the events as JSON Lines, with before and after text
 with open("covid-events.jsonl", "w") as f:
-    for event in events_raw:
-        f.write(json.dumps(event) + "\n")
+    for event in events:
+        f.write(json.dumps(asdict(event)) + "\n")
+```
+
+The dataclasses keep selected fields. For the complete record, including `eventId`
+and the enrichment fields, write the CLI's own export for a bounded range:
+
+```bash
+refract export "Bitcoin" --from 369361755 --to 369393212 --format ndjson > bitcoin-events.jsonl
 ```
 
 ## Step 7: Error handling
@@ -140,25 +157,28 @@ from refract import Refract, RefractError
 r = Refract()
 
 try:
-    events = r.analyze("ThisPageDoesNotExist", depth="brief")
+    # Bounds in the wrong order make the CLI exit non-zero
+    r.analyze("Bitcoin", depth="brief", **{"from": "369393212", "to": "369361755"})
 except RefractError as e:
     print(f"Refract error: {e}")
-    # Handle gracefully — the page may have been deleted, the API may be down,
-    # or the CLI may not be installed
+
+# A page with no revisions is not an error: the result is an empty list
+missing = r.analyze("ThisPageDoesNotExist", depth="brief")
+print(len(missing))  # 0
 ```
+
+`RefractError` carries the CLI's exit code and stderr. It is also raised when neither
+`refract` nor Node.js can be found.
 
 ## Step 8: Use the model evaluation adapter
 
-`refract_eval` maps Refract events to model evaluation records — no CLI needed:
+`refract_eval` maps Refract events to model evaluation records. It reads a JSON Lines
+file and does not call the CLI:
 
 ```python
 from refract_eval import build_leakage_benchmark, check_provenance
 
-# Export events first, then use the adapter
-r.export("COVID-19", format="ndjson", flatten=False)
-# (events saved to stdout — pipe to file, then load with adapter)
-
-# Or use pre-computed events:
+# The file written in step 6
 records = build_leakage_benchmark("covid-events.jsonl", cutoff="2024-06-01")
 leaked = [r for r in records if r.leaked]
 print(f"Leakage rate: {len(leaked)}/{len(records)}")

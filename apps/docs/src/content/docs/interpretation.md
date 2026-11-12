@@ -7,44 +7,43 @@ Refract emits a deterministic event stream. This page explains how to read it.
 
 ## The event envelope
 
-Every event has the same structure:
+Every event has the same structure. This one is from `refract export "Bitcoin" --from 369361755 --to 369393212 --format ndjson`:
 
 ```json
 {
-  "eventId": "a3f5c2e1b7d409fa",
-  "eventType": "sentence_first_seen",
-  "claimId": "c7d8e9f0a1b23456",
-  "fromRevisionId": 1280110001,
-  "toRevisionId": 1280110100,
-  "section": "Geology",
-  "before": "",
-  "after": "Earth's crust consists of tectonic plates...",
+  "eventType": "citation_removed",
+  "fromRevisionId": 369361755,
+  "toRevisionId": 369393212,
+  "section": "Basis of Value",
+  "before": "<ref>[http://www.bitcoin.org/faq Bitcoin FAQ]</ref>",
+  "after": "",
   "deterministicFacts": [
-    {
-      "fact": "New sentence detected",
-      "detail": "First appearance of this text across revision range",
-      "provenance": {
-        "analyzer": "section-differ",
-        "version": "0.5.1",
-        "inputHashes": ["sha256:abc123..."]
-      }
-    }
+    { "fact": "citation_changed", "detail": "type=removed" }
   ],
   "layer": "observed",
-  "timestamp": "2024-11-25T12:00:00Z",
-  "schemaVersion": "0.4.0"
+  "timestamp": "2010-06-21T17:29:07Z",
+  "schemaVersion": "0.5.0",
+  "editMagnitude": "minor",
+  "contentChange": "compression",
+  "keyTerms": ["bitcoin"],
+  "certaintyProfile": { "high": 0, "medium": 0, "low": 0, "hedging": 0 },
+  "directionSignal": "neutral",
+  "quantitativeFindings": [],
+  "eventId": "614217608b4726d4"
 }
 ```
+
+`eventId` is added by `refract export`; `refract analyze --json` prints the same event without it. Neither command writes a `claimId` on events.
 
 ### Field meanings
 
 | Field | What it tells you |
 |-------|-------------------|
 | `eventType` | Kind of change — sentence, citation, template, revert, section, etc. See [event taxonomy](events.md). |
-| `fromRevisionId` / `toRevisionId` | The revision boundary where this change occurred. `from` is the parent revision; `to` is the revision containing the change. |
+| `fromRevisionId` / `toRevisionId` | The revision boundary where this change occurred. `from` is the parent revision; `to` is the revision containing the change. On `talk_page_correlated`, `from` is the article revision and `to` is the talk page revision nearest to it in time. |
 | `section` | Which section the change belongs to. `(lead)` means the page introduction. Not all event types use this field. |
-| `before` / `after` | The text before and after the change. For additions, `before` is empty. For removals, `after` is empty. For modifications, both are present. |
-| `deterministicFacts` | Why the engine produced this event. Always mechanical — pure functions of the wikitext. The `provenance` field identifies which analyzer, what version, and what parameters. |
+| `before` / `after` | The text before and after the change. For additions, `before` is empty. For removals, `after` is empty. For modifications, both are present. At `--depth brief` both are empty on almost every event. On `revert_detected`, `after` holds the edit summary that matched and `before` is empty. |
+| `deterministicFacts` | Why the engine produced this event. Always mechanical — pure functions of the wikitext. Each fact has a `fact` name and a `detail` string. The schema allows an optional `provenance` object; the CLI does not fill it. |
 | `layer` | Where the evidence came from: `"observed"` (deterministic), `"policy_coded"` (rules-based), `"model_interpretation"` (downstream only), `"speculative"` (low confidence), `"unknown"`. |
 | `schemaVersion` | Which schema version produced this event. Use this for compatibility checks when consuming events across package versions. |
 
@@ -89,18 +88,18 @@ dispute signals. Refract tracks them mechanically.
 
 ### Dispute signals (`revert_*`, `edit_cluster_*`)
 
-- **`revert_detected`**: An edit was reverted, detected from the edit summary matching revert patterns.
-- **`edit_cluster_detected`**: Multiple edits occurred within a tight time window (default: 3+ edits in 1 hour).
+- **`revert_detected`**: An edit was reverted, detected from the edit summary matching revert patterns. Its `section` is empty.
+- **`edit_cluster_detected`**: Multiple edits occurred within a tight time window (default: 3+ edits in 1 hour; `--cluster-window` changes it). The event spans the cluster, from its first revision to its last, and its `section` is empty.
 
 ### Talk page activity (`talk_*`)
 
-These events correlate article revisions with their associated talk pages.
+These events correlate article revisions with their associated talk pages. `refract analyze` and `refract export` emit all five from the ten talk-page edits that precede the last analyzed revision. Thread events cover the talk edits made since the first analyzed revision.
 
 - **`talk_page_correlated`**: An article revision has a nearby talk page revision.
 - **`talk_thread_opened`**: A new discussion thread was started.
 - **`talk_thread_archived`**: A thread was closed or archived.
 - **`talk_reply_added`**: A reply was posted in an existing thread.
-- **`talk_activity_spike`**: Talk page activity exceeded the threshold (default: 3× the moving average).
+- **`talk_activity_spike`**: Talk page activity on one day exceeded the threshold (default: 3× the moving average; `--spike-factor` changes it). The CLI looks for spikes among the ten talk-page edits that precede the last analyzed revision, within the seven days before it, so most runs emit none.
 
 ## Reading patterns across events
 
@@ -135,7 +134,7 @@ When building on Refract's event stream:
 1. **Filter by `eventType`** to isolate the signal you care about (e.g., citation
    events for source churn analysis).
 2. **Group by `section`** to find which parts of the page are most active.
-3. **Chain by `claimId`** to trace a specific proposition across its full lifecycle.
+3. **Follow one passage** with `refract claim`, or group the claims in `refract analyze --report`, which assigns each a `claimId`. Events themselves carry no `claimId`.
 4. **Sort by `timestamp`** to reconstruct the chronological sequence.
 5. **Never interpret `layer` values you didn't set** — `model_interpretation` is for
    downstream use only. Refract never sets it.

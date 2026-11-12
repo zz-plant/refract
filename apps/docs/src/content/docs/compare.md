@@ -24,15 +24,15 @@ Sources: [Help:Page history](https://en.wikipedia.org/wiki/Help:Page_history),
 |---|---|---|
 | **View a single revision diff** | Yes — click "prev" on any revision | Yes — every event carries `before`/`after` snapshots |
 | **See who edited what** | Yes — username + timestamp per revision | No — Refract observes document change, not editor identity |
-| **Find when a sentence first appeared** | Not built in — on English Wikipedia, the history page's "Find addition/removal" link opens WikiBlame | `refract claim "Page" --text "sentence"` → exact revision + timestamp |
+| **Find when a sentence first appeared** | Not built in — on English Wikipedia, the history page's "Find addition/removal" link opens WikiBlame | `refract claim "Page" --text "sentence"` → first matching revision + timestamp among the revisions read (the latest 50, or a `--from`/`--to` range) |
 | **Track a sentence across its entire lifecycle** | Manual — follow the page history | Automatic — first seen, modified, removed, reintroduced, all timestamped |
 | **Detect citation swapping** | Manual — compare each diff's reference section | `citation_replaced` event — `before`/`after` show the old and new source |
-| **Detect edit wars** | Partly — undos, rollbacks and manual reverts are tagged, as are the edits they revert; spotting back-and-forth is manual | `revert_detected` + `edit_cluster_detected` — automatic structural detection |
+| **Detect edit wars** | Partly — undos, rollbacks and manual reverts are tagged, as are the edits they revert; spotting back-and-forth is manual | `revert_detected` events from edit summaries; `edit_cluster_detected` events for three or more edits within an hour |
 | **Correlate article edits with talk page discussion** | Manual — check Talk tab separately | `talk_page_correlated` — Refract checks 7 days before / 3 days after each edit |
-| **Compare the same topic across language editions** | Manual — open each wiki separately | `refract diff` — cross-wiki comparison with z-score outlier detection |
+| **Compare the same topic across language editions** | Manual — open each wiki separately | `refract diff` — side-by-side event counts per wiki; z-score outliers can be listed only when five or six wikis are compared |
 | **Query with SQL** | No | DuckDB: `SELECT "eventType", count(*) FROM 'events.jsonl' GROUP BY 1` |
 | **Hash an export so others can check it** | Per revision — each revision has a permanent link, and the API returns a SHA-1 of its content | `refract export --manifest` → Merkle root over the event hashes; the same version over the same revision range reproduces it |
-| **Automated monitoring** | Watchlist, with optional email when any watched page changes | `refract cron` + `refract watch` → Slack, email, webhook alerts |
+| **Automated monitoring** | Watchlist, with optional email when any watched page changes | `refract cron` → Slack, email, webhook alerts; `refract watch` prints new revisions as they arrive |
 | **AI agent integration** | No | `refract mcp` → Claude Code, Cursor, VS Code can call Refract tools directly |
 
 ## Refract vs. other tools
@@ -40,7 +40,7 @@ Sources: [Help:Page history](https://en.wikipedia.org/wiki/Help:Page_history),
 | Tool | What it does | Refract's difference |
 |---|---|---|
 | **[XTools](https://www.mediawiki.org/wiki/XTools)** | [Page History](https://www.mediawiki.org/wiki/XTools/Page_History): statistics about a page's edits, such as top editors and edits per year and month. [Authorship](https://www.mediawiki.org/wiki/XTools/Authorship): each editor's share of the current text, by character count. [Blame](https://www.mediawiki.org/wiki/XTools/Blame): the edits that added a given text. Authorship and Blame use WikiWho | Refract reports each change between revisions as a typed event and does not attribute text to editors |
-| **[WikiBlame](https://en.wikipedia.org/wiki/User:Flominator/WikiBlame)** | Uses binary or linear search over a page's revisions to find the one in which a given text was inserted or removed. Works on MediaWiki wikis | `refract claim` follows one sentence through every revision: first seen, modified, removed, reintroduced |
+| **[WikiBlame](https://en.wikipedia.org/wiki/User:Flominator/WikiBlame)** | Uses binary or linear search over a page's revisions to find the one in which a given text was inserted or removed. Works on MediaWiki wikis | `refract claim` follows one passage through each revision it reads (the latest 50 by default, or a `--from`/`--to` range) and prints the matching sentence at each |
 | **[Who Wrote That?](https://www.mediawiki.org/wiki/Who_Wrote_That%3F)** | Browser extension for Chrome and Firefox that uses WikiWho to highlight who wrote each part of an article's current text | Refract does not identify editors; it reports what changed at each revision |
 | **[WikiWho](https://www.mediawiki.org/wiki/WikiWho)** | Token-level provenance for about 70 Wikipedia editions: who added, removed or reinserted each token, and in which revision | Refract emits events for sentences, citations, templates, reverts and sections rather than tokens, and does not attribute editors |
 | **[WhoColor](https://github.com/wikiwho/WhoColor)** | Userscript that colors article text by author, with conflict and age views, built on WikiWho | Refract structures the data for querying, not just viewing |
@@ -79,7 +79,7 @@ Refract's model evaluation capability — temporal leakage detection, provenance
 | **Retrieval quality (stability-weighted)** | Embedding similarity only. Contested and stable passages score identically. | `refract_eval.score_retrieval_quality()` — each passage scored by revert count, citation churn, talk activity. |
 | **Knowledge recency** | No standard tooling. Ad-hoc: "ask the model what date it thinks it is." | `refract snapshot "Page" --at <date>` — deterministic page state at any point. Compare model answer against ground truth. |
 | **Standard benchmark** | No open benchmark for temporal ground truth. | `BENCHMARK.md` — 10 standard pages, submission format, reproducibility requirements. |
-| **Reproducibility** | Most eval suites: "run our script, trust our numbers." | Every event has a deterministic SHA-256 hash. Reviewer runs same command, gets same hash. |
+| **Reproducibility** | Most eval suites: "run our script, trust our numbers." | Every exported event has a deterministic `eventId` derived by SHA-256. Reviewer runs the same command over the same revision range, gets the same IDs. |
 
 **The gap Refract fills**: every eval suite tests whether a model is *accurate*. None test whether a model *knows things it shouldn't*. Refract provides the ground truth for that test — and makes it reproducible.
 

@@ -112,7 +112,14 @@ export async function runCron(
       const d = new Date(Date.now() - intervalHours * 60 * 60 * 1000);
       fromTimestamp = d.toISOString();
     } else if (priorEvents.length > 0) {
-      const lastTimestamp = priorEvents[priorEvents.length - 1].timestamp;
+      // The newest event, not the last in the array: talk-page correlations are
+      // appended after the article's events and carry the talk revision's time,
+      // which can be hours earlier. Starting there re-read a window that no
+      // longer held the earlier transitions, and reported the difference as new.
+      const lastTimestamp = priorEvents.reduce(
+        (newest, e) => (e.timestamp > newest ? e.timestamp : newest),
+        priorEvents[0].timestamp,
+      );
       priorObservationAt = lastTimestamp;
       fromTimestamp = lastTimestamp;
     } else {
@@ -142,10 +149,21 @@ export async function runCron(
     // against prior events inside this run's window: one outside it was not
     // looked at this time, which is not the same as having gone away.
     const seen = diffObservations(priorEvents, events);
+    // A window that starts later than the last one reads less history. The
+    // window's first revision is not compared with the one before it, and a
+    // sentence whose earlier appearance is now out of view is reported as
+    // first seen rather than reintroduced. Neither is a change to the page, so
+    // an event on a revision that already had events is not new, and an event
+    // is resolved only when its revision was compared again and has none left.
+    const priorRevisions = new Set(priorEvents.map((e) => e.toRevisionId));
+    const currentRevisions = new Set(events.map((e) => e.toRevisionId));
+    const anchorRevId = revisions[0]?.revId ?? 0;
     const obsDiff = {
-      new: seen.new,
+      new: seen.new.filter((e) => e.toRevisionId === 0 || !priorRevisions.has(e.toRevisionId)),
       unchanged: seen.unchanged,
-      resolved: diffObservations(withinWindow(priorEvents, fromTimestamp), events).resolved,
+      resolved: diffObservations(withinWindow(priorEvents, fromTimestamp), events).resolved.filter(
+        (e) => e.toRevisionId > anchorRevId && !currentRevisions.has(e.toRevisionId),
+      ),
     };
     // A quiet run keeps the previous observation as the next run's anchor,
     // rewriting it if analysis emptied the file on the way.

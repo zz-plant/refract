@@ -36,11 +36,12 @@ Google_DeepMind
 EOF
 ```
 
-Analyze each at forensic depth:
+Analyze each at detailed depth. `--json` writes one event per line; without it the
+command prints a report for reading:
 
 ```bash
 while read page; do
-  refract analyze "$page" --depth detailed -c > "events-${page// /_}.jsonl"
+  refract analyze "$page" --depth detailed --json > "events-${page// /_}.jsonl"
 done < leakage-pages.txt
 ```
 
@@ -98,17 +99,21 @@ difference visible.
 
 ```sql
 SELECT
-  after as claim_text,
-  count(*) FILTER (WHERE "eventType" = 'revert_detected') as reverts,
-  count(*) FILTER (WHERE "eventType" LIKE 'citation_%') as citation_churn,
-  count(*) FILTER (WHERE "eventType" LIKE 'talk_%') as talk_activity,
-  count(*) FILTER (WHERE "eventType" LIKE 'template_%') as template_disputes,
-  reverts + citation_churn + template_disputes as contestation_score
+  section,
+  CASE WHEN after <> '' THEN after ELSE before END as claim_text,
+  count(*) FILTER (WHERE "eventType" = 'sentence_modified') as modifications,
+  count(*) FILTER (WHERE "eventType" = 'sentence_removed') as removals,
+  count(*) FILTER (WHERE "eventType" = 'sentence_reintroduced') as reintroductions,
+  modifications + removals + reintroductions as contestation_score
 FROM 'events.jsonl'
 WHERE "eventType" LIKE 'sentence_%'
-GROUP BY after
+GROUP BY section, claim_text
 ORDER BY contestation_score DESC;
 ```
+
+Reverts, citation changes and talk events are separate events with their own text,
+so they are not counted per sentence here. Each sentence is keyed by its section and
+text.
 
 Claims with high contestation scores are candidates for closer examination. A RAG
 system that retrieves these as fact without hedging is measurably worse.
@@ -121,21 +126,21 @@ system that retrieves these as fact without hedging is measurably worse.
 4. Publish the results: "System A retrieves contested claims 3x more often than System B"
 
 ```python
-from refract import Refract
+import pandas as pd
 
-r = Refract()
-stability = r.analyze("COVID-19", depth="forensic", as_frame=True)
+events = pd.read_json("events.jsonl", lines=True)
+sentences = events[events["eventType"].str.startswith("sentence_")]
 
-# Score each claim by contestation signals
-stability["score"] = (
-    stability["event_type"].str.startswith("sentence_").astype(int) *
-    (1.0 - 0.3 * (stability["fact"].str.contains("revert", na=False).astype(int)))
-)
-
-# Map retrieved passages to stability scores
+# For each retrieved passage: how often its text appears in sentence events,
+# and how many of those are modifications or removals
+changed = {"sentence_modified", "sentence_removed"}
 for passage in rag_system_a_results:
-    match = stability[stability["after"].str.contains(passage[:50], na=False)]
-    passage.stability = match["score"].mean() if len(match) > 0 else None
+    text = passage[:50]
+    match = sentences[
+        sentences["after"].str.contains(text, regex=False)
+        | sentences["before"].str.contains(text, regex=False)
+    ]
+    print(text, len(match), match["eventType"].isin(changed).sum())
 ```
 
 ## 3. Provenance hallucination: who makes up sources?
@@ -174,7 +179,7 @@ Same deterministic input — different outputs. The divergence is purely in the 
 ### Generate a controlled comparison
 
 ```bash
-refract analyze "Bitcoin" --depth detailed --since 2024-01-01 > bitcoin-events.jsonl
+refract analyze "Bitcoin" --depth detailed --since 2024-01-01 --json > bitcoin-events.jsonl
 ```
 
 Feed `bitcoin-events.jsonl` to both models with the same prompt:
@@ -247,12 +252,12 @@ Every finding includes:
 
 ```bash
 refract --version
-# refract 0.5.3
+# 0.6.0
 
 git log -1 --format="%H" -- packages/evidence-graph packages/analyzers
 # a1b2c3d4e5f6...
 
-refract analyze "Page" --depth forensic > events.jsonl
+refract analyze "Page" --depth forensic --json > events.jsonl
 # SHA-256 of events.jsonl: e7f8a9b0c1d2...
 ```
 

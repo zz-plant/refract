@@ -1,24 +1,28 @@
 ---
 title: "Analysis depth levels"
-description: "The --depth flag controls how many analyzers run and how aggressively they parse. Applies to analyze, diff, and explore commands."
+description: "The --depth flag controls how much text each event carries and, for brief, how many revisions are read. All three levels run the same analyzers and emit the…"
 ---
 
-The `--depth` flag controls how many analyzers run and how aggressively they parse. Applies to `analyze`, `diff`, and `explore` commands.
+The `--depth` flag controls how much text each event carries and, for `brief`, how many revisions are read. All three levels run the same analyzers and emit the same event types. It applies to `analyze`, `diff`, and `explore`.
 
-| Level | Analyzers | Use case |
-|-------|-----------|----------|
-| `brief` | Section differ only | Quick check — did anything change on this page? |
-| `detailed` | Section differ, citation tracker, revert detector, template tracker | Standard analysis — most common |
-| `forensic` | All analyzers including protection tracker, page move detector, category diff, wikilink diff, talk page correlation, edit cluster detection, sentence modification detection | Full audit — all 26 event types |
+| Level | Event content | Revisions read without `--from`, `--to` or `--since` |
+|-------|---------------|------------------------------------------------------|
+| `brief` | `before` and `after` are empty on almost every event | The latest 20 (`--brief-limit` changes the number) |
+| `detailed` | `before` and `after` carry the changed text | The whole history |
+| `forensic` | As `detailed`, plus both revisions' full wikitext on every event | The whole history |
 
-`brief` skips citation parsing, revert pattern matching, and template extraction. It only compares section headings between revisions.
+`brief` answers whether anything changed, and of what kind. Event types, sections, revision IDs and timestamps are present; the changed text is not. `template_parameter_changed` events keep their text.
 
-`detailed` (default) runs the full set of deterministic analyzers. Sufficient for most workflows.
+`detailed` is the default. An unrecognized `--depth` value also runs as `detailed`.
 
-`forensic` enables cross-revision correlation (talk page matching, edit cluster detection), metadata trackers (protection changes, page moves, category and wikilink diffs), and sentence modification detection. Use when you need the complete event stream — all 26 event types — for export or visualization.
+`forensic` adds two facts to every event, `full_wikitext_before` and `full_wikitext_after`, each holding a whole revision. Output grows with page size times event count: 19 revisions of "Pluto" produce about 1 MB at `detailed` and 63 MB at `forensic`. Give it a revision range.
+
+`export`, `cron`, `visualize` and `eval` have no `--depth` flag and run at `detailed`.
+
+Depth does not add or remove analyzers. Citation, template, revert, wikilink, category, sentence and talk-correlation events appear at every level.
 
 Example:
 
 ```bash
-refract analyze "Earth" --depth forensic --cache
+refract analyze "Pluto" --from 71593043 --to 71597389 --depth forensic --json
 ```

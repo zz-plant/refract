@@ -1,162 +1,193 @@
 ---
 title: "Complete workflow: From nothing to insight"
-description: "This page ties together every part of Refract into a single end-to-end workflow. Follow along to go from zero install to a data-backed conclusion about how…"
+description: "This page ties together the parts of Refract into a single end-to-end workflow. Follow along to go from zero install to a data-backed reading of how a…"
 ---
 
-This page ties together every part of Refract into a single end-to-end workflow.
-Follow along to go from zero install to a data-backed conclusion about how a Wikipedia
-page has changed.
+This page ties together the parts of Refract into a single end-to-end workflow.
+Follow along to go from zero install to a data-backed reading of how a Wikipedia
+page changed.
 
 ## What we're doing
 
-We'll analyze the Bitcoin Wikipedia page, track a specific claim across its revision
-history, export the data, query it with DuckDB, and draw a conclusion about claim
-stability — all using deterministic, byte-reproducible output.
+On 24 August 2006 the International Astronomical Union reclassified Pluto. We'll
+analyze the 43 revisions Wikipedia's Pluto article went through in the following hour,
+track one passage across them, export the events, and query them. The outputs shown
+are from that fixed revision range, so your run prints the same counts.
+
+Every command below names the range with `--from` and `--to`. Without a range,
+`detailed` and `forensic` analysis and `export` read a page's whole history.
 
 ## Step 1: Zero-install analysis
 
 ```bash
-npx @refract-org/cli analyze "Bitcoin" --depth forensic
+npx @refract-org/cli analyze "Pluto" --from 71593043 --to 71601937 --depth detailed --json | wc -l
 ```
 
-This fetches 20 recent revisions and runs all 26 deterministic analyzers, including wikilink and category diffing, talk page correlation, and edit cluster detection.
-Output is one JSON event per line — the full event stream:
+`--json` prints one JSON event per line; without it, `analyze` prints a text summary
+or, in an interactive terminal, opens the explorer. Progress goes to stderr:
 
 ```
-Analysis of "Bitcoin" at depth detailed found 330 events across 20 revisions.
-
-[2009-03-08T16:41:44Z] wikilink_added (rev 275832581→275832690)
-  Section: body
-  • target: cryptography
-
-[2009-12-10T14:15:09Z] citation_added (rev 308164432→308164529)
-  Section: (lead)
-  • ref: href=http://sourceforge.net/projects/bitcoin/
-
-...
+Analyzing "Pluto" at depth: detailed...
+Coverage: complete; 43 revisions (71593043 → 71601937).
+Correlated 43 talk page discussions.
+    1372
 ```
 
-Every event has a type, a revision range, a section, before/after snapshots, and
-deterministic facts explaining why it was produced.
+Each of the 1,372 events has a type, a revision pair, a section, before/after text,
+and the deterministic facts that triggered it.
 
-## Step 2: Track a specific claim
-
-Now let's trace a specific claim through the page's history:
+## Step 2: Track a specific passage
 
 ```bash
-refract claim "Bitcoin" --text "decentralized" -c
+refract claim "Pluto" --text "ninth and smallest" --from 71593043 --to 71601937
 ```
 
-Refract finds every revision where the word "decentralized" appears in the page text,
-tracks when it was first added, modified, or removed, and prints a claim lifecycle:
+Refract prints the sentence that matched in each revision of the range, then a
+summary. The last lines:
 
 ```
-Claim: "decentralized" on Bitcoin
-  • first_seen: 2009-01-03 (rev 275832581)
-  • revisions present: 18 of 20
-  • modifications: 2 (spelling correction, phrasing change)
-  • removed: never
-  • status: STABLE
+[2006-08-24T14:37:04Z] EXACT MATCH (rev 71601937)
+  Matched text: "Pluto was considered the ninth and smallest of the planets of the Solar system by the International Astronomical Union (IAU) and the general public for much of the twentieth century, and into the early 21st."
+
+=== Passage History Summary ===
+Claim ID:    f914f34dbb918e2f
+Page:        Pluto
+Status:      contested
+Latest revision: 71601937
+Latest match:    exact
+Tracked "ninth and smallest" across 43 revisions. First matched within this selection at 2006-08-24T13:39:15Z (rev 71593043). Multiple changes detected; latest version at 2006-08-24T14:37:04Z (rev 71601937). …
+Note: Matching covers 43 fetched revisions, not the page's entire history.
+Note: The legacy contested label records repeated wording changes or disappearance and return, not an observed discussion dispute.
 ```
 
-This claim is stable — it appeared early, persisted through most revisions, and was
-never removed. Contrast with a contested claim:
+`Status` is `present`, `modified`, `contested`, `absent` or `unknown`. `contested` here
+means the wording changed repeatedly within the range.
 
-```
-Claim: "completely anonymous" on Bitcoin
-  • first_seen: 2010-04-15 (rev 308200000)
-  • revisions present: 3 of 20
-  • removed: 2010-05-01 (rev 308350000)
-  • reintroduced: never
-  • status: REMOVED
-```
+Without `--from` and `--to`, `claim` reads the latest 50 revisions (`--limit` changes
+the number), and "first matched" is relative to those.
 
 ![Claim lifecycle](claim-lifecycle.svg)
 
 ## Step 3: Export for analysis
 
 ```bash
-refract export "Bitcoin" --format ndjson > bitcoin-events.jsonl
+refract export "Pluto" --from 71593043 --to 71601937 --format ndjson > pluto-events.jsonl
 ```
 
-Now we have a portable, queryable file of the complete event stream.
+The file holds the same 1,372 events, each with an added `eventId`.
 
-## Step 4: Query with DuckDB
+## Step 4: Query the events
 
 ```bash
 duckdb -c "
-SELECT "eventType", count(*) as cnt
-FROM 'bitcoin-events.jsonl'
-GROUP BY "eventType"
+SELECT \"eventType\", count(*) AS cnt
+FROM 'pluto-events.jsonl'
+GROUP BY \"eventType\"
 ORDER BY cnt DESC;
 "
 ```
 
-Output:
-
-| event_type | cnt |
-|------------|-----|
-| sentence_modified | 85 |
-| citation_added | 34 |
-| sentence_first_seen | 28 |
-| revert_detected | 15 |
-| template_added | 12 |
-| citation_removed | 8 |
-
-The page has more `citation_added` (34) than `citation_removed` (8) — net source
-accumulation, the page is becoming better-sourced over time.
-
-Find the most contested section:
-
-```sql
-SELECT section,
-       count(*) FILTER (WHERE "eventType" = 'revert_detected') as reverts,
-       count(*) FILTER (WHERE "eventType" = 'edit_cluster_detected') as clusters
-FROM 'bitcoin-events.jsonl'
-GROUP BY section
-HAVING reverts > 0 OR clusters > 0
-ORDER BY reverts DESC;
-```
-
-| section | reverts | clusters |
-|---------|---------|----------|
-| Regulation | 6 | 2 |
-| Scalability debate | 4 | 1 |
-| History | 3 | 0 |
-
-The "Regulation" section has the most reverts (6) and edit clusters (2) — this is the
-most actively contested part of the page.
-
-## Step 5: Correlate with talk page activity
-
-Run the talk page analysis:
+The same count with `jq`:
 
 ```bash
-refract analyze "Talk:Bitcoin" --depth detailed
+jq -r .eventType pluto-events.jsonl | sort | uniq -c | sort -rn
 ```
 
-Compare revert days with talk activity days. Days with high reverts and no talk
-activity suggest edit-warring. Days with reverts and active discussion suggest
-genuine editorial deliberation:
+Output:
+
+| eventType | cnt |
+|-----------|-----|
+| wikilink_removed | 296 |
+| wikilink_added | 289 |
+| sentence_removed | 255 |
+| sentence_reintroduced | 246 |
+| section_reorganized | 97 |
+| talk_page_correlated | 43 |
+| sentence_modified | 30 |
+| citation_added | 22 |
+| citation_removed | 21 |
+| template_removed | 20 |
+| template_added | 20 |
+| sentence_first_seen | 11 |
+| talk_reply_added | 6 |
+| template_parameter_changed | 4 |
+| category_removed | 4 |
+| category_added | 4 |
+| talk_thread_opened | 2 |
+| revert_detected | 1 |
+| edit_cluster_detected | 1 |
+
+Sentences were removed and reintroduced about as often (255 and 246): text was taken
+out and put back many times within the hour.
+
+Find the sections with the most sentence changes:
+
+```sql
+SELECT section, count(*) AS sentence_events
+FROM 'pluto-events.jsonl'
+WHERE "eventType" LIKE 'sentence_%'
+GROUP BY section
+ORDER BY sentence_events DESC
+LIMIT 5;
+```
+
+```bash
+jq -r 'select(.eventType | startswith("sentence_")) | .section' pluto-events.jsonl \
+  | sort | uniq -c | sort -rn | head -5
+```
+
+| section | sentence_events |
+|---------|-----------------|
+| Charon | 93 |
+| (lead) | 81 |
+| Minor planet? | 50 |
+| Name | 47 |
+| Heliocentric distance | 36 |
+
+`revert_detected` events have an empty `section`: a revert is detected from the edit
+summary, which names no section. Group them by `timestamp` instead.
+
+## Step 5: Check for talk page activity
+
+The export already holds one `talk_page_correlated` event for each article revision
+that had a talk page edit within 7 days before or 3 days after it. The `detail` names
+the nearest talk edit's summary and its distance in hours:
+
+```bash
+jq -r 'select(.eventType == "talk_page_correlated") | .deterministicFacts[0].detail' pluto-events.jsonl \
+  | sort | uniq -c | sort -rn | head -3
+```
 
 ```
-2025-01-15: 2 reverts, 5 talk replies → deliberation
-2025-02-03: 4 reverts, 0 talk replies → edit-warring
+  10 time_delta_hours=0.1 talk_comment=/* Not a Planet Anymore! */
+   9 time_delta_hours=0 talk_comment=/* Not a Planet Anymore! */
+   7 time_delta_hours=0 talk_comment=Owned
 ```
+
+All 43 article revisions had a talk page edit within minutes, so the rewriting was
+accompanied by discussion.
+
+The same run reports threads opened and replies added on the talk page while the
+article was being rewritten:
+
+```bash
+jq -r 'select(.eventType | test("talk_thread|talk_reply")) | [.eventType, .section] | @tsv' pluto-events.jsonl
+```
+
+`refract analyze "Talk:Pluto"` treats the talk page as an ordinary page and reports
+its sections and sentences.
 
 ## The complete picture
 
 After these 5 steps you know:
 
-1. **What changed** on the Bitcoin page (330 deterministic events across 20 revisions)
-2. **Which claims are stable** ("decentralized" — present in 18 of 20 revisions, never removed)
-3. **Which claims were contested** ("completely anonymous" — added, then removed permanently)
-4. **Which sections are most disputed** (Regulation: 6 reverts, 2 edit clusters)
-5. **Whether disputes were discussed** (talk page correlation shows deliberation vs. edit-warring)
-6. **How sourcing evolved** (net source accumulation — page is improving)
+1. **What changed** in that hour (1,372 events across 43 revisions)
+2. **How one passage fared** ("ninth and smallest" matched in the first and last revision, with repeated rewording between)
+3. **Which sections changed most** (Charon and the lead)
+4. **Whether the talk page was active** (an edit within minutes of every article revision)
+5. **How sourcing moved** (22 citations added, 21 removed)
 
-All of this is deterministic — run the same commands a year from now on the same
-revision range and you get identical output.
+The same commands over the same revision range produce the same events.
 
 ## What to do next
 
@@ -167,19 +198,19 @@ revision range and you get identical output.
   Observable ([analytics guide](analytics.md))
 - **Integrate with RAG**: Use claim stability signals to filter retrieval results
   ([downstream guide](downstream.md))
-- **Verify accuracy**: Run `refract eval` to benchmark analyzer precision
+- **Check expectations**: Score events against test cases or labels
   ([eval guide](eval.md))
 
 ## The same workflow for any page
 
-This workflow works identically on any MediaWiki page — Wikipedia, Fandom, or a
-private wiki:
+The commands take any MediaWiki page — Wikipedia, Fandom, or a private wiki — through
+`--api`:
 
 ```bash
-refract analyze "Darth_Vader" --api https://starwars.fandom.com/api.php --depth detailed
-refract claim "Darth_Vader" --text "midichlorians" --api https://starwars.fandom.com/api.php
-refract export "Darth_Vader" --api https://starwars.fandom.com/api.php --format ndjson > vader.jsonl
+refract analyze "Midi-chlorian" --api https://starwars.fandom.com/api.php --depth brief --json
+refract claim "Midi-chlorian" --text "midi-chlorians" --api https://starwars.fandom.com/api.php --limit 10
+refract export "Midi-chlorian" --api https://starwars.fandom.com/api.php --from <revId> --to <revId> --format ndjson > midi-chlorian.jsonl
 ```
 
-The commands are the same. The output format is the same. The deterministic guarantee
-is the same. Only the API endpoint changes.
+The output format is the same. Redirects are not followed: a redirect title, such as
+"Darth_Vader" on that wiki, yields the history of the redirect page itself.

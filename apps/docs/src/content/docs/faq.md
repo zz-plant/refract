@@ -9,12 +9,17 @@ Refract spaces its requests to the MediaWiki API (100 ms apart by default) and r
 
 ## "Page too large" errors
 
-Wikipedia pages with thousands of revisions may exceed the default fetch limit. Use `--from <revId> --to <revId>` to scope to a specific range, or increase depth gradually:
+Without `--from`, `--to` or `--since`, `detailed` and `forensic` analysis reads a page's whole history. For a page with thousands of revisions that is slow and can exhaust memory. Scope the run:
 
 ```bash
-# Start with the last 50 revisions
-refract analyze "Earth" --from <recent-rev-id>
+# The latest 20 revisions
+refract analyze "Earth" --depth brief --json
+
+# One revision range
+refract analyze "Earth" --from <revId> --to <revId> --json
 ```
+
+`--from` alone reads from that revision to the newest one.
 
 ## Authentication errors
 
@@ -34,7 +39,7 @@ refract analyze "Page" \
   --api-key <token>
 ```
 
-Supported auth methods: bearer token (`--api-key`), basic auth (`--api-user` + `--api-password`), OAuth2.
+Supported auth methods: bearer token (`--api-key`) and basic auth (`--api-user` + `--api-password`). An OAuth2 access token obtained elsewhere is passed as `--api-key`. `refract diff` takes no auth flags.
 
 ## Cache issues
 
@@ -44,7 +49,9 @@ If results seem stale, clear the cache:
 rm -rf ~/.wikihistory/
 ```
 
-Or use `--cache-dir` to point at a fresh location. The default cache directory is `~/.wikihistory/`.
+Or use `--cache-dir` to point at a fresh location. The default cache directory is `~/.wikihistory/`. It also holds `refract cron` observations, so removing it resets cron's baseline.
+
+The revision cache is read back only for a fixed `--from … --to` range on English Wikipedia. Open ranges, and every run with `--api`, fetch from the wiki each time.
 
 ## No events produced
 
@@ -52,7 +59,7 @@ If `refract analyze` returns no events, the page may not have changed in the req
 
 ## Cross-wiki diff returns no results
 
-`refract diff` compares a topic across two MediaWiki instances. Each wiki must have a page with the given title. Verify:
+`refract diff` compares a topic across two or more MediaWiki instances. Each wiki must have a page with the given title, and redirects are not followed. A wiki without the page is not an error: its column shows zeros. Verify:
 
 ```bash
 refract analyze "Topic" --api <wiki-a-url>
@@ -63,11 +70,11 @@ refract analyze "Topic" --api <wiki-b-url>
 
 ### How many revisions per page?
 
-`brief` depth (section differ only) processes ~50 revisions per second. `detailed`
-depth (all standard analyzers) processes ~20 revisions per second. `forensic` depth
-(with talk page correlation and edit cluster detection) processes ~10 revisions per
-second. These are single-core measurements on an M-series Mac; results scale linearly
-with additional pages (Refract processes pages sequentially).
+All three depths run the same analyzers, so analysis time per revision is similar.
+`brief` is faster in practice because it reads only the latest 20 revisions unless you
+give a range. `forensic` writes both revisions' full wikitext into every event, which
+makes its output tens of times larger than `detailed`. With `--pages-file`, four pages
+are analyzed in parallel by default (`--batch-concurrency`).
 
 ### Memory usage
 
@@ -87,12 +94,14 @@ Use `--from` / `--to` or `--since` when:
 For batch processing many pages, use `--pages-file`:
 
 ```bash
-refract analyze --pages-file topics.txt --depth detailed -c
+refract analyze --pages-file topics.txt --depth brief
 ```
+
+Batch mode prints per-page event counts, not the events. For the events, run `analyze --json` or `export` per page.
 
 ### Cache behavior
 
-The cache stores fetched revisions in `~/.wikihistory/` (default: `~/.wikihistory/refract.db`). Each revision costs
+With `-c` under Bun in a source checkout, the cache stores fetched revisions in `~/.wikihistory/` (default: `~/.wikihistory/refract.db`). Under Node, `-c` prints `Cache write failed` and the run continues uncached. Each revision costs
 ~2–10 KB of disk space. A page with 500 revisions uses ~5 MB of cache. The cache is
 persistent — clear it with `rm -rf ~/.wikihistory/` when disk space is tight.
 
