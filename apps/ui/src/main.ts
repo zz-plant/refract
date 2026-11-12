@@ -82,7 +82,8 @@ async function loadSampleData(): Promise<void> {
 	);
 	throbber.start();
 	try {
-		const resp = await fetch("/sample-data.jsonl");
+		// BASE_URL is /refract/viewer/ on the published site, / under the dev server.
+		const resp = await fetch(`${import.meta.env.BASE_URL}sample-data.jsonl`);
 		const text = await resp.text();
 		const lines = text.split("\n").filter((l) => l.trim().length > 0);
 		const events: EvidenceEvent[] = lines.map((l) => JSON.parse(l));
