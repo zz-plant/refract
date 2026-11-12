@@ -1,6 +1,6 @@
 {
   "format": "refract-review/v1",
-  "analyzerVersion": "0.6.0",
+  "analyzerVersion": "0.6.1",
   "depth": "detailed",
   "scope": "article_revisions",
   "pages": [
@@ -543,5 +543,5 @@
       ]
     }
   ],
-  "reportId": "7e0ea1db5f6bf189d608af8c2c620ad74d7c258b924c90a57ad02e26ec89f714"
+  "reportId": "ea92f60f7e19c3a181b7a23cb7917cd7211f273becd2a9bc2907477696a531e2"
 }

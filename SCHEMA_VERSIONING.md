@@ -53,7 +53,8 @@ A non-breaking change adds capabilities without breaking existing consumers. The
 
 | refract CLI | `@refract-org/evidence-graph` | `EVENT_SCHEMA_VERSION` | Key changes |
 |---|---|---|---|
-| 0.6.0 | 0.5.3 | `"0.5.0"` | Current. |
+| 0.6.1 | 0.5.4 | `"0.5.0"` | Current. Same `EventType` members; the CLI emits the cluster, spike and thread events, and citation events name their section |
+| 0.6.0 | 0.5.3 | `"0.5.0"` | Tagged; the CLI did not reach npm |
 | 0.5.15–0.5.17 | 0.5.1–0.5.2 | `"0.5.0"` | Optional fields added to `EvidenceEvent`; same `EventType` members |
 | 0.5.0–0.5.7 | 0.4.x–0.5.0 | `"0.4.0"` | `sentence_modified`, `FactProvenance.parameters`, `AnalyzerConfig`, `EVENT_SCHEMA_VERSION`, `CLAIM_IDENTITY_VERSION` |
 | 0.4.x | 0.3.x | `"0.3.0"` | `ClaimLedger`, `ObservationReport`, `--report` flag, cron merging |

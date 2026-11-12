@@ -188,6 +188,7 @@ When consuming Refract events across different package versions, the `schemaVers
 
 | refract CLI | `@refract-org/evidence-graph` | `EVENT_SCHEMA_VERSION` | Key changes |
 |------------|------------------------------|-----------------------|-------------|
+| 0.6.1 | 0.5.4 | `"0.5.0"` | No `EventType` changes; `analyze` and `export` emit the cluster, spike and thread events; citation events name their section |
 | 0.6.0 | 0.5.3 | `"0.5.0"` | No `EventType` changes |
 | 0.5.15–0.5.17 | 0.5.1–0.5.2 | `"0.5.0"` | No `EventType` changes; optional fields only |
 | 0.5.0–0.5.7 | 0.4.x–0.5.0 | `"0.4.0"` | `sentence_modified` event type, `FactProvenance.parameters`, `AnalyzerConfig`, `EVENT_SCHEMA_VERSION`, `CLAIM_IDENTITY_VERSION` |

@@ -20,7 +20,7 @@ hero:
 On 24 August 2006, the International Astronomical Union reclassified Pluto as a dwarf planet. Wikipedia's Pluto article went through 43 revisions in under an hour that afternoon. This prints its first sentence from each of them:
 
 ```bash
-npx @refract-org/cli@0.6.0 claim "Pluto" --text "ninth and smallest" --from 71593043 --to 71601937
+npx @refract-org/cli@0.6.1 claim "Pluto" --text "ninth and smallest" --from 71593043 --to 71601937
 ```
 
 The sentence starts at "Pluto is the ninth…" and passes through "Pluto was until recently considered the ninth…". The [captured walkthrough](https://github.com/refract-org/refract/blob/main/docs/example-output.md) links each change to its revisions.

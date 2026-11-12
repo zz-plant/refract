@@ -5,7 +5,7 @@ description: "All commands work with wikihistory as a backward-compatible alias 
 
 All commands work with `wikihistory` as a backward-compatible alias (e.g., `wikihistory analyze`).
 
-The tables describe published CLI 0.6.0. To keep checking a source, see
+The tables describe CLI 0.6.1. To keep checking a source, see
 [which command to use](../../../../../docs/usage.md#which-command-keeps-checking-a-source).
 
 ## `refract init`

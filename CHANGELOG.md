@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.1 (2026-11-11)
 
 ### Changed
 - **The docs site is built with Starlight.** `apps/docs` moves from a hand-written `build.mjs` to Astro 7 and Starlight 0.42, which add a light theme beside the dark one, full-text search with Pagefind, previous and next links, and an edit link on every page. All 55 pages keep their URLs, titles, descriptions, canonical links, Open Graph tags and JSON-LD; `sitemap.xml` now indexes Starlight's `sitemap-0.xml`. Pages live in `apps/docs/src/content/docs/` with their title and description as frontmatter. Links to the review and usage guides name `docs/review.md` and `docs/usage.md`, so they also work on GitHub.

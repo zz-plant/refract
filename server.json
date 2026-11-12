@@ -7,13 +7,13 @@
     "url": "https://github.com/refract-org/refract",
     "source": "github"
   },
-  "version": "0.6.0",
+  "version": "0.6.1",
   "websiteUrl": "https://zz-plant.github.io/refract/",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@refract-org/cli",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "transport": {
         "type": "stdio"
       },

@@ -69,7 +69,7 @@ docker run --rm refract analyze "Bitcoin" --depth brief --json
 refract --version
 ```
 
-A version number means the CLI started; on 2026-11-04 npm's is 0.6.0. The CLI
+A version number means the CLI started. The CLI
 before it on npm, 0.5.7, does not start and fails here with `SyntaxError: The
 requested module '@refract-org/analyzers' does not provide an export named …`;
 `npm install -g @refract-org/cli` replaces it.

@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@refract-org/evidence-graph": "^0.5.3"
+    "@refract-org/evidence-graph": "^0.5.4"
   },
   "devDependencies": {}
 }
