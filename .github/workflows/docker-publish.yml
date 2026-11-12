@@ -11,6 +11,14 @@ on:
         description: Release tag to build and push, such as v0.6.1
         required: true
         type: string
+  # publish.yml calls this for a tag it pushed itself, since a tag pushed with
+  # the workflow token does not start the push trigger above.
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build and push, such as v0.6.1
+        required: true
+        type: string
 
 jobs:
   push:

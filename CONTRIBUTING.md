@@ -41,6 +41,15 @@ Use Conventional Commits: `feat:`, `fix:`, `refactor:`, `chore:`, `docs:`, `test
 2. New analyzers must include an eval (even a single sample page)
 3. Architecture changes require an ARCHITECTURE.md update in the same PR
 
+## Releasing
+
+The release version is `packages/cli/package.json`'s, and its tag is `v<version>`. Merging a bump of that version to `main` publishes it.
+
+- `bun scripts/release.ts <major|minor|patch>` bumps the CLI version everywhere it is stamped, writes the changelog entry and commits. Bump any other package whose source changed; `bun run check:release -- --registry` names them.
+- When the bump reaches `main`, `publish.yml` tags the commit that set the version and, in the same run, publishes the packages to npm and the MCP registry, pushes the Docker image and creates the GitHub release. A change to that file that keeps an already tagged version does nothing. `bun scripts/release-tag.ts`, in a full clone, prints what the next run would do.
+- If the run fails after tagging, re-run it: it knows the tag is its own, and npm skips the versions it already has. A fix to the code needs a new bump.
+- A tag pushed by hand still releases the commit it names, and runs from `main` then leave that version alone, or fail if the tag is not on `main`. Do not push one for a bump that is on its way to `main`.
+
 ## Deprecation Policy
 
 - Deprecated APIs are marked with a `@deprecated` JSDoc tag in the current minor version
