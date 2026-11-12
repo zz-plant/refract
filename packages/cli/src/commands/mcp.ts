@@ -1,3 +1,5 @@
+import { isAbsolute, join } from "node:path";
+import { stripWikitext } from "@refract-org/analyzers";
 import type { AnalyzerConfig, EvidenceEvent, InferenceBoundary } from "@refract-org/evidence-graph";
 import { buildInferencePrompt, DEFAULT_ANALYZER_CONFIG } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
@@ -6,6 +8,8 @@ import { OpenAICompatibleProvider } from "../inference-provider.js";
 import { REFRACT_VERSION } from "../version.js";
 import { runAnalyze } from "./analyze.js";
 import { runClaim, runClaimHistory } from "./claim.js";
+import { acknowledgeCommand, filterReviewEntries, isAcknowledgeable, observeReview } from "./review.js";
+import { takeSnapshot } from "./snapshot.js";
 
 interface JsonRpcResponse {
   jsonrpc: "2.0";
@@ -332,9 +336,92 @@ export async function handleToolCall(
       return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
     }
 
+    case "snapshot":
+      return { content: [{ type: "text", text: JSON.stringify(await snapshotTool(params), null, 2) }] };
+
+    case "review":
+      return { content: [{ type: "text", text: JSON.stringify(await reviewTool(params), null, 2) }] };
+
     default:
       return { content: [{ type: "text", text: `Unknown tool: ${name}` }] };
   }
+}
+
+/** The `snapshot` tool: the revision live at a date, as data rather than console output. */
+export async function snapshotTool(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const page = params.page;
+  if (typeof page !== "string" || !page.trim()) throw new Error("snapshot needs a page title.");
+  const content = params.content ?? "plain";
+  if (content !== "plain" && content !== "wikitext" && content !== "none") {
+    throw new Error("content must be plain, wikitext, or none.");
+  }
+  const at = typeof params.at === "string" && params.at ? params.at : new Date().toISOString();
+  const { snapshot } = await takeSnapshot(page, at, {
+    apiUrl: params.api as string | undefined,
+    revisionLimit: params.revisionLimit === undefined ? undefined : Number(params.revisionLimit),
+  });
+  const { wikitext, ...metadata } = snapshot;
+  if (content === "plain") return { ...metadata, text: stripWikitext(wikitext) };
+  if (content === "wikitext") return { ...metadata, wikitext };
+  return metadata;
+}
+
+function stringList(value: unknown, name: string): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`${name} must be an array of strings.`);
+  }
+  return value;
+}
+
+/**
+ * The `review` tool. It observes and saves a report under `stateDir` and never
+ * acknowledges one: acknowledgment marks revisions as inspected by a person,
+ * so the result hands that person the CLI command instead of doing it here.
+ */
+export async function reviewTool(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const stateDir = params.stateDir;
+  if (typeof stateDir !== "string" || !isAbsolute(stateDir)) {
+    throw new Error("review needs stateDir, an absolute path for review state and saved reports.");
+  }
+  const filters = {
+    eventTypes: stringList(params.eventTypes, "eventTypes"),
+    section: params.section as string | undefined,
+    text: params.text as string | undefined,
+  };
+  const report = await observeReview(stringList(params.pages, "pages") ?? [], {
+    stateDir,
+    sample: params.sample === true,
+    apiUrl: params.api as string | undefined,
+    from: params.from === undefined ? undefined : Number(params.from),
+    limit: params.limit === undefined ? undefined : Number(params.limit),
+  });
+  const acknowledgeable = isAcknowledgeable(report);
+  return {
+    ...report,
+    // Input revisions carry full wikitext for every fetched revision; the saved
+    // report at reportPath keeps them, and the reply names them by ID.
+    pages: report.pages.map(({ inputRevisions, ...page }) => ({
+      ...page,
+      inputRevisionIds: inputRevisions.map((r) => r.revId),
+    })),
+    reportPath: join(stateDir, "reports", `${report.reportId}.json`),
+    view: {
+      filters,
+      pages: report.pages.map((p) => ({ sourceKey: p.source.key, entries: filterReviewEntries(p.entries, filters) })),
+    },
+    acknowledgment: acknowledgeable
+      ? {
+          available: true,
+          by: "person",
+          note: "A person inspects the unfiltered saved report, then runs this command. Acknowledgment covers every entry, including those hidden by filters.",
+          command: acknowledgeCommand(report.reportId, stateDir),
+        }
+      : {
+          available: false,
+          note: "This report is incomplete or a page failed. Call review again to resume; an incomplete report cannot be acknowledged.",
+        },
+  };
 }
 
 function boundaryFromParams(params: Record<string, unknown>): InferenceBoundary {
@@ -611,6 +698,9 @@ export async function runMcpServer(): Promise<void> {
       };
       return response;
     },
+
+    snapshot: snapshotTool,
+    review: reviewTool,
   };
 
   process.stderr.write("Refract MCP server starting...\n");

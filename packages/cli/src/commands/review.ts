@@ -267,6 +267,26 @@ export async function observeReview(titles: string[], options: ReviewOptions = {
   });
 }
 
+/** Whether `acknowledgeReview` accepts this report: every page fetched with complete coverage. */
+export function isAcknowledgeable(report: ReviewReport): boolean {
+  return (
+    report.pages.length > 0 &&
+    report.pages.every(
+      (p) =>
+        p.coverage.status === "complete" &&
+        p.status !== "error" &&
+        p.status !== "incomplete" &&
+        p.fetchedRevisionId !== null,
+    )
+  );
+}
+
+/** The command a person runs to acknowledge a report after inspecting it. */
+export function acknowledgeCommand(reportId: string, stateDir?: string): string {
+  const dir = stateDir ? ` --state-dir '${stateDir.replaceAll("'", "'\"'\"'")}'` : "";
+  return `refract review${dir} --ack ${reportId}`;
+}
+
 export async function acknowledgeReview(reportId: string, stateDir = DEFAULT_STATE_DIR): Promise<void> {
   if (!/^[a-f0-9]{64}$/.test(reportId)) throw new Error("Supply the saved report's 64-character report ID.");
   return withReviewLock(stateDir, async () => {
@@ -274,16 +294,7 @@ export async function acknowledgeReview(reportId: string, stateDir = DEFAULT_STA
     const { reportId: storedId, ...data } = report;
     if (report.format !== "refract-review/v1" || storedId !== reportId || hash(data) !== reportId)
       throw new Error("Review report hash mismatch.");
-    if (
-      !report.pages.length ||
-      report.pages.some(
-        (p) =>
-          p.coverage.status !== "complete" ||
-          p.status === "error" ||
-          p.status === "incomplete" ||
-          p.fetchedRevisionId === null,
-      )
-    ) {
+    if (!isAcknowledgeable(report)) {
       throw new Error("Cannot acknowledge an incomplete report. Resume the review and inspect a complete report.");
     }
     const state = readState(stateDir);
@@ -374,10 +385,7 @@ export function renderReview(report: ReviewReport, filters: ReviewFilters = {}, 
       lines.push("No events emitted by the enabled rules for this captured range.", "");
   }
   if (report.pages.every((p) => p.coverage.status === "complete"))
-    lines.push(
-      `After inspecting the saved report: refract review${stateDir ? ` --state-dir '${stateDir.replaceAll("'", "'\"'\"'")}'` : ""} --ack ${report.reportId}`,
-      "",
-    );
+    lines.push(`After inspecting the saved report: ${acknowledgeCommand(report.reportId, stateDir)}`, "");
   else lines.push("Review is incomplete. Run review again to resume; acknowledgment is unavailable.", "");
   return lines.join("\n");
 }

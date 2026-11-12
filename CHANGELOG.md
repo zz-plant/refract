@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **MCP `snapshot` and `review` tools.** `snapshot` returns the revision live at a date as JSON: its ID, timestamp, section headings, and plain text or wikitext. `review` observes a page list against an explicit, absolute `stateDir`, saves the report there, and returns it with `reportPath`, a filtered `view`, and an `acknowledgment` field. No MCP tool acknowledges a report: acknowledgment records that a person inspected every entry, so the response gives that person the `refract review --ack` command, and gives none for an incomplete report. `runSnapshot` now prints the result of `takeSnapshot`, which returns it.
+
 ## 0.6.1 (2026-11-11)
 
 ### Changed

@@ -128,6 +128,63 @@ export const TOOLS = [
       required: ["statement", "page"],
     },
   },
+  {
+    name: "snapshot",
+    description:
+      "Return the revision of a MediaWiki page that was live at a date: the newest revision at or before it, with its revision ID, timestamp, section headings, and text.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        page: { type: "string", description: "Page title" },
+        at: {
+          type: "string",
+          description: "Target date or timestamp, ISO 8601 (e.g. '2024-01-15'). Defaults to the current time.",
+        },
+        api: { type: "string", description: "MediaWiki API base URL. Defaults to English Wikipedia." },
+        revisionLimit: { type: "number", description: "Max revisions to fetch at or before the date (default 500)" },
+        content: {
+          type: "string",
+          enum: ["plain", "wikitext", "none"],
+          description: "Page text to include: plain (markup stripped, default), wikitext, or none",
+        },
+      },
+      required: ["page"],
+    },
+  },
+  {
+    name: "review",
+    description:
+      "Observe changes to a list of pages since their last acknowledged review and return the saved review report as JSON. Saves revisions and the report under stateDir. Never acknowledges: a person inspects the report and acknowledges it with the CLI command the result gives, and an incomplete report cannot be acknowledged.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pages: { type: "array", items: { type: "string" }, description: "Page titles to review" },
+        stateDir: {
+          type: "string",
+          description:
+            "Absolute path of the review state directory. All state and saved reports are written here; use the same directory the person acknowledges with.",
+        },
+        api: { type: "string", description: "MediaWiki API base URL. Defaults to English Wikipedia." },
+        from: {
+          type: "number",
+          description: "Initial comparison baseline revision ID for a page with no acknowledged review",
+        },
+        limit: { type: "number", description: "New revisions per page per call (default 200); call again to resume" },
+        sample: {
+          type: "boolean",
+          description: "Review the bundled fictional history offline instead of pages",
+        },
+        eventTypes: {
+          type: "array",
+          items: { type: "string" },
+          description: "Show only these event types in view; the saved report stays unfiltered",
+        },
+        section: { type: "string", description: "Show only events in this section in view" },
+        text: { type: "string", description: "Show only events whose text contains this in view" },
+      },
+      required: ["stateDir"],
+    },
+  },
 ];
 
 function send(response: {
@@ -201,6 +258,10 @@ export interface McpServerOptions {
   cron: (pagesFile: string) => Promise<unknown>;
   classify?: (boundary: string, input: unknown) => Promise<unknown>;
   getStatementHistory?: (statement: string) => Promise<unknown>;
+  /** Receives the `snapshot` tool's arguments; the result is returned as JSON. */
+  snapshot?: (args: Record<string, unknown>) => Promise<unknown>;
+  /** Receives the `review` tool's arguments; the result is returned as JSON. */
+  review?: (args: Record<string, unknown>) => Promise<unknown>;
 }
 
 export async function handleToolCall(
@@ -382,6 +443,13 @@ export async function handleToolCall(
         history_summary: (history as any)?.historySummary,
       };
       return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
+    }
+
+    case "snapshot":
+    case "review": {
+      const handler = name === "snapshot" ? options.snapshot : options.review;
+      if (!handler) return { content: [{ type: "text", text: `Error: no ${name} handler configured` }] };
+      return { content: [{ type: "text", text: JSON.stringify(await handler(params), null, 2) }] };
     }
 
     default:
