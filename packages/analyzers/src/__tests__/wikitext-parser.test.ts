@@ -20,6 +20,21 @@ describe("stripWikitext", () => {
   it("keeps a visible link to a category", () => {
     expect(stripWikitext("See [[:Category:Dwarf planets]].")).toBe("See :Category:Dwarf planets.");
   });
+
+  it("drops interlanguage links so their labels cannot join sentence text", () => {
+    expect(stripWikitext("Pluto is small.\n\n[[de:Pluto (Zwergplanet)]]\n[[fr:Pluton]]")).toBe("Pluto is small.");
+    expect(stripWikitext("[[zh-yue:冥王星]]Pluto is small.")).toBe("Pluto is small.");
+    expect(stripWikitext("[[de:Pluto|Zwergplanet]] is small.")).toBe("is small.");
+  });
+
+  it("keeps a visible interlanguage link and a namespace link", () => {
+    expect(stripWikitext("The German article: [[:de:Pluto (Zwergplanet)]].")).toBe(
+      "The German article: :de:Pluto (Zwergplanet).",
+    );
+    expect(stripWikitext("See [[Wikipedia:Notability]] for the policy.")).toBe(
+      "See Wikipedia:Notability for the policy.",
+    );
+  });
 });
 
 const SAMPLE = `'''Bold text''' and ''italic''.

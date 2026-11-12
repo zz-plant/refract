@@ -25,6 +25,11 @@ export function stripWikitext(wikitext: string): string {
   // A category tag is page metadata, not prose. Left in, its name joined the next
   // sentence. A visible link to a category, [[:Category:X]], has its own syntax.
   text = text.replace(/\[\[\s*Category\s*:[^\]]*\]\]/gi, "");
+  // An interlanguage link points at another edition of the wiki; its label is a
+  // language code, not prose. Left in, "de:Pluto (Zwergplanet)" landed in sentence
+  // events. A visible interlanguage link, [[:de:Pluto]], keeps its leading colon and
+  // stays; namespaces such as [[Wikipedia:Notability]] are capitalised, not codes.
+  text = text.replace(/\[\[[a-z][a-z0-9_-]*:[^\]]*\]\]/g, "");
   text = text.replace(/\[\[([^\]|]+?)\]\]/g, "$1");
   text = text.replace(/\[\[[^\]]+?\|([^\]]+?)\]\]/g, "$1");
   text = text.replace(/\n{3,}/g, "\n\n");
