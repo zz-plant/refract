@@ -109,4 +109,28 @@ describe("detectTalkActivitySpikes", () => {
       { date: "2024-03-02", count: 1 },
     ]);
   });
+
+  it("measures the lookback from the reference time, so old histories give the same spikes on any day", () => {
+    const talk = (revId: number, day: string) => makeTalkRev(revId, `2010-06-${day}T12:00:00Z`);
+    // Six talk edits on the 10th, then one a day for four days.
+    const talkRevs = [
+      ...[1, 2, 3, 4, 5, 6].map((id) => talk(id, "10")),
+      talk(7, "11"),
+      talk(8, "12"),
+      talk(9, "13"),
+      talk(10, "14"),
+    ];
+
+    // Measured from today, 2010 is outside any lookback window.
+    expect(detectTalkActivitySpikes(talkRevs, []).spikes).toHaveLength(0);
+
+    const { spikes } = detectTalkActivitySpikes(talkRevs, [], undefined, "2010-06-14T18:00:00Z");
+    expect(spikes.map((s) => s.deterministicFacts[0]?.detail)).toEqual([
+      "date=2010-06-10 talk_edits=6 moving_average=1.0 threshold=3.0 nearby_article_edits=0",
+    ]);
+    // A higher factor raises the threshold above that day.
+    expect(detectTalkActivitySpikes(talkRevs, [], { spikeFactor: 7 }, "2010-06-14T18:00:00Z").spikes).toHaveLength(0);
+    // Days after the reference time are not part of the window.
+    expect(detectTalkActivitySpikes(talkRevs, [], undefined, "2010-06-09T00:00:00Z").spikes).toHaveLength(0);
+  });
 });

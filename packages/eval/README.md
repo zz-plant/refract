@@ -28,4 +28,4 @@ bun add @refract-org/eval
 import { createEvalHarness, validateAgainstGroundTruth } from "@refract-org/eval";
 ```
 
-[Refract](https://github.com/refract-org/refract) · [Docs](https://refract-org.github.io/refract/) · [npm](https://www.npmjs.com/package/@refract-org/eval)
+[Refract](https://github.com/refract-org/refract) · [Docs](https://zz-plant.github.io/refract/) · [npm](https://www.npmjs.com/package/@refract-org/eval)

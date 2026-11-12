@@ -1,4 +1,4 @@
-import { classifyHeuristic } from "@refract-org/analyzers";
+import { classifyHeuristic, revertDetector } from "@refract-org/analyzers";
 import type { InferenceBoundary, InferenceResult } from "@refract-org/evidence-graph";
 import { buildInferencePrompt, parseInferenceResponse } from "@refract-org/evidence-graph";
 
@@ -43,11 +43,14 @@ function lexicalSimilarity(before: string, after: string): number {
 function defaultInference(boundary: InferenceBoundary, input: Record<string, unknown>): InferenceResult {
   switch (boundary) {
     case "revert": {
-      const kind = classifyHeuristic(asString(input.comment), asNumber(input.sizeDelta));
+      // The rule `refract analyze` applies when it emits revert_detected. This
+      // used the edit-type heuristic's wider pattern, so the two disagreed on
+      // summaries such as "rv".
+      const isRevert = revertDetector.isRevert(asString(input.comment));
       return {
         boundary,
-        output: { isRevert: kind === "revert" },
-        confidence: kind === "revert" ? 0.85 : 0.6,
+        output: { isRevert },
+        confidence: isRevert ? 0.85 : 0.6,
         source: "default",
       };
     }
@@ -125,9 +128,10 @@ export class OpenAICompatibleProvider implements InferenceProvider {
   }
 
   async infer(boundary: InferenceBoundary, input: Record<string, unknown>): Promise<InferenceResult> {
-    const prompt = buildInferencePrompt(boundary, input);
-
     if (this.apiKey) {
+      // Built only for a model call: the prompt reads fields the default rule
+      // treats as optional, and threw on `classify activity_spike --input '{}'`.
+      const prompt = buildInferencePrompt(boundary, input);
       const response = await fetch(this.endpoint, {
         method: "POST",
         headers: {

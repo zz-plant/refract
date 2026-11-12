@@ -37,7 +37,7 @@ A non-breaking change adds capabilities without breaking existing consumers. The
 
 ## What consumers SHOULD do
 
-- **Pin to a minor version**: `@refract-org/evidence-graph@~0.4`. You'll get patches and non-breaking additions.
+- **Pin to a minor version**: `@refract-org/evidence-graph@~0.5`. You'll get patches and non-breaking additions.
 - **Handle unknown event types gracefully**: if you encounter an event type you don't recognize, log it and preserve it. Don't silently drop.
 - **Check `schemaVersion` at runtime**: every event carries it. If you see a schema version you don't support, degrade gracefully rather than crashing.
 
@@ -53,7 +53,10 @@ A non-breaking change adds capabilities without breaking existing consumers. The
 
 | refract CLI | `@refract-org/evidence-graph` | `EVENT_SCHEMA_VERSION` | Key changes |
 |---|---|---|---|
-| 0.5.x | 0.4.x | `"0.4.0"` | Current. `sentence_modified`, `FactProvenance.parameters`, `AnalyzerConfig`, `EVENT_SCHEMA_VERSION`, `CLAIM_IDENTITY_VERSION` |
+| 0.6.1 | 0.5.4 | `"0.5.0"` | Current. Same `EventType` members; the CLI emits the cluster, spike and thread events, and citation events name their section |
+| 0.6.0 | 0.5.3 | `"0.5.0"` | Tagged; the CLI did not reach npm |
+| 0.5.15–0.5.17 | 0.5.1–0.5.2 | `"0.5.0"` | Optional fields added to `EvidenceEvent`; same `EventType` members |
+| 0.5.0–0.5.7 | 0.4.x–0.5.0 | `"0.4.0"` | `sentence_modified`, `FactProvenance.parameters`, `AnalyzerConfig`, `EVENT_SCHEMA_VERSION`, `CLAIM_IDENTITY_VERSION` |
 | 0.4.x | 0.3.x | `"0.3.0"` | `ClaimLedger`, `ObservationReport`, `--report` flag, cron merging |
 | 0.3.x | 0.2.x | `"0.2.0"` | 25 event types, initial public release |
 
@@ -67,6 +70,6 @@ When a MAJOR bump becomes necessary, the release notes will include a migration 
 
 ## Related
 
-- [Event schema reference](schema.md) — full `EvidenceEvent` structure
+- [Event schema reference](https://zz-plant.github.io/refract/schema/) — full `EvidenceEvent` structure
 - [COMPATIBILITY.md](COMPATIBILITY.md) — cross-repo version matrix
-- [Downstream integration](downstream.md) — production patterns for consuming events
+- [Downstream integration](https://zz-plant.github.io/refract/downstream/) — production patterns for consuming events

@@ -1,6 +1,6 @@
 {
   "format": "refract-review/v1",
-  "analyzerVersion": "0.6.0",
+  "analyzerVersion": "0.6.1",
   "depth": "detailed",
   "scope": "article_revisions",
   "pages": [
@@ -202,7 +202,7 @@
           "eventType": "citation_removed",
           "fromRevisionId": 2,
           "toRevisionId": 3,
-          "section": "body",
+          "section": "(lead)",
           "before": "<ref>{{cite web|url=https://example.org/rivergate/hours|title=Rivergate opening hours}}</ref>",
           "after": "",
           "deterministicFacts": [
@@ -229,8 +229,8 @@
           },
           "directionSignal": "neutral",
           "quantitativeFindings": [],
-          "eventId": "79512edc32a862cf",
-          "entryId": "17a87de09276cce09f35c095b3f52f77c8ffcf46a1e2842ee23612def8b0c48f",
+          "eventId": "acfaff3682f061b8",
+          "entryId": "2610b462fc60104d373521dc0b550d571d250c0ad0c5151b66c0ad24118aadd0",
           "source": {
             "kind": "fictional_sample",
             "key": "9f3e6db9080df0422d20f9e2dc269d082aa2bc9a22aa8fa56067ed6e015bd943",
@@ -543,5 +543,5 @@
       ]
     }
   ],
-  "reportId": "0fb4a8f1443ea70a66988e1f69a383940b43de9f7a83ba4fe2ebb50f645acfdd"
+  "reportId": "ea92f60f7e19c3a181b7a23cb7917cd7211f273becd2a9bc2907477696a531e2"
 }

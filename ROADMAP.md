@@ -4,7 +4,7 @@ Core revision analyzers are available. Current product work focuses on repeatabl
 
 ## Source review workflow
 
-Shipped in 0.6.0:
+Shipped in 0.6.0, first published to npm as 0.6.1:
 
 - `review`: watchlists, separate fetched/reviewed cursors, resumable inputs, and acknowledgment of saved reports.
 - Markdown and JSON reports with full changed text, source links, filters, and coverage.

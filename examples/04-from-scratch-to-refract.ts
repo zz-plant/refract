@@ -31,7 +31,8 @@ const PAGE = "CRISPR";
 const DEPTH = 10;
 
 const client = new MediaWikiClient({ minDelayMs: 200 });
-const revisions = await client.fetchRevisions(PAGE, { direction: "newer", limit: DEPTH });
+// Newest first by default; reversed so pairs run from earlier to later.
+const revisions = (await client.fetchRevisions(PAGE, { limit: DEPTH })).reverse();
 
 console.log(`=== From Scratch ===`);
 console.log(`When you build Wikipedia analysis yourself, you write:`);

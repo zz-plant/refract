@@ -1,6 +1,6 @@
 {
   "name": "@refract-org/analyzers",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "type": "module",
   "private": false,
   "description": "Deterministic analyzers for public revision histories: section diffs, claim events, citation changes, reverts, talk-page signals, templates, categories, and wikilinks",
@@ -9,10 +9,10 @@
   "types": "./dist/src/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/refract-org/refract.git",
+    "url": "git+https://github.com/zz-plant/refract.git",
     "directory": "packages/analyzers"
   },
-  "homepage": "https://github.com/refract-org/refract#readme",
+  "homepage": "https://zz-plant.github.io/refract/",
   "bugs": {
     "url": "https://github.com/refract-org/refract/issues"
   },
@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@refract-org/evidence-graph": "^0.5.3"
+    "@refract-org/evidence-graph": "^0.5.4"
   },
   "devDependencies": {}
 }

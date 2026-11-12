@@ -3,18 +3,18 @@
 Refract is a git log for Wikipedia. See how Wikipedia text and citations
 changed since your last review, with text and revision links to inspect.
 
-The [documentation site](https://refract-org.github.io/refract/) has the CLI reference,
+The [documentation site](https://zz-plant.github.io/refract/) has the CLI reference,
 tutorials, and integration guides. This directory holds the guides maintained with the engine.
 
 ## Getting Started
 
 - [Review your sources](./review.md) — watchlists, saved baselines, coverage, and explicit acknowledgment
 
-- [Quick Start](../README.md#quick-start) — first commands to try
+- [Install](../README.md#install) — first commands to try
 - [Offline walkthrough](./recipes.md#try-the-offline-walkthrough) — changed wording, a removed reference, and returned text
 - [History range and output guide](./usage.md) — what gets fetched and where results appear
 - [Which command keeps checking a source](./usage.md#which-command-keeps-checking-a-source) — `review`, `cron`, `watch`, or `stream`
-- [Core Concepts](../README.md#core-concepts) — observed transitions, identity, and replay
+- [How it works](../README.md#how-it-works) — observed transitions, identity, and replay
 - [Claim-State Timelines](./concepts/claim-state-timelines.md) — observed transitions, identity, matching, and coverage limits
 
 ## Reference

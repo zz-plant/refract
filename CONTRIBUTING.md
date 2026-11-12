@@ -6,7 +6,7 @@
 2. **Run the gate**: `bun run build && bun run typecheck && bun run test` — all must pass before you start
 3. **Pick a task**: [Good first issues](https://github.com/refract-org/refract/labels/good%20first%20issue) are scoped for new contributors. If none fit, start a [discussion](https://github.com/refract-org/refract/discussions) about what you would like to work on.
 4. **Read the architecture**: [ARCHITECTURE.md](./ARCHITECTURE.md) — 5 minutes, saves hours of wrong turns
-5. **Build a custom analyzer**: [Tutorial](https://refract-org.github.io/refract/tutorials/custom-analyzer/) steps through the full cycle
+5. **Build a custom analyzer**: [Tutorial](https://zz-plant.github.io/refract/tutorials/custom-analyzer/) steps through the full cycle
 6. **Run `bun run ci` before opening a PR**: build + lint + typecheck + boundaries + test. All must pass.
 
 ### What packages need what
@@ -40,6 +40,15 @@ Use Conventional Commits: `feat:`, `fix:`, `refactor:`, `chore:`, `docs:`, `test
 1. PR description must state what the code shows, not what it claims
 2. New analyzers must include an eval (even a single sample page)
 3. Architecture changes require an ARCHITECTURE.md update in the same PR
+
+## Releasing
+
+The release version is `packages/cli/package.json`'s, and its tag is `v<version>`. Merging a bump of that version to `main` publishes it.
+
+- `bun scripts/release.ts <major|minor|patch>` bumps the CLI version everywhere it is stamped, writes the changelog entry and commits. Bump any other package whose source changed; `bun run check:release -- --registry` names them.
+- When the bump reaches `main`, `publish.yml` tags the commit that set the version and, in the same run, publishes the packages to npm and the MCP registry, pushes the Docker image and creates the GitHub release. A change to that file that keeps an already tagged version does nothing. `bun scripts/release-tag.ts`, in a full clone, prints what the next run would do.
+- If the run fails after tagging, re-run it: it knows the tag is its own, and npm skips the versions it already has. A fix to the code needs a new bump.
+- A tag pushed by hand still releases the commit it names, and runs from `main` then leave that version alone, or fail if the tag is not on `main`. Do not push one for a bump that is on its way to `main`.
 
 ## Deprecation Policy
 

@@ -99,7 +99,10 @@ notifications. `refract cron` on the command line does both.
 ### `classify`
 
 Classify one observation boundary. Uses the configured inference provider when an API
-key is available, and otherwise asks the connected client through MCP sampling.
+key is available, and otherwise asks the connected client through MCP sampling. With
+neither a key nor a client that supports sampling, the result has an empty `output` and
+a `note` saying no provider is configured; `refract classify` on the command line
+applies the boundary's default rule instead.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -124,7 +127,7 @@ the matching rules. See [state labels](./concepts/claim-state-timelines.md#state
 | `depth` | enum | | `brief`, `detailed` (default), or `forensic` |
 | `api` | string | | MediaWiki API base URL. Defaults to English Wikipedia |
 
-Response fields: `statement`, `page`, `context`, `revisions` (array of `revisionId` + `timestamp`), `status` (`present`, `absent`, `modified`, or `contested`), and `history_summary`.
+Response fields: `statement`, `page`, `context` (when one was passed), `revisions` (array of `revisionId` + `timestamp`), `status` (`present`, `absent`, `modified`, or `contested`), and `history_summary`.
 
 ## Protocol details
 

@@ -1,19 +1,19 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.refract-org/refract",
+  "name": "io.github.zz-plant/refract",
   "title": "Refract",
   "description": "git log for Wikipedia: typed events for changed sentences, citations, and structure on any page.",
   "repository": {
-    "url": "https://github.com/refract-org/refract",
+    "url": "https://github.com/zz-plant/refract",
     "source": "github"
   },
-  "version": "0.6.0",
-  "websiteUrl": "https://refract-org.github.io/refract/",
+  "version": "0.6.1",
+  "websiteUrl": "https://zz-plant.github.io/refract/",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@refract-org/cli",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "transport": {
         "type": "stdio"
       },

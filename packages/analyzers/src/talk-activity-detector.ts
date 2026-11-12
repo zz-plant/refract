@@ -17,6 +17,11 @@ export function detectTalkActivitySpikes(
   talkRevisions: Revision[],
   articleRevisions: Revision[],
   options?: AnalyzerConfig["talkSpike"],
+  /**
+   * The end of the lookback window. Default: now. Pass the last analyzed
+   * revision's time so the same revisions give the same spikes on any day.
+   */
+  referenceTime?: string | Date,
 ): TalkActivityResult {
   const windowMs = options?.lookbackWindowMs ?? DEFAULT_SPIKE_WINDOW_MS;
   const spikeFactor = options?.spikeFactor ?? DEFAULT_SPIKE_FACTOR;
@@ -35,9 +40,12 @@ export function detectTalkActivitySpikes(
     return { spikes, activityByDay: dailyActivity(dailyCounts), movingAverage: 0 };
   }
 
-  const recentEnd = Date.now();
+  const recentEnd = referenceTime === undefined ? Date.now() : new Date(referenceTime).getTime();
   const recentStart = recentEnd - windowMs;
-  const recentDays = sortedDays.filter((d) => new Date(d).getTime() >= recentStart);
+  const recentDays = sortedDays.filter((d) => {
+    const t = new Date(d).getTime();
+    return t >= recentStart && t <= recentEnd;
+  });
 
   const movingAverages: number[] = [];
   for (let i = maPeriods - 1; i < sortedDays.length; i++) {

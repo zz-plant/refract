@@ -49,7 +49,7 @@ describe("analyze next steps", () => {
     expect(output()).toContain("Next steps:");
     expect(output()).toContain('refract review "Bitcoin"');
     expect(output()).toContain('refract claim "Bitcoin"');
-    expect(output()).toContain("https://refract-org.github.io/refract/");
+    expect(output()).toContain("https://zz-plant.github.io/refract/");
     expect(output()).not.toContain("refract explore");
   });
 

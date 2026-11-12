@@ -1,12 +1,89 @@
 name: Publish Packages
 
+# A release is the tag v<version>, where <version> is packages/cli/package.json's.
+# It starts one of two ways:
+#   - A person pushes the tag. This workflow publishes it, and docker-publish.yml
+#     and release.yml run on the same push, as they always have.
+#   - A change to packages/cli/package.json reaches main, or this workflow is run
+#     from main by hand. `guard` reads the version; if v<version> is not on the
+#     remote, it tags the commit that set the version, and this run publishes from
+#     that commit. A tag pushed with the job's own token starts no workflow, so
+#     this run also calls docker-publish.yml and release.yml. If the tag is
+#     already there, nothing else runs. scripts/release-tag.ts has the rules,
+#     including when it fails rather than tagging.
+# npm trusted publishing is set up on npmjs.com for this file by name, so
+# `npm publish` stays here rather than moving into a called workflow.
 on:
   push:
+    branches: [main]
+    # GitHub does not apply path filters to tag pushes, so every v* tag runs.
+    paths:
+      - packages/cli/package.json
     tags:
       - 'v*'
+  workflow_dispatch:
+
+# Runs from main go one at a time; GitHub keeps one waiting run per group, the
+# newest, and that run reads main afresh. A tag push has a group to itself, as
+# it had before. A tag push and a run from main never both release a version:
+# only the run that creates the tag releases it, and the remote refuses a second
+# tag of the same name.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # To push the tag. The publish job, which installs dependencies, stays read-only.
+      contents: write
+    outputs:
+      release: ${{ steps.pushed.outputs.release || steps.main.outputs.release }}
+      tag: ${{ steps.pushed.outputs.tag || steps.main.outputs.tag }}
+      sha: ${{ steps.pushed.outputs.sha || steps.main.outputs.sha }}
+      tagged_here: ${{ steps.pushed.outputs.tagged_here || steps.main.outputs.tagged_here }}
+    steps:
+      - name: Release the pushed tag
+        id: pushed
+        if: github.ref_type == 'tag'
+        run: |
+          {
+            echo "release=true"
+            echo "tag=$GITHUB_REF_NAME"
+            echo "sha=$GITHUB_SHA"
+            echo "tagged_here=false"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Refuse a branch other than main
+        if: github.ref_type == 'branch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Releases are tagged from main, and this run is on $GITHUB_REF_NAME"
+          exit 1
+
+      - uses: actions/checkout@v7
+        if: github.ref == 'refs/heads/main'
+        with:
+          # The commit that set the version can be any distance behind main.
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          bun-version: "1.3.14"
+      - name: Tag the version if it is new
+        id: main
+        if: github.ref == 'refs/heads/main'
+        env:
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          # Written into the tag, so a re-run of this run knows the tag is its own.
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bun scripts/release-tag.ts --push --run-url "$RUN_URL"
+
   publish:
+    needs: guard
+    if: needs.guard.outputs.release == 'true'
     runs-on: ubuntu-latest
     # v0.5.13 and v0.5.14 died at GitHub's 6-hour default: `bun test` (Bun's
     # own runner, not the project suite) hung in CI. Fail a hang in minutes.
@@ -19,6 +96,10 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The tagged commit: the pushed tag's, or from main the commit that set
+          # the version, which a later push can have left behind main's head.
+          ref: ${{ needs.guard.outputs.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.14"
@@ -172,7 +253,7 @@ jobs:
       # The registry reads mcpName from the npm package to confirm ownership of
       # the name in server.json, so this has to follow the npm publish above.
       - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
       - name: Download and verify mcp-publisher
         env:
@@ -201,3 +282,24 @@ jobs:
             sleep 30
           done
           exit 1
+
+  # A tag pushed by a person starts these two on its own. One this run pushed
+  # does not, so the run calls them. Neither waits for npm, as on a tag push.
+  docker:
+    needs: guard
+    if: needs.guard.outputs.tagged_here == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      tag: ${{ needs.guard.outputs.tag }}
+
+  github-release:
+    needs: guard
+    if: needs.guard.outputs.tagged_here == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.guard.outputs.tag }}

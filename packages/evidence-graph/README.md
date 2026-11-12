@@ -18,8 +18,8 @@ bun add @refract-org/evidence-graph
 
 ### Functions
 
-- `createClaimIdentity(pageTitle, claimText)` — deterministic hash for claim dedup
-- `createEventIdentity(pageTitle, eventType, revisionRange)` — deterministic event fingerprint
+- `createClaimIdentity({ text, section, pageTitle, pageId, version? })` — returns a `ClaimIdentity` (`claimId`, `identityKey`, `pageTitle`, `pageId`); `claimId` is a deterministic hash for claim dedup
+- `createEventIdentity(event)` — deterministic 16-hex-character fingerprint of an `EvidenceEvent`
 
 ### Verification bundles (0.5.1+)
 
@@ -37,4 +37,4 @@ import type { EvidenceEvent, Revision } from "@refract-org/evidence-graph";
 import { createClaimIdentity, createVerificationBundle } from "@refract-org/evidence-graph";
 ```
 
-[Refract](https://github.com/refract-org/refract) · [Docs](https://refract-org.github.io/refract/) · [npm](https://www.npmjs.com/package/@refract-org/evidence-graph)
+[Refract](https://github.com/refract-org/refract) · [Docs](https://zz-plant.github.io/refract/) · [npm](https://www.npmjs.com/package/@refract-org/evidence-graph)

@@ -38,6 +38,8 @@ export interface Section {
 export interface SectionChange {
   section: string;
   changeType: "added" | "removed" | "modified" | "moved" | "unchanged";
+  /** For `moved`: the title the section had before it was renamed. */
+  fromSection?: string;
   fromContent?: string;
   toContent?: string;
 }

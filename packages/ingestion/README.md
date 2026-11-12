@@ -35,4 +35,4 @@ import { GitRevisionSource, MediaWikiClient, RateLimiter } from "@refract-org/in
 import type { RevisionFetcher, RevisionOptions } from "@refract-org/ingestion";
 ```
 
-[Refract](https://github.com/refract-org/refract) · [Docs](https://refract-org.github.io/refract/) · [npm](https://www.npmjs.com/package/@refract-org/ingestion)
+[Refract](https://github.com/refract-org/refract) · [Docs](https://zz-plant.github.io/refract/) · [npm](https://www.npmjs.com/package/@refract-org/ingestion)

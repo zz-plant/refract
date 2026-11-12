@@ -1,7 +1,7 @@
 # Source change review
 
-Report: 0fb4a8f1443ea70a66988e1f69a383940b43de9f7a83ba4fe2ebb50f645acfdd
-Analyzer: 0.6.0; scope: article revisions only.
+Report: ea92f60f7e19c3a181b7a23cb7917cd7211f273becd2a9bc2907477696a531e2
+Analyzer: 0.6.1; scope: article revisions only.
 
 ## Rivergate Library (fictional)
 
@@ -53,7 +53,7 @@ After:
 Rivergate Library is open until eight every weekday throughout the year
 ```
 
-### citation_removed — body
+### citation_removed — (lead)
 
 2025-01-03T12:00:00Z · fictional revisions 2 → 3
 
@@ -185,4 +185,4 @@ After:
 The library provides free printing for all registered members
 ```
 
-After inspecting the saved report: refract review --state-dir './review-state' --ack 0fb4a8f1443ea70a66988e1f69a383940b43de9f7a83ba4fe2ebb50f645acfdd
+After inspecting the saved report: refract review --state-dir './review-state' --ack ea92f60f7e19c3a181b7a23cb7917cd7211f273becd2a9bc2907477696a531e2

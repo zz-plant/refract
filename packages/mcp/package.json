@@ -9,18 +9,19 @@
   "types": "./dist/src/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/refract-org/refract.git",
+    "url": "git+https://github.com/zz-plant/refract.git",
     "directory": "packages/mcp"
   },
+  "homepage": "https://zz-plant.github.io/refract/",
   "files": ["dist", "src"],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@refract-org/evidence-graph": "^0.5.3",
-    "@refract-org/ingestion": "^0.3.4",
-    "@refract-org/analyzers": "^0.5.3"
+    "@refract-org/evidence-graph": "^0.5.4",
+    "@refract-org/ingestion": "^0.3.5",
+    "@refract-org/analyzers": "^0.5.4"
   },
   "devDependencies": {}
 }

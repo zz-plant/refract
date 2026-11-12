@@ -83,8 +83,10 @@ export const sectionDiffer: SectionDiffer = {
   diffSections(
     before: Section[],
     after: Section[],
-    _options?: { renameDetection?: "exact" | "similarity" | "none" },
+    options?: { renameDetection?: "exact" | "similarity" | "none"; similarityThreshold?: number },
   ): SectionChange[] {
+    const renameDetection = options?.renameDetection ?? "exact";
+    const similarityThreshold = options?.similarityThreshold ?? 0.8;
     const changes: SectionChange[] = [];
     const beforeByTitle = new Map<string, Section>();
     const afterByTitle = new Map<string, Section>();
@@ -98,10 +100,58 @@ export const sectionDiffer: SectionDiffer = {
       afterByTitle.set(key, s);
     }
 
+    // A heading that disappears while another appears is one renamed section
+    // when the text under it stayed put: identical for `exact`, and for
+    // `similarity` also when its word overlap reaches the threshold.
+    const renamedTo = new Map<string, string>();
+    if (renameDetection !== "none") {
+      const removedKeys = [...beforeByTitle.keys()].filter((k) => !afterByTitle.has(k));
+      const addedKeys = [...afterByTitle.keys()].filter((k) => !beforeByTitle.has(k));
+      const taken = new Set<string>();
+      for (const removedKey of removedKeys) {
+        const removed = beforeByTitle.get(removedKey);
+        if (!removed?.content) continue;
+        let match: string | undefined;
+        let best = 0;
+        for (const addedKey of addedKeys) {
+          if (taken.has(addedKey)) continue;
+          const added = afterByTitle.get(addedKey);
+          if (!added?.content) continue;
+          const score =
+            added.content === removed.content
+              ? 1
+              : renameDetection === "similarity"
+                ? sectionOverlap(removed.content, added.content)
+                : 0;
+          if (score > best && (score === 1 || score >= similarityThreshold)) {
+            best = score;
+            match = addedKey;
+          }
+        }
+        if (match) {
+          taken.add(match);
+          renamedTo.set(match, removedKey);
+        }
+      }
+    }
+    const renamedFrom = new Set(renamedTo.values());
+
     const seenAfter = new Set<string>();
 
     for (const [key, afterSection] of afterByTitle) {
       seenAfter.add(key);
+      const renamedFromKey = renamedTo.get(key);
+      const previous = renamedFromKey ? beforeByTitle.get(renamedFromKey) : undefined;
+      if (previous) {
+        changes.push({
+          section: afterSection.title || "(lead)",
+          changeType: "moved",
+          fromSection: previous.title || "(lead)",
+          fromContent: previous.content,
+          toContent: afterSection.content,
+        });
+        continue;
+      }
       const beforeSection = beforeByTitle.get(key);
       if (!beforeSection) {
         changes.push({
@@ -125,7 +175,7 @@ export const sectionDiffer: SectionDiffer = {
     }
 
     for (const [key, beforeSection] of beforeByTitle) {
-      if (!seenAfter.has(key)) {
+      if (!seenAfter.has(key) && !renamedFrom.has(key)) {
         changes.push({
           section: beforeSection.title || "(lead)",
           changeType: "removed",
@@ -322,6 +372,16 @@ export function buildSectionLineage(
   }
 
   return [...lineages.values()].sort((a, b) => a.sectionName.localeCompare(b.sectionName));
+}
+
+/** Share of the two sections' distinct words that both contain. */
+function sectionOverlap(a: string, b: string): number {
+  const wordsA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
+  const wordsB = new Set(b.toLowerCase().split(/\s+/).filter(Boolean));
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+  let shared = 0;
+  for (const w of wordsA) if (wordsB.has(w)) shared++;
+  return shared / (wordsA.size + wordsB.size - shared);
 }
 
 function sectionKey(s: Section): string {

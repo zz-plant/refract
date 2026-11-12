@@ -7,4 +7,4 @@
  * scripts/release.ts rewrites this line when it bumps the version, and
  * scripts/check-release.ts fails when it disagrees with package.json.
  */
-export const REFRACT_VERSION = "0.6.0";
+export const REFRACT_VERSION = "0.6.1";

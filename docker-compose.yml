@@ -1,13 +1,8 @@
+# One-shot analysis from a local build. The image's entry point is the CLI, so
+# `command` holds CLI arguments only. `refract explore` is not offered here: its
+# server listens on the container's loopback address by design, which a
+# published port cannot reach.
 services:
   refract:
     build: .
-    ports:
-      - "8899:8899"
-    command: ["refract", "explore", "Earth", "--no-open"]
-    environment:
-      - REFRACT_CACHE_DIR=/data
-    volumes:
-      - refract-cache:/data
-
-volumes:
-  refract-cache:
+    command: ["analyze", "Earth", "--depth", "brief", "--json"]

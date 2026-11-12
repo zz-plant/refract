@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { annotateEvents, correlateTalkRevisions, diffObservations } from "@refract-org/analyzers";
-import type { EvidenceEvent, Revision } from "@refract-org/evidence-graph";
+import type { AnalyzerConfig, EvidenceEvent, Revision } from "@refract-org/evidence-graph";
 import type { AuthConfig, RevisionOptions } from "@refract-org/ingestion";
 import { MediaWikiClient } from "@refract-org/ingestion";
 import type { HistoryCoverage } from "../coverage.js";
@@ -79,10 +79,14 @@ export async function fetchRevisionsWithCache(
   return { client, revisions: sorted, coverage };
 }
 /** Correlate talk page revisions with article revisions. */
-export function correlateTalkPages(sortedRevs: Revision[], talkRevs: Revision[]): EvidenceEvent[] {
+export function correlateTalkPages(
+  sortedRevs: Revision[],
+  talkRevs: Revision[],
+  options?: AnalyzerConfig["talkCorrelation"],
+): EvidenceEvent[] {
   if (talkRevs.length === 0) return [];
 
-  const talkEvents = correlateTalkRevisions(sortedRevs, talkRevs);
+  const talkEvents = correlateTalkRevisions(sortedRevs, talkRevs, options);
   if (talkEvents.length > 0) {
     console.error(`Correlated ${talkEvents.length} talk page discussions.`);
   }

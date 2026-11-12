@@ -22,9 +22,7 @@ describe("stripWikitext", () => {
   });
 
   it("drops interlanguage links so their labels cannot join sentence text", () => {
-    expect(stripWikitext("Pluto is small.\n\n[[de:Pluto (Zwergplanet)]]\n[[fr:Pluton]]")).toBe(
-      "Pluto is small.",
-    );
+    expect(stripWikitext("Pluto is small.\n\n[[de:Pluto (Zwergplanet)]]\n[[fr:Pluton]]")).toBe("Pluto is small.");
     expect(stripWikitext("[[zh-yue:冥王星]]Pluto is small.")).toBe("Pluto is small.");
     expect(stripWikitext("[[de:Pluto|Zwergplanet]] is small.")).toBe("is small.");
   });

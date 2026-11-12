@@ -8,8 +8,7 @@
  *
  * Refract's L1 analyzers produce the same classifications
  * deterministically — no model, no hidden state, byte-for-byte
- * reproducible. Every classification carries a provenance chain
- * (which analyzer, which version, which input hashes).
+ * reproducible. Each label comes with the rule that produced it.
  *
  * This script classifies each edit using only deterministic rules
  * and explains why each label was assigned.
@@ -30,10 +29,9 @@ const DEPTH = 20;
 
 const client = new MediaWikiClient({ minDelayMs: 200 });
 
-const revisions = await client.fetchRevisions(PAGE, {
-  direction: "newer",
-  limit: DEPTH,
-});
+// The default direction returns the newest revisions first; reverse them
+// so each pair below runs from the earlier revision to the later one.
+const revisions = (await client.fetchRevisions(PAGE, { limit: DEPTH })).reverse();
 
 console.log(`ORES:  "edit is damaging (p=0.87)" — unanswerable, unverifiable`);
 console.log(`Refract: "revert detected (matched revert pattern in comment)" — reproducible`);

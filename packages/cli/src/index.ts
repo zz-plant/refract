@@ -59,7 +59,7 @@ export function extractAuth(opts: Record<string, unknown>): AuthConfig | undefin
   return { apiKey, apiUser, apiPassword, oauthClientId, oauthClientSecret };
 }
 
-const DOCS_URL = "https://refract-org.github.io/refract/";
+const DOCS_URL = "https://zz-plant.github.io/refract/";
 
 export const program = new Command();
 

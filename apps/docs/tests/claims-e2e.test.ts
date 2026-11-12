@@ -1,41 +1,16 @@
-import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { promisify } from "node:util";
-import { beforeAll, describe, expect, it } from "vitest";
-
-const ROOT_DIR = resolve(__dirname, "..");
-const DOCS_DIR = join(ROOT_DIR, "docs");
-const DIST_DIR = join(ROOT_DIR, "dist");
-const execFileAsync = promisify(execFile);
-
-async function findMarkdownFiles(dir: string): Promise<string[]> {
-	const entries = await readdir(dir, { withFileTypes: true });
-	const files: string[] = [];
-	for (const entry of entries) {
-		const filePath = join(dir, entry.name);
-		if (entry.isDirectory()) {
-			files.push(...(await findMarkdownFiles(filePath)));
-		} else if (entry.name.endsWith(".md")) {
-			files.push(filePath);
-		}
-	}
-	return files;
-}
-
-function slugForDoc(filePath: string): string {
-	return filePath
-		.slice(DOCS_DIR.length + 1)
-		.replaceAll("\\", "/")
-		.replace(/\.md$/, "");
-}
-
-function renderedPathForSlug(slug: string): string {
-	return slug === "index"
-		? join(DIST_DIR, "index.html")
-		: join(DIST_DIR, slug, "index.html");
-}
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+	DIST_DIR,
+	DOCS_DIR,
+	findMarkdownFiles,
+	pageSlugs,
+	ROOT_DIR,
+	renderedPathForSlug,
+	slugForDoc,
+} from "./site";
 
 function extractCliCommands(cliMarkdown: string): string[] {
 	return Array.from(cliMarkdown.matchAll(/^## `refract ([^`\s]+)`$/gm))
@@ -50,13 +25,8 @@ function extractEventTypes(eventsMarkdown: string): string[] {
 }
 
 describe("docs claim audit e2e", () => {
-	beforeAll(async () => {
-		await execFileAsync(process.execPath, ["build.mjs"], { cwd: ROOT_DIR });
-	});
-
 	it("renders every source markdown document into the built site", async () => {
-		const markdownFiles = await findMarkdownFiles(DOCS_DIR);
-		const missingPages = markdownFiles
+		const missingPages = (await findMarkdownFiles())
 			.map((filePath) => slugForDoc(filePath))
 			.filter((slug) => !existsSync(renderedPathForSlug(slug)));
 
@@ -69,8 +39,7 @@ describe("docs claim audit e2e", () => {
 		// whole table as a paragraph of pipes.
 		const delimiterRow = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?\s*$/m;
 		const pagesWithPipeText: string[] = [];
-		for (const filePath of await findMarkdownFiles(DOCS_DIR)) {
-			const slug = slugForDoc(filePath);
+		for (const slug of await pageSlugs()) {
 			const html = await readFile(renderedPathForSlug(slug), "utf-8");
 			for (const [, paragraph] of html.matchAll(/<p>([\s\S]*?)<\/p>/g)) {
 				if (delimiterRow.test(paragraph)) {
@@ -82,21 +51,29 @@ describe("docs claim audit e2e", () => {
 		expect(pagesWithPipeText).toEqual([]);
 	});
 
-	it("keeps the search index in sync with rendered documentation pages", async () => {
-		const markdownSlugs = (await findMarkdownFiles(DOCS_DIR))
-			.map((filePath) => slugForDoc(filePath))
-			.sort();
-		const searchIndex = JSON.parse(
-			await readFile(join(DIST_DIR, "search-index.json"), "utf-8"),
-		) as Array<{ slug: string }>;
-		const indexedSlugs = searchIndex.map((entry) => entry.slug).sort();
+	it("indexes every page for search", async () => {
+		expect(existsSync(join(DIST_DIR, "pagefind/pagefind.js"))).toBe(true);
+		const unindexed: string[] = [];
+		for (const slug of await pageSlugs()) {
+			const html = await readFile(renderedPathForSlug(slug), "utf-8");
+			if (!html.includes("data-pagefind-body")) unindexed.push(slug);
+		}
 
-		expect(indexedSlugs).toEqual(markdownSlugs);
+		expect(unindexed).toEqual([]);
 	});
 
 	it("keeps rendered landing-page claims in sync with homepage source", async () => {
 		const html = await readFile(join(DIST_DIR, "index.html"), "utf-8");
-		const css = await readFile(join(DIST_DIR, "style.css"), "utf-8");
+		const cssDir = join(DIST_DIR, "_astro");
+		const css = (
+			await Promise.all(
+				(
+					await readdir(cssDir)
+				)
+					.filter((name) => name.endsWith(".css"))
+					.map((name) => readFile(join(cssDir, name), "utf-8")),
+			)
+		).join("\n");
 
 		expect(html.match(/class="feature-card"/g) ?? []).toHaveLength(6);
 		expect(html.match(/class="usecase-card"/g) ?? []).toHaveLength(3);
@@ -129,7 +106,7 @@ describe("docs claim audit e2e", () => {
 
 	it("keeps primary naming claims consistent across docs", async () => {
 		const checkedFiles = [
-			...(await findMarkdownFiles(DOCS_DIR)),
+			...(await findMarkdownFiles()),
 			join(ROOT_DIR, "README.md"),
 			join(ROOT_DIR, "package.json"),
 		];

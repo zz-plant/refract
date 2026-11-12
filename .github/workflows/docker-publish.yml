@@ -3,6 +3,22 @@ name: Docker
 on:
   push:
     tags: ['v*']
+  # A tag's run uses the workflow file at that tag, so a fix made after the tag
+  # cannot be re-run from it. This builds an existing tag with the current file.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and push, such as v0.6.1
+        required: true
+        type: string
+  # publish.yml calls this for a tag it pushed itself, since a tag pushed with
+  # the workflow token does not start the push trigger above.
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build and push, such as v0.6.1
+        required: true
+        type: string
 
 jobs:
   push:
@@ -10,13 +26,22 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      # Named after the repository the workflow runs in. The job's token can
+      # push only to its own owner's namespace: the image was
+      # ghcr.io/refract-org/refract/cli, and the v0.6.1 push from
+      # zz-plant/refract was refused with 403.
+      IMAGE: ghcr.io/${{ github.repository }}/cli
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
       - name: Build image
-        run: docker build -t ghcr.io/refract-org/refract/cli:${{ github.ref_name }} .
+        run: docker build -t "$IMAGE:$TAG" .
       - name: Tag latest
-        run: docker tag ghcr.io/refract-org/refract/cli:${{ github.ref_name }} ghcr.io/refract-org/refract/cli:latest
+        run: docker tag "$IMAGE:$TAG" "$IMAGE:latest"
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Push
-        run: docker push --all-tags ghcr.io/refract-org/refract/cli
+        run: docker push --all-tags "$IMAGE"

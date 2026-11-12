@@ -1,9 +1,9 @@
 /**
  * Release helper — bumps version, generates changelog from conventional commits,
- * and creates a Git tag. Run: bun scripts/release.ts <major|minor|patch>
+ * and commits. Run: bun scripts/release.ts <major|minor|patch>
  *
  * Reads the current version from the root package.json, bumps it according to the
- * specified level, writes the changelog entry, commits, and tags.
+ * specified level, writes the changelog entry, and commits.
  *
  * The CLI ships as the project version, so the bump is written to every place that
  * carries it: the root package.json, packages/cli/package.json, the constant the CLI
@@ -13,8 +13,10 @@
  * changes; scripts/check-release.ts, run here before anything is committed, fails
  * the release if one was changed without a bump or a dependent range was not moved.
  *
- * The actual npm publish and GitHub release creation are handled by the existing
- * publish.yml and release.yml workflows, which trigger on tag push.
+ * It does not tag. When the commit reaches main, publish.yml tags v<version> at the
+ * commit that set packages/cli/package.json's version and publishes the packages,
+ * the Docker image and the GitHub release (scripts/release-tag.ts). A tag made
+ * here and pushed from a branch would release code before it was merged.
  */
 
 import { $ } from "bun";
@@ -114,8 +116,6 @@ await $`bun scripts/capture-review.ts`;
 const tag = `v${next}`;
 await $`git add package.json CHANGELOG.md packages/cli/package.json packages/cli/src/version.ts server.json .well-known/mcp/server-card.json docs/examples/review.md docs/examples/review.json docs/examples/review-citations.md`;
 await $`git commit -m "chore: release ${tag}"`;
-await $`git tag ${tag}`;
 
-console.log(`\nReleased ${tag}. Push with:`);
-console.log(`  git push origin main --tags`);
-console.log(`\nPublish and GitHub release workflows will trigger on tag push.`);
+console.log(`\nCommitted ${tag}. Merging this commit to main releases it: publish.yml tags`);
+console.log(`${tag} at the commit that set the version and publishes from there; do not push the tag yourself.`);

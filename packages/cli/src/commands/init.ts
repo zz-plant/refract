@@ -64,6 +64,6 @@ export async function runInit(options: { json?: boolean } = {}): Promise<void> {
   console.log("  This starts a local server; Ctrl+C stops it.");
   console.log();
   console.log("  Walkthrough and recipes: https://github.com/refract-org/refract/blob/main/docs/recipes.md");
-  console.log("  Full docs: https://refract-org.github.io/refract/");
+  console.log("  Full docs: https://zz-plant.github.io/refract/");
   console.log();
 }

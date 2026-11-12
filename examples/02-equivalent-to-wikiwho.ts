@@ -29,10 +29,9 @@ const DEPTH = 15;
 
 const client = new MediaWikiClient({ minDelayMs: 200 });
 
-const revisions = await client.fetchRevisions(PAGE, {
-  direction: "newer",
-  limit: DEPTH,
-});
+// The default direction returns the newest revisions first; reverse them
+// so each pair below runs from the earlier revision to the later one.
+const revisions = (await client.fetchRevisions(PAGE, { limit: DEPTH })).reverse();
 
 console.log(`"${PAGE}" — last ${revisions.length} revisions`);
 console.log();
@@ -70,20 +69,17 @@ for (let i = 1; i < revisions.length; i++) {
     .join(", ");
 
   console.log(`rev ${after.revId} — ${after.timestamp.slice(0, 10)}`);
-  console.log(`  editor: ${after.comment ? after.comment.split(" ")[0] + "…" : "(auto)"}`);
+  console.log(`  editor: ${after.user ?? "(hidden)"}`);
+  console.log(`  comment: ${after.comment ? `"${after.comment.slice(0, 80)}"` : "(none)"}`);
   console.log(`  heuristic: ${heuristic}${isRevert ? " [revert]" : ""}`);
   if (changedSections) console.log(`  sections touched: ${changedSections}`);
-  if (citations.length > 0) {
-    const summary = citations
-      .filter((c) => c.type !== "unchanged")
-      .map((c) => `${c.type}${c.after?.title ?? c.before?.title ?? ""}`);
-    console.log(`  citations: ${summary.join(", ")}`);
-  }
-  if (templates.length > 0) {
-    const summary = templates
-      .filter((t) => t.type !== "unchanged")
-      .map((t) => `${t.type} ${t.template.name}`);
-    console.log(`  templates: ${summary.join(", ")}`);
-  }
+  const citationSummary = citations
+    .filter((c) => c.type !== "unchanged")
+    .map((c) => `${c.type} ${c.after?.title ?? c.before?.title ?? ""}`.trim());
+  if (citationSummary.length > 0) console.log(`  citations: ${citationSummary.join(", ")}`);
+  const templateSummary = templates
+    .filter((t) => t.type !== "unchanged")
+    .map((t) => `${t.type} ${t.template.name}`);
+  if (templateSummary.length > 0) console.log(`  templates: ${templateSummary.join(", ")}`);
   console.log();
 }
