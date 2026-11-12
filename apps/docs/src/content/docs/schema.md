@@ -58,6 +58,7 @@ optional at the envelope level:
 
 ```typescript
 export interface EvidenceEvent {
+  schemaVersion?: string;                        // EVENT_SCHEMA_VERSION when the event was generated
   eventId?: string;                              // deterministic content hash (see below)
   eventType: EventType;                          // discriminator (serialized as "eventType" in NDJSON)
   claimId?: string;                              // claim identity hash, when applicable
@@ -68,10 +69,18 @@ export interface EvidenceEvent {
   after: string;                                 // text / state after the change
   deterministicFacts: DeterministicFact[];       // facts backing this event
   modelInterpretation?: ModelInterpretation;     // set by downstream consumers
+  editMagnitude?: EditMagnitude;                 // semantic enrichment, see below
+  contentChange?: ContentChange;
+  keyTerms?: string[];
+  certaintyProfile?: CertaintyProfile;
+  directionSignal?: DirectionSignal;
+  quantitativeFindings?: QuantitativeFinding[];
   layer: EvidenceLayer;                          // provenance layer
   timestamp: string;                             // ISO 8601
 }
 ```
+
+The CLI and `annotateEvents` set `schemaVersion` and the six enrichment fields on every event. The CLI also sets `eventId`. `claimId` is not set on the events `refract analyze` and `refract export` emit.
 
 ## Supporting types
 
@@ -121,7 +130,28 @@ export type PolicyDimension =
   | "notability"
   | "copyright"
   | "civility";
+
+// Semantic enrichment, computed from the before/after text
+export type EditMagnitude = "minor" | "moderate" | "major";
+export type ContentChange =
+  | "introduction" | "removal" | "expansion" | "compression" | "refinement" | "rewrite";
+export type DirectionSignal = "strengthening" | "weakening" | "neutral";
+
+export interface CertaintyProfile {
+  high: number;
+  medium: number;
+  low: number;
+  hedging: number;
+}
+
+export interface QuantitativeFinding {
+  type: string;
+  value: string;
+  raw: string;
+}
 ```
+
+Refract's own events leave `DeterministicFact.provenance` unset: their facts carry `fact` and `detail`. `FactProvenance` is there for a consumer to record the analyzer, version and parameters when it stores events.
 
 `ModelInterpretation` and `modelInterpretation` on `EvidenceEvent` are never set by Refract's deterministic pipeline — they exist for downstream consumers to attach semantic analysis without modifying the deterministic event.
 
@@ -158,12 +188,14 @@ When consuming Refract events across different package versions, the `schemaVers
 
 | refract CLI | `@refract-org/evidence-graph` | `EVENT_SCHEMA_VERSION` | Key changes |
 |------------|------------------------------|-----------------------|-------------|
-| 0.5.x | 0.4.x | `"0.4.0"` | `sentence_modified` event type, `FactProvenance.parameters`, `AnalyzerConfig`, `EVENT_SCHEMA_VERSION`, `CLAIM_IDENTITY_VERSION` |
+| 0.6.0 | 0.5.3 | `"0.5.0"` | No `EventType` changes |
+| 0.5.15–0.5.17 | 0.5.1–0.5.2 | `"0.5.0"` | No `EventType` changes; optional fields only |
+| 0.5.0–0.5.7 | 0.4.x–0.5.0 | `"0.4.0"` | `sentence_modified` event type, `FactProvenance.parameters`, `AnalyzerConfig`, `EVENT_SCHEMA_VERSION`, `CLAIM_IDENTITY_VERSION` |
 | 0.4.x | 0.3.x | `"0.3.0"` | ClaimLedger, ObservationReport, `--report` flag, cron merging |
 | 0.3.x | 0.2.x | `"0.2.0"` | 25 event types, initial public release |
 
 **Negotiation rules:**
-- Consumers SHOULD accept events with the same minor schema version (0.4.x)
+- Consumers SHOULD accept events with the same minor schema version (0.5.x today)
 - Consumers MAY accept events across minor versions if they handle unknown `EventType` members gracefully (skip unrecognized types, log, preserve)
 - Consumers MUST NOT silently drop events with unrecognized event types — log them and preserve the raw data
 - When `schemaVersion` is missing, assume the most recent compatible schema for the consuming package version

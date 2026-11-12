@@ -24,7 +24,7 @@ refract analyze "Bitcoin" --from 369361755 --to 369393212 --depth detailed --jso
 
 These two revisions are from 2010-06-21. Look for `citation_removed`: inspect `before`, `after`, `fromRevisionId`, and `toRevisionId`, then compare the [source revisions](https://en.wikipedia.org/w/index.php?title=Bitcoin&diff=369393212&oldid=369361755). The observation records a removed reference; it does not explain the editor's reason.
 
-`--json` prints one event per line as NDJSON. In an interactive terminal, analysis without it opens the local explorer when there are events. `--depth brief` fetches the latest 20 revisions by default; detailed and forensic analysis can fetch the full history unless you provide bounds. Depth selects analyzers, while `--from`, `--to`, and `--since` scope the history.
+`--json` prints one event per line as NDJSON. In an interactive terminal, analysis without it opens the local explorer when there are events. `--depth brief` fetches the latest 20 revisions by default; detailed and forensic analysis can fetch the full history unless you provide bounds. Depth sets how much text each event carries (see [depth levels](depth.md)), while `--from`, `--to`, and `--since` scope the history.
 
 ## Browse the observations
 

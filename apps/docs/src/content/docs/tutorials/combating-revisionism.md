@@ -26,24 +26,27 @@ cannot vanish from the event stream.
 A contested historical claim appears on Wikipedia. When was it first added?
 
 ```bash
-refract claim "Battle of X" --text "civilian casualties were minimal" -c
+refract claim "Battle of X" --text "civilian casualties were minimal" --from <revId> --to <revId>
 ```
 
-Output: a timeline of every revision where that sentence appeared, was rewritten,
-removed, or reintroduced. Each event carries the exact revision ID, timestamp,
-and a deterministic SHA-256 `eventId`. Run the same command on the same revision
-range and you get the same hash — independently verifiable.
+Output: one entry per revision in the range where a sentence matched, with the revision
+ID, timestamp and matched text, then a summary with a `Claim ID` and the times the
+passage was first matched, changed, removed and reintroduced. The output is text, not
+JSON. An illustrative excerpt:
 
-```json
-{
-  "eventType": "sentence_first_seen",
-  "toRevisionId": 1280110100,
-  "timestamp": "2021-04-03T12:00:00Z",
-  "after": "civilian casualties were minimal according to official sources",
-  "claimId": "c7d8e9f0a1b23456",
-  "layer": "observed"
-}
 ```
+[2021-04-03T12:00:00Z] EXACT MATCH (rev 1280110100)
+  Matched text: "Civilian casualties were minimal according to official sources."
+
+=== Passage History Summary ===
+Claim ID:    c7d8e9f0a1b23456
+Page:        Battle of X
+Status:      present
+```
+
+Without `--from` and `--to`, `claim` reads the latest 50 revisions, so "first matched"
+means first within those. To find when a sentence entered an old article, give a range
+that reaches back far enough.
 
 ## Step 2: Citation laundering — same claim, different source
 
@@ -54,48 +57,55 @@ an independent human rights report to a government press release.
 Refract catches this as a `citation_replaced` event:
 
 ```bash
-refract analyze "Battle of X" --depth forensic -c > battle-events.jsonl
+refract export "Battle of X" --from <revId> --to <revId> --format ndjson > battle-events.jsonl
 ```
 
 ```sql
 SELECT timestamp, before, after
 FROM 'battle-events.jsonl'
 WHERE "eventType" = 'citation_replaced'
-  AND section LIKE '%Casualties%'
 ORDER BY timestamp;
 ```
+
+A citation event's `section` is the section that holds the reference, so the result can
+be narrowed with `AND section = 'History'`.
 
 The `before` field contains the old citation. The `after` field contains the new
 one. The claim text didn't change — but what supports it did. Without Refract,
 this pattern requires manually comparing every revision diff.
 
-To find claims that lost their original sources:
+Citation events are not linked to a sentence. To find the revisions that removed more
+sources than they added:
 
 ```sql
 SELECT
-  claim_id,
+  "toRevisionId",
   count(*) FILTER (WHERE "eventType" = 'citation_added') as sources_added,
   count(*) FILTER (WHERE "eventType" = 'citation_removed') as sources_removed,
   count(*) FILTER (WHERE "eventType" = 'citation_replaced') as sources_swapped
 FROM 'battle-events.jsonl'
-GROUP BY claim_id
+GROUP BY "toRevisionId"
 HAVING sources_removed > sources_added
 ORDER BY sources_swapped DESC;
 ```
 
 ## Step 3: Edit clusters — coordinated or organic?
 
-3+ edits hitting the same section within an hour fire `edit_cluster_detected`:
+An `edit_cluster_detected` event marks 3 or more edits within an hour. Its fact gives
+the number of revisions and of distinct editors; `--cluster-window` changes the window.
 
-```sql
-SELECT timestamp, section, deterministicFacts[0].detail as detail
-FROM 'battle-events.jsonl'
-WHERE "eventType" = 'edit_cluster_detected'
-ORDER BY timestamp;
+```bash
+jq -r 'select(.eventType == "edit_cluster_detected") | [.timestamp, .fromRevisionId, .toRevisionId, .deterministicFacts[0].detail] | @tsv' battle-events.jsonl
 ```
 
-The `detail` field reports the editor count and time span.
-Refract does not record editor identities.
+The revisions per hour show the same bursts:
+
+```bash
+jq -r 'select(.eventType != "talk_page_correlated") | [.timestamp[:13], .toRevisionId] | @tsv' battle-events.jsonl \
+  | sort -u | cut -f1 | uniq -c | awk '$1 >= 3'
+```
+
+Events have no editor field. An edit summary quoted in a `revert_detected` event may name one.
 
 ## Step 4: Talk page correlation — was this debated?
 
@@ -114,11 +124,12 @@ FROM 'battle-events.jsonl';
 ## Step 5: Cross-wiki temporal precedence — who said it first?
 
 ```bash
-refract analyze "Topic" --api https://en.wikipedia.org/w/api.php > wiki-en.jsonl
-refract analyze "Topic" --api https://de.wikipedia.org/w/api.php > wiki-de.jsonl
+refract analyze "Topic" --api https://en.wikipedia.org/w/api.php --from <revId> --to <revId> --json > wiki-en.jsonl
+refract analyze "Topic" --api https://de.wikipedia.org/w/api.php --from <revId> --to <revId> --json > wiki-de.jsonl
 ```
 
-Or use `refract diff` for structured cross-wiki comparison with z-score outlier detection.
+Revision IDs are per wiki, so each command needs its own range. `refract diff` prints
+side-by-side event counts for the same title on several wikis.
 
 ## Step 6: A Merkle root others can reproduce
 

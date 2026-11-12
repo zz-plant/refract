@@ -93,7 +93,7 @@ console.log(`Found ${events.length} events across ${revisions.length} revisions`
 |---|---|
 | Wikipedia or any MediaWiki wiki | `refract analyze "Page" --api <url>` — no code needed |
 | A non-MediaWiki source | Write an adapter function (pattern above) |
-| An adapter that others might use | Contribute it to `labs/` in the refract monorepo |
+| An adapter that others might use | Contribute it to `examples/` in the refract monorepo |
 | Private/authenticated sources | [Private wiki tutorial](private-wiki.md) |
 
 ## What the analyzers expect

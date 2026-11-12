@@ -75,48 +75,52 @@ Each label requires:
 refract eval --ground-truth my-labels.json
 ```
 
-Refract loads the labels, fetches the relevant pages, runs the pipeline, and compares
-output against your ground truth:
+Refract loads the labels, analyzes each label's page at detailed depth, and compares
+the events against your ground truth. It analyzes the page's whole history, so a
+long page takes a long time. The output has this shape (the counts here are
+illustrative):
 
 ```
 Loaded 3 ground truth labels from my-labels.json
+[covid-origin-consensus] Talk page consensus (Jan 2023) removed unsourced origin claims from lead...
+  Fetched 5120 events for "COVID-19".
+[bitcoin-citation-dispute] RFC closed June 2022: Nakamoto whitepaper citation must remain in lead...
+  Fetched 3310 events for "Bitcoin".
+[trump-protection-event] Page protected Aug 2024 after edit war. Revert events expected in surrounding revisions....
+  Fetched 9875 events for "Donald_Trump".
 
-[1/3] COVID-19 — talk_page_consensus: Talk page consensus (Jan 2023)...
-  PASS — precision=1.00 recall=1.00 f1=1.00
-  2/2 expected events matched (sentence_removed, section_reorganized)
+=== L3 Ground Truth Validation ===
+  [PASS] covid-origin-consensus: prec=1.00 recall=1.00 matched=412
+  [PASS] bitcoin-citation-dispute: prec=1.00 recall=1.00 matched=57
+  [PASS] trump-protection-event: prec=0.50 recall=1.00 matched=230
 
-[2/3] Bitcoin — rfc_closure: RFC closed June 2022...
-  PASS — precision=1.00 recall=1.00 f1=1.00
-  1/1 expected events matched (citation_added)
-
-[3/3] Donald_Trump — page_protection: Page protected Aug 2024...
-  FAIL — precision=0.50 recall=1.00 f1=0.67
-  1/2 expected events matched (revert_detected)
-  Missed: protection_changed
-
-=== Eval Summary ===
-Total outcomes: 3
-Passed: 2 / Failed: 1
-Overall precision: 83.3%
-Overall recall: 100.0%
-Overall F1: 88.9%
+  Total: 3/3 passed (0 failed)
+  Avg precision: 83.3%
+  Avg recall: 100.0%
 ```
 
 ## Step 3: Interpret the results
 
+A label passes when at least one event has an expected type (and the expected
+section, if the label names one). `matched` counts those events. `prec` is the
+share of the label's expected event types that appeared at least once. `recall`
+is 1.00 for a pass and 0.00 for a fail.
+
 | Outcome | What it means |
 |---|---|
-| **Pass (P=1.0, R=1.0)** | Pipeline detected all expected events. The analyzer is working as intended. |
-| **Pass (P<1.0, R=1.0)** | Pipeline found the expected events plus extras (false positives). Precision < 1.0 may indicate the analyzer is too sensitive. |
-| **Fail (R=0.0)** | Pipeline missed all expected events. The analyzer may not cover this scenario, or the revision range doesn't include the event. |
-| **Fail (P=0.5, R=1.0)** | Pipeline found some expected events but missed others. The analyzer is partially working — check if the missed event type is in scope. |
+| **PASS, prec=1.00** | Every expected event type appeared at least once. |
+| **PASS, prec<1.00** | Some expected event types appeared and others did not. In the third label above, `revert_detected` appeared and `protection_changed` did not. Check whether the missing type is one the pipeline emits for that page. |
+| **FAIL (prec=0.00, recall=0.00)** | No event had an expected type in the expected section. The analyzer may not cover this scenario, or the section name does not match. |
+
+The check does not use `observedAt`: an expected event anywhere in the page's
+history counts.
 
 ## Step 4: Diagnose misses
 
 When an outcome fails, investigate the missed events:
 
-1. Run the same page manually: `refract analyze "Page" --depth forensic`
-2. Check the revision range around the `observedAt` timestamp
+1. Run the same page manually over the revisions around the `observedAt` timestamp: `refract analyze "Page" --from <revId> --to <revId> --json`
+2. Check which event types that range produces
 3. Verify the `expectedEventTypes` match what the analyzer produces
 4. If the `expectedSection` is specified, check that the event fired in that section
 

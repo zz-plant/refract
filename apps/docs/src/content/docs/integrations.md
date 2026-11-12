@@ -23,7 +23,7 @@ Refract produces a deterministic event stream — standard NDJSON with typed sch
 | Tool | How | Docs |
 |---|---|---|
 | **DuckDB** | Query NDJSON directly: `SELECT * FROM 'events.jsonl'` | [Analytics](analytics.md) |
-| **SQLite** | `@refract-org/persistence` wraps `bun:sqlite`. Stores events + revisions locally. | [SDK](sdk.md) |
+| **SQLite** | `@refract-org/persistence` wraps `bun:sqlite`. Stores revisions and claim records locally; it has no event table. | [SDK](sdk.md) |
 | **PostgreSQL / D1** | Reference DDL with indexes for production ingestion. | [Downstream](downstream.md#production-ingestion) |
 | **ClickHouse** | Columnar analytics on event streams. Query NDJSON via `file()` table function. | [Downstream](downstream.md#complementary-technologies) |
 

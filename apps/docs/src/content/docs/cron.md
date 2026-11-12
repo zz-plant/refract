@@ -34,9 +34,10 @@ For each page:
 
 1. Reads the page's previous observation, if there is one.
 2. Analyzes the revisions since the lookback start (below) at `detailed` depth.
-3. Compares: an event is **new** if the previous observation did not contain it, and
-   **resolved** if the previous observation had it inside this run's window and this
-   run does not. An event that is merely older than the window is neither.
+3. Compares: an event is **new** if it sits on a revision the previous observation had
+   no events for, and **resolved** if the previous observation had it inside this
+   run's window and its revision, compared again, has no events left. An event that is
+   merely older than the window is neither.
 4. Writes this run's events as the page's observation — unless the run found none, in
    which case the previous observation is kept, so the next run still has something
    to compare against.
@@ -58,6 +59,13 @@ refract cron pages.txt --interval 24
 
 Run the scheduler at least as often as the interval. A window shorter than the gap
 between runs leaves edits no run looked at.
+
+With `--interval` the window slides, and each run analyzes a different slice of
+history. The first revision in a window is not compared with the one before it, and a
+sentence whose earlier appearance has left the window is typed `sentence_first_seen`
+where it was `sentence_reintroduced`. Neither counts as a change: a revision that
+already had events contributes no new ones, and the window's first revision contributes
+no resolved ones. A page nobody edited reports no changes.
 
 ## Output and exit code
 

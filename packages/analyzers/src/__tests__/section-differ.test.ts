@@ -119,6 +119,49 @@ describe("diffSections", () => {
   });
 });
 
+describe("diffSections rename detection", () => {
+  const TEXT = "Earth formed about 4.5 billion years ago from the solar nebula.";
+  const before = sectionDiffer.extractSections(`Lead\n\n== Origin ==\n${TEXT}`);
+  const renamed = sectionDiffer.extractSections(`Lead\n\n== Formation ==\n${TEXT}`);
+  const renamedAndEdited = sectionDiffer.extractSections(`Lead\n\n== Formation ==\n${TEXT} Slowly.`);
+  const summary = (changes: ReturnType<typeof sectionDiffer.diffSections>) =>
+    changes
+      .filter((c) => c.changeType !== "unchanged")
+      .map((c) => `${c.changeType}:${c.fromSection ?? ""}>${c.section}`);
+
+  it("reports one moved section by default when the text under a new heading is identical", () => {
+    expect(summary(sectionDiffer.diffSections(before, renamed))).toEqual(["moved:Origin>Formation"]);
+    expect(summary(sectionDiffer.diffSections(before, renamed, { renameDetection: "exact" }))).toEqual([
+      "moved:Origin>Formation",
+    ]);
+  });
+
+  it("reports a removal and an addition when detection is off", () => {
+    expect(summary(sectionDiffer.diffSections(before, renamed, { renameDetection: "none" }))).toEqual([
+      "added:>Formation",
+      "removed:>Origin",
+    ]);
+  });
+
+  it("pairs an edited section only in similarity mode, and only above the threshold", () => {
+    expect(summary(sectionDiffer.diffSections(before, renamedAndEdited, { renameDetection: "exact" }))).toEqual([
+      "added:>Formation",
+      "removed:>Origin",
+    ]);
+    expect(summary(sectionDiffer.diffSections(before, renamedAndEdited, { renameDetection: "similarity" }))).toEqual([
+      "moved:Origin>Formation",
+    ]);
+    expect(
+      summary(
+        sectionDiffer.diffSections(before, renamedAndEdited, {
+          renameDetection: "similarity",
+          similarityThreshold: 0.99,
+        }),
+      ),
+    ).toEqual(["added:>Formation", "removed:>Origin"]);
+  });
+});
+
 describe("sectionDiffer.extractSections on a hostile line", () => {
   it("stays linear on a line of '=' and whitespace", () => {
     // The heading pattern took time cubic or worse in such a line until 2026-09-24.

@@ -44,7 +44,7 @@ import { sectionDiffer, citationTracker, revertDetector } from "@refract-org/ana
 Deterministic text analysis for evidence events. No model, no API.
 
 - `computeCertaintyProfile(text)` — counts certainty/hedging markers
-- `computeDirectionSignal(before, after)` — strengthening/weakening/neutral
+- `computeDirectionSignal(beforeProfile, afterProfile)` — strengthening/weakening/neutral, from two `computeCertaintyProfile` results
 - `computeEditMagnitude(beforeLen, afterLen)` — minor/moderate/major
 - `computeContentChange(eventType, before, after)` — introduction/removal/expansion/etc.
 - `extractKeyTerms(text)` — significant terms from text

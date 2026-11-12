@@ -41,6 +41,15 @@ export interface RevisionEventOptions {
   similarityThreshold?: number;
   /** The page's protection log. An entry becomes an event on the pair whose span contains it: after the earlier revision, up to and including the later one. */
   protectionLogs?: readonly ProtectionLogRecord[];
+  /**
+   * How a heading that disappears while another appears is read. `exact`
+   * (default) reports one renamed section when the text under it is identical;
+   * `similarity` also when its word overlap reaches `similarityThreshold`;
+   * `none` reports a removed and an added section.
+   */
+  sectionRename?: "exact" | "similarity" | "none";
+  /** Edit-summary patterns that mark a revision as a revert. Default: the revert detector's built-in patterns. */
+  revertPatterns?: RegExp[];
 }
 
 function templateTypeToPolicyDimension(type: TemplateType): string | null {
@@ -79,6 +88,17 @@ export function parseContent(wikitext: string): ParsedContent {
   };
 }
 
+/**
+ * The section whose text contains `raw`: its title, `(lead)` for the lead, and
+ * `body` when no section holds it. A reference repeated verbatim in several
+ * sections is placed in the first.
+ */
+function sectionContaining(sections: Section[], raw: string | undefined): string {
+  if (!raw) return "body";
+  const holder = sections.find((s) => s.content.includes(raw));
+  return holder ? holder.title || "(lead)" : "body";
+}
+
 /** Diff sections, citations, wikilinks, categories, and lead structure between two revisions. */
 export function computeStructuralDiffs(
   before: Revision,
@@ -87,10 +107,11 @@ export function computeStructuralDiffs(
   afterParsed: ParsedContent,
   isBrief: boolean,
   extraFacts: DeterministicFact[],
+  sectionOptions?: { renameDetection?: "exact" | "similarity" | "none"; similarityThreshold?: number },
 ): EvidenceEvent[] {
   const events: EvidenceEvent[] = [];
 
-  const sectionChanges = sectionDiffer.diffSections(beforeParsed.sections, afterParsed.sections);
+  const sectionChanges = sectionDiffer.diffSections(beforeParsed.sections, afterParsed.sections, sectionOptions);
   const citationChanges = citationTracker.diffCitations(beforeParsed.citations, afterParsed.citations);
   const wikilinkChanges = diffWikilinks(beforeParsed.wikilinks, afterParsed.wikilinks);
   const categoryChanges = diffCategories(beforeParsed.categories, afterParsed.categories);
@@ -98,12 +119,18 @@ export function computeStructuralDiffs(
   for (const cit of citationChanges) {
     if (cit.type === "unchanged") continue;
     const layer: EvidenceLayer = "observed";
+    // Where the reference sits: in the later revision for one added or
+    // replaced, in the earlier one for one removed.
+    const section =
+      cit.type === "removed"
+        ? sectionContaining(beforeParsed.sections, cit.before?.raw)
+        : sectionContaining(afterParsed.sections, cit.after?.raw);
     events.push({
       eventType:
         cit.type === "added" ? "citation_added" : cit.type === "removed" ? "citation_removed" : "citation_replaced",
       fromRevisionId: before.revId,
       toRevisionId: after.revId,
-      section: "body",
+      section,
       before: isBrief ? "" : (cit.before?.raw ?? ""),
       after: isBrief ? "" : (cit.after?.raw ?? ""),
       deterministicFacts: [{ fact: "citation_changed", detail: `type=${cit.type}` }, ...extraFacts],
@@ -177,7 +204,13 @@ export function computeStructuralDiffs(
       section: sc.section,
       before: isBrief ? "" : (sc.fromContent ?? ""),
       after: isBrief ? "" : (sc.toContent ?? ""),
-      deterministicFacts: [{ fact: "section_changed", detail: `change=${sc.changeType}` }, ...extraFacts],
+      deterministicFacts: [
+        {
+          fact: "section_changed",
+          detail: sc.fromSection ? `change=${sc.changeType} from=${sc.fromSection}` : `change=${sc.changeType}`,
+        },
+        ...extraFacts,
+      ],
       layer: "observed",
       timestamp: after.timestamp,
     });
@@ -245,11 +278,12 @@ export function detectEditorialSignals(
   isBrief: boolean,
   extraFacts: DeterministicFact[],
   protectionLogs: readonly ProtectionLogRecord[] = [],
+  revertPatterns?: RegExp[],
 ): EvidenceEvent[] {
   const events: EvidenceEvent[] = [];
 
   const templateChanges = templateTracker.diffTemplates(beforeParsed.templates, afterParsed.templates);
-  const isRevRevert = revertDetector.isRevert(after.comment);
+  const isRevRevert = revertDetector.isRevert(after.comment, revertPatterns ? { patterns: revertPatterns } : undefined);
 
   for (const tpl of templateChanges) {
     if (tpl.type === "unchanged") continue;
@@ -525,8 +559,20 @@ export function buildRevisionEvents(
     const afterParsed = getParsed(after);
 
     events.push(
-      ...computeStructuralDiffs(before, after, beforeParsed, afterParsed, isBrief, pairExtraFacts),
-      ...detectEditorialSignals(before, after, beforeParsed, afterParsed, isBrief, pairExtraFacts, protectionLogs),
+      ...computeStructuralDiffs(before, after, beforeParsed, afterParsed, isBrief, pairExtraFacts, {
+        renameDetection: options.sectionRename,
+        similarityThreshold: options.similarityThreshold,
+      }),
+      ...detectEditorialSignals(
+        before,
+        after,
+        beforeParsed,
+        afterParsed,
+        isBrief,
+        pairExtraFacts,
+        protectionLogs,
+        options.revertPatterns,
+      ),
       ...diffSentences(
         before,
         after,

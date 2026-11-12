@@ -327,7 +327,7 @@ def test_analyze_parses_ndjson(monkeypatch):
 
 
 def test_langchain_loader_accepts_typed_events(monkeypatch):
-    """The LangChain loader should handle EvidenceEvent dataclasses returned by export()."""
+    """The LangChain loader should handle the EvidenceEvent dataclasses the client returns."""
     pytest = __import__("pytest")
     pytest.importorskip("langchain_core")
 
@@ -349,10 +349,19 @@ def test_langchain_loader_accepts_typed_events(monkeypatch):
         timestamp="2026-01-01T00:00:00Z",
     )
 
-    monkeypatch.setattr(Refract, "export", lambda self, page, format="ndjson": [event])
-    loader = RefractLoader(page="Earth")
+    calls = []
+
+    def fake_analyze(self, page, depth="brief", **flags):
+        calls.append((page, depth, flags))
+        return [event]
+
+    monkeypatch.setattr(Refract, "analyze", fake_analyze)
+    loader = RefractLoader(page="Earth", depth="forensic", api_url="https://wiki.example.org/w/api.php")
 
     docs = list(loader.lazy_load())
+
+    # depth and api_url reach the CLI; both were dropped when this called export().
+    assert calls == [("Earth", "forensic", {"api": "https://wiki.example.org/w/api.php"})]
 
     assert len(docs) == 1
     assert docs[0].page_content == "A sourced claim."
@@ -410,3 +419,42 @@ def test_to_networkx():
     g = to_networkx(events)
     assert g.has_edge("rev:10", "rev:20")
     assert g.has_edge("rev:20", "url=https://example.org/study")
+
+
+# ── refract_eval ────────────────────────────────────────────────────
+
+def _write_events(tmp_path, events):
+    path = tmp_path / "events.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in events) + "\n")
+    return str(path)
+
+
+def test_leakage_benchmark_accepts_a_date_only_cutoff(tmp_path):
+    """The documented cutoff is a bare date; event timestamps end in Z."""
+    from refract_eval import build_leakage_benchmark
+
+    path = _write_events(tmp_path, [
+        {"eventType": "sentence_first_seen", "after": "A sentence seen before the cutoff.",
+         "timestamp": "2024-05-31T23:59:59Z", "toRevisionId": 1},
+        {"eventType": "sentence_first_seen", "after": "A sentence seen after the cutoff.",
+         "timestamp": "2024-06-01T00:00:01Z", "toRevisionId": 2},
+    ])
+
+    records = build_leakage_benchmark(path, cutoff="2024-06-01")
+
+    assert [r.leaked for r in records] == [False, True]
+    assert [r.leaked for r in build_leakage_benchmark(path, cutoff="2024-06-01T00:00:00+00:00")] == [False, True]
+
+
+def test_recency_benchmark_accepts_a_date_only_knowledge_date(tmp_path):
+    from refract_eval import build_recency_benchmark
+
+    path = _write_events(tmp_path, [
+        {"eventType": "sentence_first_seen", "after": "Known.", "timestamp": "2024-05-01T00:00:00Z"},
+        {"eventType": "sentence_modified", "after": "Not yet known.", "timestamp": "2024-07-01T00:00:00Z"},
+    ])
+
+    result = build_recency_benchmark(path, "2024-06-01")
+
+    assert result["claims_known"] == 1
+    assert [c["claim"] for c in result["not_yet_known"]] == ["Not yet known."]

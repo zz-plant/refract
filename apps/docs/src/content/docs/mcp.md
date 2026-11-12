@@ -142,6 +142,8 @@ Re-observe pages for scheduled monitoring.
 
 Ask a model to classify a single observation boundary. See [CLI reference](cli) for the boundary table and all options.
 
+The tool calls the configured inference provider when an API key is available, and otherwise asks the connected client through MCP sampling. With neither, the result has an empty `output` and a `note` saying no provider is configured; `refract classify` on the command line applies the boundary's default rule instead.
+
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `boundary` | enum | required | `revert`, `sentence_similarity`, `heuristic`, `template_signal`, `activity_spike` |

@@ -11,10 +11,10 @@ Refract produces a deterministic event stream. Downstream systems consume that s
 
 ```bash
 # Export events as NDJSON
-refract export "Bitcoin" --format ndjson > bitcoin-events.jsonl
+refract export "Bitcoin" --from 369361755 --to 369393212 --format ndjson > bitcoin-events.jsonl
 
 # Export as ObservationReport with Merkle root
-refract analyze "Bitcoin" --report > bitcoin-report.json
+refract analyze "Bitcoin" --from 369361755 --to 369393212 --report > bitcoin-report.json
 ```
 
 Each event carries `schemaVersion` and an `eventId`, a deterministic hash of the event's type, revisions, section, text, timestamp and facts.
@@ -38,7 +38,7 @@ These are the events the CLI derives from each pair of revisions, from the same 
 ```json
 {
   "analyzer": "section-differ",
-  "version": "0.5.1",
+  "version": "0.5.3",
   "inputHashes": [],
   "parameters": { "similarityThreshold": 0.8 }
 }
@@ -52,12 +52,11 @@ Every event carries `schemaVersion` matching `EVENT_SCHEMA_VERSION`. This preven
 
 ### 5. Config version pinning
 
-`AnalyzerConfig.$version` is pinned from the CLI version. Downstream systems can prove which configuration was used for a given run.
+The CLI sets `AnalyzerConfig.$version` to its own version while it runs. The config is not written to the output, so record the flags you passed alongside the events. The version itself is in the output: `analyzerVersion` in an `ObservationReport`, `analyzerVersions` in a replay manifest.
 
 ```bash
-refract analyze "Bitcoin" --similarity 0.85
-# config.$version = "0.5.1"
-# config.section.similarityThreshold = 0.85
+refract analyze "Bitcoin" --from 369361755 --to 369393212 --similarity 0.85 --json > bitcoin-events.jsonl
+# sentence matching ran at 0.85; store that with bitcoin-events.jsonl
 ```
 
 ### 6. ObservationReport for chain-of-custody
@@ -65,11 +64,15 @@ refract analyze "Bitcoin" --similarity 0.85
 ```json
 {
   "pageTitle": "Bitcoin",
+  "pageId": 28249265,
   "observedAt": "2026-05-15T10:00:00Z",
   "revisionRange": { "from": 100, "to": 200 },
-  "merkleRoot": "a1b2c3d4...",
+  "claims": { ... },
   "eventCount": 47,
-  "analyzerVersion": "0.5.1"
+  "uniqueEditorCount": 9,
+  "merkleRoot": "a1b2c3d4...",
+  "analyzerVersion": "0.6.0",
+  "coverage": { ... }
 }
 ```
 
@@ -77,15 +80,14 @@ The Merkle root is from the replay manifest. A downstream system can verify even
 
 ## Baseline superiority validation
 
-When validating an integrated signal, supply a Refract event summary to `computeBaselineSuperiority()`. The function adds Refract-derived baselines (revert count, citation flux, edit clusters) that the signal must outperform.
+When validating a signal built on Refract events, compare it against baselines counted from the same events, such as revert count and citation changes. A signal that does not outperform those counts adds nothing to them. Refract exports no function for this comparison; it belongs in the consumer's validation code.
 
 ```typescript
-const result = computeBaselineSuperiority({
-  integratedLeadTimeDays: signal.leadTimeDays,
-  mentionCount: snapshot.metrics.mentionCount,
-  revertCount: snapshot.metrics.revertCount,
-  refractEventSummary: { totalEvents: 47, revertCount: 12 },
-});
+const baselines = {
+  totalEvents: events.length,
+  revertCount: events.filter((e) => e.eventType === "revert_detected").length,
+  citationChanges: events.filter((e) => e.eventType.startsWith("citation_")).length,
+};
 ```
 
 ## Principle
@@ -119,7 +121,7 @@ Refract pairs naturally with these modern tools. The event stream is standard JS
 | **Python SDK** | `refract-py` ([source](https://github.com/refract-org/refract/tree/main/clients/python)) | Typed dataclasses, pandas DataFrame integration, `RefractError` handling. Install: `pip install "git+https://github.com/refract-org/refract.git#subdirectory=clients/python"` (not on PyPI; needs the Refract CLI on `PATH`). |
 | **MCP (Model Context Protocol)** | Any MCP client (Claude Desktop, VS Code, Cursor, ChatGPT) | `refract mcp` is a native MCP server exposing tools for analyze, claim, export, cron, and classify. AI agents use these tools to retrieve claim history directly. |
 | **Data lakes & query** | DuckDB, Apache Parquet, ClickHouse | Query `refract export --format ndjson` output with SQL. DuckDB can query JSONL files directly: `SELECT "eventType", count(*) FROM 'events.jsonl' GROUP BY "eventType";` |
-| **Streaming** | Apache Kafka, Redpanda, Cloudflare Queues | Feed event streams into real-time claim monitoring pipelines. Each `EvidenceEvent` is a Kafka message with key by claimId for stateful processing. |
+| **Streaming** | Apache Kafka, Redpanda, Cloudflare Queues | Feed event streams into real-time claim monitoring pipelines. Each `EvidenceEvent` is one message; key it by page title or `eventId`, since CLI events carry no `claimId`. |
 | **Visualization** | Observable Framework, Mermaid, D3 | `refract visualize --format mermaid` produces Mermaid diagrams. Observable Framework has a [data loader recipe](./sdk.md#observable-framework-data-loader). D3 reads event JSONL directly. |
 | **Knowledge graphs** | RDF, SPARQL, Neo4j | Convert `wikilink_added`/`category_added` events into triple statements. Build an evolving entity graph where each edge has a revision timestamp. |
 | **Model serving** | OpenAI API, DeepSeek, Ollama, vLLM, Workers AI | Plug any OpenAI-compatible endpoint into `refract classify` at each BYO-inference boundary. Workers AI runs models at the edge without managing servers. |

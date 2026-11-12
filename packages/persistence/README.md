@@ -14,7 +14,7 @@ bun add @refract-org/persistence
 
 ### Interface
 
-- `PersistenceAdapter` — `insertRevision`, `insertRevisions`, `getRevisions`, `hasRevision`, `insertClaim`, `getClaims`, `close`
+- `PersistenceAdapter` — `insertRevision`, `insertRevisions`, `getRevisions`, `hasRevision`, `getLatestTimestamp`, `insertClaim`, `getClaims`, `close`
 
 ```ts
 import { Persistence } from "@refract-org/persistence";

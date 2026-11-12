@@ -57,6 +57,10 @@ Add to your crontab, with the interval matching the schedule:
 0 */6 * * * refract cron /path/to/watch-pages.txt --interval 6 --cache-dir /path/to/state
 ```
 
+With `--interval` the window slides between runs. The
+[cron reference](../cron.md#lookback-window) describes how events are compared across
+windows.
+
 On GitHub Actions the runner starts empty, so the state directory has to be carried
 between runs — cached or committed — or every run is a first run and reports nothing.
 The [cron reference](../cron.md#scheduling-with-github-actions) has a complete
@@ -142,7 +146,8 @@ done
 `--json`, which prints one JSON event per line:
 
 ```bash
-SINCE=$(date -u -d '25 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+SINCE=$(date -u -d '25 hours ago' +%Y-%m-%dT%H:%M:%SZ)   # GNU date (Linux)
+SINCE=$(date -u -v-25H +%Y-%m-%dT%H:%M:%SZ)              # BSD date (macOS)
 
 # Citation removals — often the first sign a claim is about to change
 refract analyze "COVID-19" --since "$SINCE" --json | jq -c 'select(.eventType == "citation_removed")'

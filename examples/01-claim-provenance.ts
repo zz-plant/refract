@@ -23,10 +23,9 @@ const DEPTH = 10;
 
 const client = new MediaWikiClient({ minDelayMs: 200 });
 
-const revisions = await client.fetchRevisions(PAGE, {
-  direction: "newer",
-  limit: DEPTH,
-});
+// The default direction returns the newest revisions first; reverse them
+// so each pair below runs from the earlier revision to the later one.
+const revisions = (await client.fetchRevisions(PAGE, { limit: DEPTH })).reverse();
 
 if (revisions.length < 2) {
   console.log(`Need at least 2 revisions for ${PAGE}, got ${revisions.length}`);
@@ -50,10 +49,12 @@ for (let i = 1; i < revisions.length; i++) {
   const before = revisions[i - 1];
   const after = revisions[i];
 
+  // extractSections gives the lead an empty title; "(lead)" is the label
+  // events use for it.
   const beforeSection = sectionDiffer.extractSections(before.content)
-    .find((s) => s.title === "(lead)");
+    .find((s) => s.title === "");
   const afterSection = sectionDiffer.extractSections(after.content)
-    .find((s) => s.title === "(lead)");
+    .find((s) => s.title === "");
 
   const beforeText = sanitizeWikitext(beforeSection?.content ?? "");
   const afterText = sanitizeWikitext(afterSection?.content ?? "");

@@ -17,7 +17,7 @@ The engine records these transitions. Your review criteria determine whether the
 
 ## Inspect the complete record
 
-- [Computed sample events](https://github.com/refract-org/refract/blob/main/docs/examples/sample-events.ndjson) include text, revision IDs, and analyzer provenance.
+- [Computed sample events](https://github.com/refract-org/refract/blob/main/docs/examples/sample-events.ndjson) include text, revision IDs, and the facts each analyzer recorded.
 - [Input revisions](https://github.com/refract-org/refract/blob/main/packages/cli/src/onboarding-sample.ts) define the fictional history.
 - [Saved review report](https://github.com/refract-org/refract/blob/main/docs/examples/review.md) shows pending changes, coverage, and explicit acknowledgment.
 - [Captured Pluto and Bitcoin changes](https://github.com/refract-org/refract/blob/main/docs/example-output.md) include actual source revision links.

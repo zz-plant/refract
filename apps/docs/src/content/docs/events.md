@@ -52,8 +52,10 @@ Each Refract event describes what changed at a revision boundary. Events are det
 
 | Event type | Trigger |
 |---|---|
-| `revert_detected` | Edit summary matches revert pattern (e.g., "revert", "rv", "undo") |
-| `edit_cluster_detected` | 3+ edits within a configurable time window (default: 1 hour). **`editorCount`**: number of unique editors in the cluster (no identities recorded) |
+| `revert_detected` | Edit summary matches one of six default patterns: `revert…`, `undid revision`, `rvv`, `rollback`, `restore…`, `[[WP:ROLLBACK]]`. A bare "rv" or "undo" does not match |
+| `edit_cluster_detected` | 3+ edits within a configurable time window (default: 1 hour). The fact's `detail` gives `revisions`, `editors` (a count of unique editors; no identities recorded), `window_ms` and `single_editor` |
+
+An `edit_cluster_detected` event spans the cluster: `fromRevisionId` is its first revision and `toRevisionId` its last. `--cluster-window` sets the window in minutes.
 
 ## Talk page activity
 
@@ -64,6 +66,8 @@ Each Refract event describes what changed at a revision boundary. Events are det
 | `talk_thread_archived` | Thread closed/archived |
 | `talk_reply_added` | Reply posted in an existing thread |
 | `talk_activity_spike` | Talk page edits exceed 3x the moving average on a given day |
+
+`refract analyze` and `refract export` read the ten talk-page edits that precede the last analyzed revision and emit all five events from them. Thread events cover the talk edits made since the first analyzed revision; their revision IDs are talk-page revisions. The CLI looks for spikes among the ten talk-page edits that precede the last analyzed revision, within the seven days before it, so most runs emit none. `--spike-factor` sets the multiplier. A spike event names a day, not a revision pair: both revision IDs are 0.
 
 ## Access control
 

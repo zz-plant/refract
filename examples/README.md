@@ -30,5 +30,5 @@ Each script targets a specific migration audience:
 All scripts are fully deterministic — no API keys needed.
 
 Each script runs against live Wikipedia API with a rate limiter
-(200ms minimum delay between requests). They use small revision
-windows (8-20 revisions) for quick runs.
+(200ms minimum delay between requests). They fetch a page's latest
+10-20 revisions, so the output changes as the page is edited.

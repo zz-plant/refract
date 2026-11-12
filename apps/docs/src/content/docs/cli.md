@@ -391,7 +391,7 @@ not set those names for Refract.
 | `--config <path>` | — | JSON file with analyzer config overrides |
 | `--similarity <n>` | `0.8` | Sentence matching threshold (0–1) |
 | `--revert-patterns <path>` | — | File of revert regex patterns, one per line |
-| `--cluster-window <min>` | `60` | Edit cluster window in minutes |
-| `--spike-factor <n>` | `3` | Talk activity spike multiplier |
+| `--cluster-window <min>` | `60` | Window in minutes within which three or more edits become one `edit_cluster_detected` event |
+| `--spike-factor <n>` | `3` | A day's talk-page edits become a `talk_activity_spike` at this multiple of the moving average, and never below three edits |
 | `--talk-window <days>` | `7/3` | Talk correlation window as "before/after" in days |
-| `--section-rename <mode>` | `similarity` | Section rename detection: `exact`\|`similarity`\|`none` |
+| `--section-rename <mode>` | `exact` | A heading that disappears while another appears: `exact` reports one renamed section when the text under it is identical, `similarity` also when its word overlap reaches `--similarity`, `none` reports a removal and an addition |

@@ -214,6 +214,27 @@ describe("cron command", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  it("starts the next window at the newest prior event, wherever it sits in the file", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "cron-test-"));
+    const pagesFile = join(tmpDir, "pages.txt");
+    writeFileSync(pagesFile, "Earth\n", "utf-8");
+
+    // Analysis appends talk-page correlations last, stamped with the talk
+    // revision's time, which is earlier than the article's newest event.
+    const article = makeEvent({ timestamp: "2024-01-01T22:58:44Z" });
+    const talk = makeEvent({ eventType: "talk_page_correlated", timestamp: "2024-01-01T15:18:44Z" });
+    vi.mocked(runAnalyze).mockResolvedValueOnce({ events: [article, talk], revisions: [] });
+    await runCron(pagesFile, undefined, undefined, tmpDir);
+
+    vi.mocked(runAnalyze).mockClear();
+    vi.mocked(runAnalyze).mockResolvedValueOnce({ events: [], revisions: [] });
+    await runCron(pagesFile, undefined, undefined, tmpDir);
+
+    expect(vi.mocked(runAnalyze).mock.calls[0]).toContain("2024-01-01T22:58:44Z");
+
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
   it("does not count prior events outside the lookback window as resolved", async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "cron-test-"));
     const pagesFile = join(tmpDir, "pages.txt");
@@ -222,13 +243,67 @@ describe("cron command", () => {
 
     const longAgo = makeEvent({ timestamp: "2020-01-01T00:00:00Z" });
     writeFileSync(join(tmpDir, "observations", "Earth.json"), JSON.stringify([longAgo], null, 2));
-    const recent = makeEvent({ eventType: "citation_added", timestamp: new Date().toISOString() });
+    const recent = makeEvent({
+      eventType: "citation_added",
+      fromRevisionId: 8,
+      toRevisionId: 9,
+      timestamp: new Date().toISOString(),
+    });
     vi.mocked(runAnalyze).mockResolvedValue({ events: [recent], revisions: [] });
 
     const result = await runCron(pagesFile, 24, undefined, tmpDir);
 
     expect(result.reports[0].eventsResolved).toBe(0);
     expect(result.reports[0].eventsNew).toBe(1);
+
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("reports nothing when a later window re-reads an unedited page", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "cron-test-"));
+    const pagesFile = join(tmpDir, "pages.txt");
+    writeFileSync(pagesFile, "Earth\n", "utf-8");
+    const now = Date.now();
+    const at = (hoursAgo: number) => new Date(now - hoursAgo * 60 * 60 * 1000).toISOString();
+    const rev = (revId: number, hoursAgo: number) => ({
+      revId,
+      pageId: 1,
+      pageTitle: "Earth",
+      timestamp: at(hoursAgo),
+      comment: "",
+      content: "",
+      size: 0,
+      minor: false,
+    });
+
+    // First run: revisions 10, 11 and 12 are in the window.
+    const onEleven = makeEvent({
+      eventType: "citation_removed",
+      fromRevisionId: 10,
+      toRevisionId: 11,
+      timestamp: at(5),
+    });
+    const returned = makeEvent({
+      eventType: "sentence_reintroduced",
+      fromRevisionId: 11,
+      toRevisionId: 12,
+      timestamp: at(2),
+    });
+    vi.mocked(runAnalyze).mockResolvedValueOnce({
+      events: [onEleven, returned],
+      revisions: [rev(10, 8), rev(11, 5), rev(12, 2)],
+    });
+    await runCron(pagesFile, 9, undefined, tmpDir);
+
+    // An hour later nothing has been edited, but revision 10 has left the
+    // window. Revision 11 now opens it, so it is not compared with 10, and the
+    // sentence on 12 reads as first seen because its earlier life is out of view.
+    const flipped = { ...returned, eventType: "sentence_first_seen" as const };
+    vi.mocked(runAnalyze).mockResolvedValueOnce({ events: [flipped], revisions: [rev(11, 5), rev(12, 2)] });
+    const next = await runCron(pagesFile, 6, undefined, tmpDir);
+
+    expect(next.totalNewEvents).toBe(0);
+    expect(next.reports[0].deltaSummary).toBe("no changes");
 
     rmSync(tmpDir, { recursive: true, force: true });
   });

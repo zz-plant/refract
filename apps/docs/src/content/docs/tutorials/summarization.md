@@ -15,38 +15,42 @@ Refract produces 26 event types — raw, structured, queryable. Non-technical us
 don't want an event stream. They want: "This week, 3 citations were removed from the
 lead section, the origin claims were softened, and a dispute template was added."
 
-The model doesn't change Refract's output. It reads it and summarizes. The
-`FactProvenance.parameters` field records which path was taken.
+The model doesn't change Refract's output. It reads it and summarizes.
 
 ## Step 1: Export the event stream
 
 ```bash
-refract analyze "COVID-19" --since 2026-01-01 --depth forensic > covid-events.jsonl
+refract analyze "COVID-19" --since 2026-01-01 --depth detailed --json > covid-events.jsonl
 ```
+
+`--json` writes one event per line. Without it, `analyze` prints a report for reading.
+Detailed depth keeps each event to the changed text; forensic depth adds both
+revisions' full wikitext to every event, which is too much to send to a model.
 
 ## Step 2: Summarize with a model
 
 ```bash
-# Pipe to any OpenAI-compatible endpoint
-cat covid-events.jsonl | head -100 | \
-  jq -s '{events: .}' | \
+# Build the request from the first 100 events and send it to any
+# OpenAI-compatible endpoint
+head -100 covid-events.jsonl | \
+  jq -s '{
+    model: "gpt-4o-mini",
+    temperature: 0,
+    messages: [{
+      role: "system",
+      content: "Summarize these Wikipedia revision events in 3-5 bullet points. Group by theme: citations, claims, disputes, structure. Mention which sections were affected. Be specific about what changed."
+    }, {
+      role: "user",
+      content: (map({eventType, section, before, after, timestamp}) | tojson)
+    }]
+  }' | \
   curl -s https://api.openai.com/v1/chat/completions \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $OPENAI_API_KEY" \
-    -d '{
-      "model": "gpt-4o-mini",
-      "messages": [{
-        "role": "system",
-        "content": "Summarize these Wikipedia revision events in 3-5 bullet points. Group by theme: citations, claims, disputes, structure. Mention which sections were affected. Be specific about what changed."
-      }, {
-        "role": "user",
-        "content": "."
-      }],
-      "temperature": 0
-    }' | jq -r '.choices[0].message.content'
+    -d @- | jq -r '.choices[0].message.content'
 ```
 
-Output:
+Output of this kind (the model's wording varies):
 
 ```
 • Citations: 2 sources removed from "Origins" section (WHO report dated 2023-01-15,
@@ -58,8 +62,6 @@ Output:
 • Disputes: NPOV template added to "Origins" section on 2026-01-12. 2 reverts
   detected in same section within 24 hours.
 • Structure: "Variants" section reorganized — 2 new subsections added.
-• Talk page: 1 new thread opened on 2026-01-13 discussing origin language.
-  8 replies across 3 threads.
 ```
 
 ## Step 3: Use the MCP server for agent-driven summarization
@@ -77,14 +79,14 @@ The agent calls `refract analyze` via MCP, receives structured events, and
 synthesizes a summary. Every claim in the summary is backed by a deterministic
 event with a hash — the agent can cite provenance.
 
-## Step 4: Audit which path was taken
+## Step 4: Keep the events and the summary apart
 
-Every event carries `FactProvenance.parameters` recording whether the default
-heuristic or a model was used. When a model produces a summary, the original
-events are unchanged — the model consumed the stream, it didn't modify it.
+When a model produces a summary, the original events are unchanged — the model
+consumed the stream, it didn't modify it. The events do not record that a model
+read them, so store the model name and prompt with the summary yourself.
 
-To verify: compare the `eventId` hashes before and after summarization. They
-match. The engine is deterministic. The narrative is interpretive. Each is
+To verify the events: compare the `eventId` hashes before and after summarization.
+They match. The engine is deterministic. The narrative is interpretive. Each is
 auditable independently.
 
 ## Available models

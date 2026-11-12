@@ -1,6 +1,6 @@
 # Source change review
 
-Report: 0fb4a8f1443ea70a66988e1f69a383940b43de9f7a83ba4fe2ebb50f645acfdd
+Report: 7e0ea1db5f6bf189d608af8c2c620ad74d7c258b924c90a57ad02e26ec89f714
 Analyzer: 0.6.0; scope: article revisions only.
 
 ## Rivergate Library (fictional)
@@ -13,7 +13,7 @@ Fictional sample: dates, revision IDs, and URLs are illustrative. Inspect inputR
 
 1 shown; 8 hidden by filters. Acknowledgment covers all revisions and events in the unfiltered saved report.
 
-### citation_removed — body
+### citation_removed — (lead)
 
 2025-01-03T12:00:00Z · fictional revisions 2 → 3
 
@@ -29,4 +29,4 @@ After:
 (empty)
 ```
 
-After inspecting the saved report: refract review --state-dir './review-state' --ack 0fb4a8f1443ea70a66988e1f69a383940b43de9f7a83ba4fe2ebb50f645acfdd
+After inspecting the saved report: refract review --state-dir './review-state' --ack 7e0ea1db5f6bf189d608af8c2c620ad74d7c258b924c90a57ad02e26ec89f714

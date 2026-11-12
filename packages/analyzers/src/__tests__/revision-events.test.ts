@@ -44,6 +44,44 @@ describe("buildRevisionEvents", () => {
     );
   });
 
+  it("names a renamed section's old heading, unless rename detection is off", () => {
+    const history = [
+      rev(1, 0, "Lead.\n\n== Origin ==\nBody text here."),
+      rev(2, 10, "Lead.\n\n== Formation ==\nBody text here."),
+    ];
+    const sections = (events: EvidenceEvent[]) =>
+      events.filter((e) => e.eventType === "section_reorganized").map((e) => `${e.section}: ${facts(e)?.[0]}`);
+
+    expect(sections(buildRevisionEvents(history))).toEqual(["Formation: section_changed: change=moved from=Origin"]);
+    expect(sections(buildRevisionEvents(history, { sectionRename: "none" }))).toEqual([
+      "Formation: section_changed: change=added",
+      "Origin: section_changed: change=removed",
+    ]);
+  });
+
+  it("places a citation event in the section that holds the reference", () => {
+    const ref = (n: string) => `<ref>https://example.org/${n}</ref>`;
+    const history = [
+      rev(1, 0, `Lead.${ref("lead")}\n\n== History ==\nPast.${ref("old")}`),
+      rev(2, 10, `Lead.\n\n== History ==\nPast.\n\n== Design ==\nShape.${ref("new")}`),
+    ];
+    const citations = buildRevisionEvents(history)
+      .filter((e) => e.eventType.startsWith("citation_"))
+      .map((e) => `${e.eventType} ${e.section}`)
+      .sort();
+
+    expect(citations).toEqual(["citation_added Design", "citation_removed (lead)", "citation_removed History"]);
+  });
+
+  it("uses the caller's revert patterns in place of the defaults", () => {
+    const history = [rev(1, 0, ARTICLE), rev(2, 10, TAGGED, "rv unexplained removal"), rev(3, 20, ARTICLE, "revert")];
+    const reverts = (events: EvidenceEvent[]) =>
+      events.filter((e) => e.eventType === "revert_detected").map((e) => e.toRevisionId);
+
+    expect(reverts(buildRevisionEvents(history))).toEqual([3]);
+    expect(reverts(buildRevisionEvents(history, { revertPatterns: [/^rv\b/] }))).toEqual([2]);
+  });
+
   it("records citation, template and revert events on the pair that made them", () => {
     const events = buildRevisionEvents([
       rev(1, 0, ARTICLE),

@@ -1,6 +1,13 @@
 import { readFileSync } from "node:fs";
 import type { RevisionEventDepth } from "@refract-org/analyzers";
-import { buildPageMoveEvents, buildRevisionEvents, windowPageMoves } from "@refract-org/analyzers";
+import {
+  buildPageMoveEvents,
+  buildRevisionEvents,
+  buildTalkThreadEvents,
+  detectEditClusters,
+  detectTalkActivitySpikes,
+  windowPageMoves,
+} from "@refract-org/analyzers";
 import type {
   AnalyzerConfig,
   ClaimLedger,
@@ -227,11 +234,48 @@ export async function runAnalyze(
         depth: eventDepth,
         similarityThreshold: config?.section?.similarityThreshold ?? 0.8,
         protectionLogs,
+        // --revert-patterns and --talk-window were parsed into config and then
+        // dropped here, so neither flag changed anything.
+        revertPatterns: config?.revert?.patterns,
+        sectionRename: config?.section?.renameDetection,
       }),
     ),
   );
 
-  events.push(...correlateTalkPages(sortedRevs, talkRevs));
+  // Bursts of edits, within each run of revisions whose parents are all
+  // present: a gap is not evidence that the edits on either side were close.
+  events.push(
+    ...contiguousRevisionGroups(sortedRevs).flatMap((group) => detectEditClusters(group, config?.editCluster)),
+  );
+
+  // Threads opened, answered or archived by the fetched talk edits made since
+  // the first analyzed revision. Earlier talk edits belong to another span.
+  const spanStart = new Date(sortedRevs[0].timestamp).getTime();
+  for (let i = 1; i < talkRevs.length; i++) {
+    const earlier = talkRevs[i - 1];
+    const later = talkRevs[i];
+    if (new Date(later.timestamp).getTime() < spanStart) continue;
+    if (earlier.contentAvailable === false || later.contentAvailable === false) continue;
+    events.push(
+      ...buildTalkThreadEvents(
+        earlier.content,
+        later.content,
+        earlier.revId,
+        later.revId,
+        later.timestamp,
+        config?.talkParser,
+      ),
+    );
+  }
+
+  // Days of unusual talk-page activity among the talk edits fetched above,
+  // measured back from the last analyzed revision rather than from today.
+  events.push(
+    ...detectTalkActivitySpikes(talkRevs, sortedRevs, config?.talkSpike, sortedRevs[sortedRevs.length - 1].timestamp)
+      .spikes,
+  );
+
+  events.push(...correlateTalkPages(sortedRevs, talkRevs, config?.talkCorrelation));
   finalizeEvents(pageTitle, events, sortedRevs, fromTimestamp, cacheDir, recordObservation);
 
   return { events, revisions: sortedRevs, coverage };
@@ -338,8 +382,6 @@ export function buildObservationReport(
   }
 
   const claims: Record<string, ClaimLedger> = {};
-  let minRev = Infinity;
-  let maxRev = -Infinity;
 
   for (const [claimId, groupEvents] of claimGroups) {
     groupEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
@@ -367,6 +409,10 @@ export function buildObservationReport(
         currentState = "emerging";
     }
 
+    // Per claim: these were shared across claims, so each ledger entry's range
+    // also covered every claim processed before it.
+    let minRev = Infinity;
+    let maxRev = -Infinity;
     for (const e of groupEvents) {
       if (e.toRevisionId < minRev) minRev = e.toRevisionId;
       if (e.toRevisionId > maxRev) maxRev = e.toRevisionId;
@@ -401,14 +447,17 @@ export function buildObservationReport(
     revisions,
     events: claimEvents,
   });
+  const revIds = revisions.map((r) => r.revId);
 
   return {
     pageTitle,
     pageId,
     observedAt: new Date().toISOString(),
+    // The revisions analyzed. Taken from sentence events, this was the span of
+    // revisions that changed a sentence, and 0–0 when none did.
     revisionRange: {
-      from: minRev === Infinity ? 0 : minRev,
-      to: maxRev === -Infinity ? 0 : maxRev,
+      from: revIds.length > 0 ? Math.min(...revIds) : 0,
+      to: revIds.length > 0 ? Math.max(...revIds) : 0,
     },
     claims,
     eventCount: events.length,

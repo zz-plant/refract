@@ -11,51 +11,63 @@ and how talk page discussion correlated with content changes.
 
 ## What makes a dispute visible in the data
 
-Refract detects three mechanical signals that, together, form a dispute signature:
+Three mechanical signals, together, form a dispute signature:
 
 1. **Reverts** — edits undone by another editor (`revert_detected`)
 2. **Edit clusters** — 3+ edits in a tight time window (`edit_cluster_detected`)
-3. **Talk page activity** — correlated discussion threads, reply chains, and activity
-   spikes (`talk_page_correlated`, `talk_activity_spike`)
+3. **Talk page activity** — talk edits near an article edit (`talk_page_correlated`),
+   threads, replies and activity spikes (`talk_thread_opened`, `talk_reply_added`,
+   `talk_activity_spike`)
 
-A section with revert clusters, no talk page activity, and rapid edit turnover is
-likely edit-warring. A section with revert clusters, long talk threads, and slower
-turnover is active deliberation. Refract distinguishes these patterns mechanically.
+`refract analyze` and `refract export` emit all of these. The talk events come from
+the ten talk-page edits that precede the last analyzed revision.
+
+Reverts with no talk page activity and rapid edit turnover suggest edit-warring.
+Reverts alongside talk edits and slower turnover suggest deliberation. The events give
+the counts; the reading is yours.
 
 ## Steps
 
-### 1. Analyze the article at forensic depth
+### 1. Analyze a range of the article
 
 ```bash
-refract analyze "Global_warming" --depth forensic -c
+refract analyze "Climate_change" --from 1374299339 --to 1383409984 --json
 ```
 
-Forensic depth enables edit cluster detection, talk page correlation, and sentence
-modification tracking — all necessary for dispute detection.
+The range is 20 revisions from 2026. Reverts, sentence modifications and talk
+correlation are reported at every `--depth`. Without `--from` and `--to` the command
+reads the whole history.
+
+Use the article's own title. "Global_warming" is a redirect to "Climate change" on
+English Wikipedia, and Refract analyzes the redirect page's history, not its target's.
 
 ### 2. Analyze the talk page
 
 ```bash
-refract analyze "Talk:Global_warming" --depth detailed -c
+refract analyze "Talk:Climate_change" --since 2026-08-01 --json
 ```
 
-Talk pages are fetched by prefixing the page title with `Talk:`. Refract detects
-thread openings, replies, archival, and activity spikes from talk page revisions.
+Talk pages are fetched by prefixing the page title with `Talk:`. The CLI treats a talk
+page as an ordinary page: it reports section and sentence changes per talk revision,
+not threads or replies.
 
-### 3. Visualize the combined timeline
+### 3. Browse the timeline
 
 ```bash
-refract visualize "Global_warming" --format mermaid --all
+refract explore "Climate_change" --from 1374299339 --to 1383409984
 ```
 
-Shows all event types (not just claim events) as a timeline diagram. Reverts and
-edit clusters will stand out visually.
+Opens the local explorer on the same range, with every event type on a timeline.
+
+`refract visualize "<page>" --format mermaid --all` prints a Mermaid diagram of a
+page's events. It has no range flags and reads the whole history, so keep it for
+pages with short histories.
 
 ### 4. Export for quantitative analysis
 
 ```bash
-refract export "Global_warming" --format ndjson > events.jsonl
-refract export "Talk:Global_warming" --format ndjson > talk-events.jsonl
+refract export "Climate_change" --from 1374299339 --to 1383409984 --format ndjson > events.jsonl
+refract export "Talk:Climate_change" --since 2026-08-01 --format ndjson > talk-events.jsonl
 ```
 
 ### 5. Correlate reverts with talk page activity
@@ -69,7 +81,7 @@ article_reverts = []
 with open("events.jsonl") as f:
     for line in f:
         event = json.loads(line)
-        if event["eventType"] in ("revert_detected", "edit_cluster_detected"):
+        if event["eventType"] == "revert_detected":
             article_reverts.append(event)
 
 # Load talk activity
@@ -100,72 +112,44 @@ for day in sorted(set(revert_days) | set(talk_days)):
 
 ## Reading the patterns
 
+A `revert_detected` event is raised from the edit summary. The values below are
+illustrative; the shape is what `refract export` writes, with the enrichment fields
+left out:
+
 ```json
 {
-  "eventId": "3c5e7f9a1b2d4068",
   "eventType": "revert_detected",
   "fromRevisionId": 1280100100,
   "toRevisionId": 1280100200,
-  "section": "Scientific consensus",
-  "before": "The scientific consensus is settled",
-  "after": "The scientific consensus is disputed",
+  "section": "",
+  "before": "",
+  "after": "Undid revision 1280100100: please propose this change on the talk page",
+  "deterministicFacts": [
+    { "fact": "revert_detected", "detail": "Undid revision 1280100100: please propose this change on the talk page" },
+    { "fact": "policy_signal", "detail": "dimension=edit_warring signal=revert_detected" }
+  ],
+  "layer": "policy_coded",
   "timestamp": "2024-11-18T09:00:00Z",
-  "layer": "observed",
-  "deterministicFacts": [
-    {
-      "fact": "Edit reverted in section Scientific consensus",
-      "detail": "Content replaced with previous version",
-      "provenance": {
-        "analyzer": "revert-detector",
-        "version": "0.5.1",
-        "inputHashes": []
-      }
-    }
-  ]
+  "schemaVersion": "0.5.0",
+  "eventId": "3c5e7f9a1b2d4068"
 }
 ```
 
-Thirty minutes later, the same change was reverted back:
+`section` and `before` are empty, and `after` is the edit summary. The text that was
+undone is in the `sentence_removed`, `sentence_modified` and `sentence_reintroduced`
+events with the same `fromRevisionId` and `toRevisionId`.
 
-```json
-{
-  "eventId": "4d6f8a0b2c3e5179",
-  "eventType": "revert_detected",
-  "fromRevisionId": 1280100200,
-  "toRevisionId": 1280100300,
-  "section": "Scientific consensus",
-  "before": "The scientific consensus is disputed",
-  "after": "The scientific consensus is settled",
-  "timestamp": "2024-11-18T09:30:00Z",
-  "layer": "observed",
-  "deterministicFacts": [
-    {
-      "fact": "Edit reverted in section Scientific consensus",
-      "detail": "Content replaced with previous version",
-      "provenance": {
-        "analyzer": "revert-detector",
-        "version": "0.5.1",
-        "inputHashes": []
-      }
-    }
-  ]
-}
-```
-
-Two reverts in 30 minutes on the same sentence — `"settled"` → `"disputed"` →
-`"settled"` — with the `before`/`after` fields showing the exact text that ping-ponged.
-
-A correlated `talk_activity_spike` on the same day would indicate editors discussing
-the change on the talk page while reverting on the article. A day with reverts but
-no talk activity suggests edit-warring without discussion.
+A second `revert_detected` thirty minutes later on the following revision pair is the
+back-and-forth pattern. `talk_page_correlated` events on the same revisions show that
+talk edits were made nearby in time; a day with reverts and none suggests edit-warring
+without discussion.
 
 | Signal combination | Interpretation |
 |--------------------|----------------|
-| Revert cluster + no talk activity | Edit-warring |
-| Revert cluster + talk thread opened | Dispute acknowledged and being discussed |
-| Revert + talk reply chain | Active deliberation |
-| Talk activity spike + no reverts | Pre-revert discussion (editors talking before acting) |
-| `edit_cluster_detected` with 5+ editors | Coordinated editing or page under heavy revision |
+| Several reverts + no talk activity | Edit-warring |
+| Several reverts + talk edits the same day | Dispute acknowledged and being discussed |
+| Talk edits + no reverts | Discussion before acting |
+| Many revisions within an hour | Coordinated editing or page under heavy revision |
 
 ## Troubleshooting
 

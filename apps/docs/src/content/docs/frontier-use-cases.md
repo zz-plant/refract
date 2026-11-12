@@ -19,7 +19,7 @@ It does not report what a document says now. It explains how a claim entered, ch
 
 AI systems retrieve text as if every sentence is equally stable. They lack signals about what has been contested, recently changed, or stabilized through editorial scrutiny.
 
-Refract exposes per-claim metadata:
+A consumer can derive per-claim metadata from the event stream. The field names below are illustrative, not CLI output:
 
 ```json
 {

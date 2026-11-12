@@ -82,7 +82,7 @@ another revision.
 
 **“My application needs reference removals as data.”**
 
-This offline workflow requires `jq` and the source-build `refract` function above:
+This offline workflow requires `jq`:
 
 ```bash
 refract init --json > sample-events.ndjson

@@ -34,15 +34,18 @@ refract analyze "Internal_Page" \
   --api-key "your-bearer-token-here"
 ```
 
-Refract sends the token as an `Authorization: Bearer <token>` header. If your wiki
-expects a different header format, use the environment variable approach and a
-custom header injection.
+Refract sends the token as an `Authorization: Bearer <token>` header. No other
+header format is available.
 
-Environment variable alternative (avoids exposing the token in shell history):
+The CLI reads the token from the flag only; there is no environment variable for it.
+To keep the token out of shell history and scripts, hold it in a variable of your own
+and expand it on the command line:
 
 ```bash
-export REFRACT_API_KEY="your-bearer-token-here"
-refract analyze "Internal_Page" --api https://wiki.internal.example.com/w/api.php
+export WIKI_TOKEN="your-bearer-token-here"
+refract analyze "Internal_Page" \
+  --api https://wiki.internal.example.com/w/api.php \
+  --api-key "$WIKI_TOKEN"
 ```
 
 ## Step 3: Authenticate with basic auth
@@ -56,14 +59,14 @@ refract analyze "Restricted_Page" \
   --api-password "password"
 ```
 
-Refract sends `Authorization: Basic <base64>` with the credentials. Use environment
-variables for production:
+Refract sends `Authorization: Basic <base64>` with the credentials. These are read
+from the flags only, so pass variables of your own the same way:
 
 ```bash
-export REFRACT_API_USER="username"
-export REFRACT_API_PASSWORD="password"
 refract analyze "Restricted_Page" \
-  --api https://restricted.wiki.example.com/api.php
+  --api https://restricted.wiki.example.com/api.php \
+  --api-user "$WIKI_USER" \
+  --api-password "$WIKI_PASSWORD"
 ```
 
 ## Step 4: OAuth2 authentication
@@ -86,10 +89,10 @@ Test with a lightweight analysis:
 ```bash
 refract analyze "Main_Page" --depth brief \
   --api https://private.wiki.example.com/api.php \
-  --api-key "$REFRACT_API_KEY"
+  --api-key "$WIKI_TOKEN"
 ```
 
-`brief` depth runs only the section differ — minimal API calls, fast feedback.
+`brief` depth reads only the latest 20 revisions — few API calls, fast feedback.
 If you get events, the connection works. If you get an authentication error, check
 the token scope and format.
 
@@ -107,22 +110,24 @@ the token scope and format.
 Once authenticated, all Refract commands work identically — just pass the auth flags:
 
 ```bash
-# Full forensic analysis on a private wiki
-refract analyze "Sensitive_Page" --depth forensic \
+# Analysis of one revision range on a private wiki
+refract analyze "Sensitive_Page" --from <revId> --to <revId> --json \
   --api https://private.wiki.example.com/api.php \
-  --api-key "$REFRACT_API_KEY" \
-  -c
+  --api-key "$WIKI_TOKEN"
 
 # Track a specific claim
 refract claim "Sensitive_Page" --text "specific claim text" \
   --api https://private.wiki.example.com/api.php \
-  --api-key "$REFRACT_API_KEY"
+  --api-key "$WIKI_TOKEN"
 
 # Export as NDJSON
-refract export "Sensitive_Page" --format ndjson \
+refract export "Sensitive_Page" --from <revId> --to <revId> --format ndjson \
   --api https://private.wiki.example.com/api.php \
-  --api-key "$REFRACT_API_KEY"
+  --api-key "$WIKI_TOKEN"
 ```
+
+`analyze`, `claim`, `export`, `cron`, `snapshot` and `watch` accept the auth flags.
+`refract diff` does not.
 
 ## Step 8: Cron monitoring with auth
 
@@ -132,25 +137,36 @@ For scheduled monitoring of private wikis, include auth in the cron command:
 # crontab entry
 0 */6 * * * refract cron /path/to/pages.txt --interval 6 \
   --api https://private.wiki.example.com/api.php \
-  --api-key "$REFRACT_API_KEY" -c
+  --api-key "$WIKI_TOKEN" --cache-dir /path/to/state
 ```
+
+`cron` has no `-c` flag; `--cache-dir` is where it keeps its state. Define `WIKI_TOKEN`
+in the crontab or in a wrapper script, since cron jobs do not inherit your shell's
+variables.
 
 Or with GitHub Actions:
 
 ```yaml
-- run: refract cron pages.txt --interval 6 -c
+- run: >
+    refract cron pages.txt --interval 6
+    --api https://private.wiki.example.com/api.php
+    --api-key "$WIKI_TOKEN" --cache-dir .refract
   env:
-    REFRACT_API_KEY: ${{ secrets.WIKI_API_KEY }}
+    WIKI_TOKEN: ${{ secrets.WIKI_API_KEY }}
 ```
+
+The [cron reference](../cron.md#scheduling-with-github-actions) shows how to carry
+`.refract` from one run to the next.
 
 ## Security considerations
 
-- Tokens in CLI flags are visible in `ps` / process listings. Use environment
-  variables (`REFRACT_API_KEY`) for production.
-- Cached revisions (SQLite in `~/.wikihistory/refract.db`) contain full wikitext
-  content from the private wiki. On shared machines, set `--cache-dir` to an
-  encrypted volume.
-- Refract makes outbound HTTPS requests only. All traffic is encrypted in transit.
+- Tokens in CLI flags are visible in `ps` / process listings while the command runs,
+  including when the flag's value comes from a shell variable.
+- The revision cache is not used with `--api`. `refract cron` observation files under
+  `--cache-dir` (default `~/.wikihistory`) hold text from the private wiki. On shared
+  machines, set `--cache-dir` to an encrypted volume.
+- Use an `https://` API URL. An `http://` URL is accepted and sends the credentials
+  unencrypted.
 
 ## Next steps
 

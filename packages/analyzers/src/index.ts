@@ -5,7 +5,7 @@ export interface SectionDiffer {
   diffSections(
     before: Section[],
     after: Section[],
-    options?: { renameDetection?: "exact" | "similarity" | "none" },
+    options?: { renameDetection?: "exact" | "similarity" | "none"; similarityThreshold?: number },
   ): SectionChange[];
 }
 

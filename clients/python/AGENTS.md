@@ -17,7 +17,8 @@ built from this tree (`bun run build` at the repository root first, or set
 
 ## Repository Structure
 
-- `src/refract/` — Python package source
+- `src/refract/` — Python package source: `Refract` (`analyze`, `export`), the dataclasses, `compute_survival_records`, `to_networkx`
+- `src/refract_eval.py`, `src/refract_langchain.py` — top-level modules shipped in the same wheel
 - `tests/` — pytest test suite
 - `pyproject.toml` — Project config (Hatch)
 - `AGENTS.md` — This file

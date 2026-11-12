@@ -129,7 +129,7 @@ export async function runExport(
   }
 
   if (format === "json") {
-    const report = buildReport(pageTitle, events);
+    const report = buildReport(pageTitle, events, revisions);
     console.log(JSON.stringify(report, null, 2));
   } else if (format === "csv") {
     console.log(flatten ? toFlatCSV(events) : toCSV(events));
@@ -197,20 +197,23 @@ function buildBundle(pageTitle: string, events: EvidenceEvent[], revisions: Revi
   return { ...bundle, bundleHash };
 }
 
-function buildReport(pageTitle: string, events: EvidenceEvent[]): Report {
-  let minRev = Infinity;
-  let maxRev = -Infinity;
+function buildReport(pageTitle: string, events: EvidenceEvent[], revisions: Revision[]): Report {
+  // The range and revision counts describe the revisions analyzed. Deriving them
+  // from events reported the event count as a revision count, and a range that
+  // started at the first revision to *receive* an event.
+  const revIds = revisions.map((r) => r.revId);
   let earliest = "";
   let latest = "";
   let observedCount = 0;
   let policyCount = 0;
   let modelCount = 0;
 
+  for (const r of revisions) {
+    if (!earliest || r.timestamp < earliest) earliest = r.timestamp;
+    if (!latest || r.timestamp > latest) latest = r.timestamp;
+  }
+
   for (const e of events) {
-    if (e.toRevisionId < minRev) minRev = e.toRevisionId;
-    if (e.toRevisionId > maxRev) maxRev = e.toRevisionId;
-    if (!earliest || e.timestamp < earliest) earliest = e.timestamp;
-    if (!latest || e.timestamp > latest) latest = e.timestamp;
     observedCount++;
     if (e.layer === "policy_coded") policyCount++;
     if (e.modelInterpretation != null) modelCount++;
@@ -240,17 +243,17 @@ function buildReport(pageTitle: string, events: EvidenceEvent[]): Report {
 
   return {
     pageTitle,
-    pageId: 0,
+    pageId: revisions[0]?.pageId ?? 0,
     analyzedRevisionRange: {
-      from: minRev === Infinity ? 0 : minRev,
-      to: maxRev === -Infinity ? 0 : maxRev,
+      from: revIds.length > 0 ? Math.min(...revIds) : 0,
+      to: revIds.length > 0 ? Math.max(...revIds) : 0,
     },
     generatedAt: new Date().toISOString(),
     depth: "detailed",
     layers,
     timeline: {
-      totalRevisions: observedCount,
-      analyzedRevisions: observedCount,
+      totalRevisions: revisions.length,
+      analyzedRevisions: revisions.length,
       dateRange: {
         start: earliest,
         end: latest,
@@ -379,8 +382,8 @@ function toFlatCSV(events: EvidenceEvent[]): string {
       csvEscape(String(r.fact_detail)),
       r.analyzer_name,
       r.analyzer_version,
-      r.input_hashes,
-      r.parameters_json,
+      csvEscape(String(r.input_hashes)),
+      csvEscape(String(r.parameters_json)),
     ].join(",");
   });
 

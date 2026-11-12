@@ -36,7 +36,7 @@ interface EvidenceEvent {
   before: string;
   after: string;
   deterministicFacts: DeterministicFact[];
-  modelInterpretation?: ModelInterpretation;   // Added by L2
+  modelInterpretation?: ModelInterpretation;   // Set by downstream consumers, never by Refract
   layer: EvidenceLayer;
   timestamp: string;                             // ISO 8601
 }
@@ -44,13 +44,14 @@ interface EvidenceEvent {
 interface DeterministicFact {
   fact: string;     // e.g., "text_changed", "attribution_added", "same_section"
   detail?: string;
-  provenance?: FactProvenance;
+  provenance?: FactProvenance;   // not set by Refract's own events
 }
 
 interface FactProvenance {
   analyzer: string;
   version: string;
   inputHashes: string[];
+  parameters?: Record<string, string | number | boolean>;
 }
 
 interface ModelInterpretation {
@@ -115,7 +116,7 @@ The assembled output with layer provenance.
 
 ```ts
 type Depth = "brief" | "detailed" | "forensic";
-type ExportFormat = "json" | "pdf" | "csv";
+type ExportFormat = "json" | "pdf" | "csv" | "html" | "ndjson" | "parquet";
 
 interface Report {
   pageTitle: string;
@@ -179,26 +180,23 @@ interface TemplateTracker {
 }
 ```
 
-## Model Adapter (L2)
+## Model interpretation (downstream)
+
+Refract exports no model adapter. A consumer that interprets events with a model
+attaches the result as `modelInterpretation` on its own copy of the event; the
+field is outside the event hash, so the `eventId` does not change.
+
+The one place Refract itself can call a model is `refract classify` (and the MCP
+`classify` tool), which classifies a single input and returns an `InferenceResult`:
 
 ```ts
-interface ModelAdapter {
-  interpret(events: EvidenceEvent[], lineage?: LineageContext): Promise<InterpretedEvent[]>;
-}
+type InferenceBoundary = "revert" | "sentence_similarity" | "heuristic" | "template_signal" | "activity_spike";
 
-interface InterpretedEvent extends EvidenceEvent {
-  modelInterpretation: ModelInterpretation;   // Required, not optional
-}
-
-interface ModelConfig {
-  provider: "openai" | "anthropic" | "deepseek" | "local" | "byok";
-  apiKey?: string;
-  model?: string;
-  endpoint?: string;
-  temperature?: number;
-  maxTokens?: number;
-  timeoutMs?: number;
-  systemPrompt?: string;
+interface InferenceResult {
+  boundary: InferenceBoundary;
+  output: Record<string, unknown>;   // shape depends on the boundary
+  confidence?: number;
+  source: "model" | "default";
 }
 ```
 

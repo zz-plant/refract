@@ -15,38 +15,51 @@ statements appear, disappear, or are rewritten — and how editorial consensus s
 Fandom wikis use the standard MediaWiki API. Pass `--api` with the wiki's API endpoint:
 
 ```bash
-refract analyze "Darth_Vader" --api https://starwars.fandom.com/api.php --depth detailed
+refract analyze "Midi-chlorian" --api https://starwars.fandom.com/api.php --depth brief --json
 ```
 
-### 2. Cache for repeated analysis
+`brief` reads the latest 20 revisions and prints one event per line, without the
+changed text.
 
-Fandom API rate limits differ from Wikipedia. Cache revisions to avoid re-fetching:
+Use the title of the page itself. Redirects are not followed: "Darth_Vader" on this
+wiki redirects to "Anakin Skywalker", and analyzing it reports the redirect page's
+own history.
+
+### 2. Bound each run
+
+Fandom API rate limits differ from Wikipedia, and the revision cache (`-c`) is not
+used with `--api`: every run fetches from the wiki. Give a revision range to keep the
+run small and repeatable:
 
 ```bash
-refract analyze "Darth_Vader" --api https://starwars.fandom.com/api.php --depth detailed -c
+refract analyze "Midi-chlorian" --api https://starwars.fandom.com/api.php --from 15147177 --to 15819492 --json
 ```
+
+This range holds 20 revisions. Without `--from` and `--to`, `detailed` depth reads
+the page's whole history.
 
 ### 3. Export for comparison
 
 ```bash
-refract export "Darth_Vader" --api https://starwars.fandom.com/api.php --format ndjson > canon-events.jsonl
+refract export "Midi-chlorian" --api https://starwars.fandom.com/api.php --from 15147177 --to 15819492 --format ndjson > canon-events.jsonl
 ```
 
 ### 4. Track a specific lore claim
 
 ```bash
-refract claim "Darth_Vader" \
-  --text "midichlorian count is over 20,000" \
-  --api https://starwars.fandom.com/api.php -c
+refract claim "Midi-chlorian" \
+  --text "midi-chlorians" \
+  --api https://starwars.fandom.com/api.php --limit 20
 ```
 
-This produces a timeline of every revision where that claim was added, modified,
-removed, or reintroduced.
+This prints the matching sentence in each of the latest 20 revisions, then when the
+passage was first matched, changed, removed or reintroduced within them. Without
+`--limit` the latest 50 are read; `--from` and `--to` select an earlier range.
 
 ### 5. Watch for new edits
 
 ```bash
-refract watch "Darth_Vader" --api https://starwars.fandom.com/api.php --interval 60000
+refract watch "Midi-chlorian" --api https://starwars.fandom.com/api.php --interval 60000
 ```
 
 Polls the wiki every 60 seconds and prints new events as they appear. Press Ctrl+C to stop.
@@ -82,14 +95,15 @@ canon status reclassified. Refract captures this as a pattern of:
 - `template_added`: `{{Legends|canon}}` banners
 
 ```
-[2014-04-25] category_removed (rev 123456→123457)
-  Section: body
-  target: Category:Canon characters
+  △ category removed (rev 123456→123457)
+    category=canon characters
 
-[2014-04-25] category_added (rev 123456→123457)
-  Section: body
-  target: Category:Legends characters
+  △ category added (rev 123456→123457)
+    category=legends characters
 ```
+
+The revision IDs and categories above are illustrative; the layout is `refract
+analyze`'s text output.
 
 ## Cross-wiki comparison
 
@@ -97,18 +111,20 @@ For the same fictional universe across competing wikis, use `refract diff`:
 
 ```bash
 refract diff "Darth_Vader" \
-  --wiki-a https://starwars.fandom.com/api.php \
-  --wiki-b https://star-wars.fandom.com/api.php \
-  --depth detailed
+  --wiki-a https://lego.fandom.com/api.php \
+  --wiki-b https://battlefront.fandom.com/api.php \
+  --depth brief
 ```
 
-This produces a side-by-side analysis showing where the two wikis diverge on the same
-topic — different backstories, different categorizations, different levels of detail.
+This prints side-by-side counts for the two wikis over their latest 20 revisions:
+events by type, sections, citations, templates, categories and wikilinks. The title
+has to be a page, not a redirect, on both.
 
 ## Troubleshooting
 
 - **Fandom rate limits**: Fandom APIs may throttle more aggressively than Wikipedia.
-  Use `-c` to cache and add `--interval 120000` for `watch` mode if you hit limits.
+  The cache (`-c`) is not used with `--api`; bound runs with `--depth brief` or
+  `--from`/`--to`, and add `--interval 120000` for `watch` mode if you hit limits.
 - **Private wikis**: Pass auth credentials for private or institutional MediaWiki
   instances: `--api-key <token>` or `--api-user <user> --api-password <pass>`.
 - **Custom domain wikis**: Fandom wikis hosted on custom domains still expose the

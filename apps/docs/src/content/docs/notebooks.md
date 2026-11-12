@@ -14,6 +14,9 @@ pip install pandas altair
 refract export "Bitcoin" --format ndjson > events.jsonl
 ```
 
+This reads Bitcoin's whole history. Add `--from 369361755 --to 372972870` for a
+25-revision span from 2010 that finishes in seconds.
+
 ## Load and explore
 
 ### Python (Jupyter / Marimo)
@@ -67,8 +70,8 @@ alt.Chart(dist).mark_bar().encode(
 
 ```r
 events %>%
-  count(event_type) %>%
-  ggplot(aes(reorder(event_type, n), n)) +
+  count(eventType) %>%
+  ggplot(aes(reorder(eventType, n), n)) +
   geom_col() +
   coord_flip() +
   labs(x = "Event type", y = "Count")
@@ -95,10 +98,10 @@ alt.Chart(churn).mark_line(point=True).encode(
 
 ```r
 events %>%
-  filter(grepl("^citation", event_type)) %>%
+  filter(grepl("^citation", eventType)) %>%
   mutate(month = format(timestamp, "%Y-%m")) %>%
-  count(month, event_type) %>%
-  ggplot(aes(as.Date(paste0(month, "-01")), n, color = event_type)) +
+  count(month, eventType) %>%
+  ggplot(aes(as.Date(paste0(month, "-01")), n, color = eventType)) +
   geom_line() +
   geom_point(size = 2) +
   scale_x_date(date_breaks = "3 months", date_labels = "%b %Y") +
@@ -128,7 +131,7 @@ stability_counts
 ```r
 events %>%
   mutate(stability = ifelse(
-    event_type %in% c("revert_detected", "edit_cluster_detected", "sentence_removed"),
+    eventType %in% c("revert_detected", "edit_cluster_detected", "sentence_removed"),
     "Contested", "Stable"
   )) %>%
   count(stability)
@@ -195,9 +198,14 @@ pip install "git+https://github.com/refract-org/refract.git#subdirectory=clients
 from refract import Refract, EvidenceEvent
 
 client = Refract()
-events = client.analyze("Bitcoin", depth="detailed")
+# "from" is a Python keyword, so pass revision bounds through a dictionary.
+span = {"from": "369361755", "to": "372972870"}
+events = client.analyze("Bitcoin", depth="detailed", **span)
 # → list[EvidenceEvent] with typed fields: eventType, timestamp, section, etc.
 ```
+
+The client stops the CLI after 120 seconds, and `detailed` without bounds reads the
+whole history, so a page as long as Bitcoin needs the span.
 
 ### Load into pandas DataFrame
 
@@ -205,7 +213,7 @@ events = client.analyze("Bitcoin", depth="detailed")
 import pandas as pd
 
 # One row per event: event_type, timestamp, section, revision IDs, first fact
-df = client.analyze("Bitcoin", depth="detailed", as_frame=True)
+df = client.analyze("Bitcoin", depth="detailed", as_frame=True, **span)
 df["timestamp"] = pd.to_datetime(df["timestamp"])
 
 # Quick exploration
@@ -222,7 +230,6 @@ df["stability"] = df["event_type"].apply(
 )
 
 print(df["stability"].value_counts())
-# → Stable: 285, Contested: 45
 ```
 
 ### Export to Parquet for archival
@@ -236,9 +243,11 @@ df.to_parquet("bitcoin-events.parquet", index=False)
 ```python
 from refract_langchain import RefractLoader
 
-loader = RefractLoader(page="Bitcoin")
+# The loader takes no revision bounds; "brief" reads the latest 20 revisions.
+loader = RefractLoader(page="Bitcoin", depth="brief")
 docs = loader.load()
-# → list[Document] with page_content = claim text, metadata = stability + provenance
+# → list[Document]: page_content is the event's text, metadata holds the event
+#   type, revision IDs, section, timestamp and a stability score
 ```
 
 The Python SDK wraps the `@refract-org/cli` npm package — install both for full

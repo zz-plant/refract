@@ -13,13 +13,15 @@ and how to query them. After 5 minutes, move on to the [full event taxonomy](eve
 Content lifecycle. A sentence appeared or disappeared.
 
 ```bash
-refract analyze "Earth" --depth brief
+refract export "Pluto" --from 71593043 --to 71601937 --format ndjson > events.jsonl
 ```
+
+That range is 43 revisions from the day Pluto was reclassified. The queries on this page read the file with DuckDB. Event fields are camelCase (`eventType`, `fromRevisionId`).
 
 ```sql
 SELECT timestamp, section, after
 FROM 'events.jsonl'
-WHERE event_type = 'sentence_first_seen'
+WHERE eventType = 'sentence_first_seen'
 ORDER BY timestamp;
 ```
 
@@ -29,9 +31,9 @@ Source changes. Added, removed, or swapped. `citation_replaced` means the claim
 text stayed but the supporting source changed — the strongest revisionism signal.
 
 ```sql
-SELECT timestamp, event_type, before, after
+SELECT timestamp, eventType, before, after
 FROM 'events.jsonl'
-WHERE event_type LIKE 'citation_%'
+WHERE eventType LIKE 'citation_%'
 ORDER BY timestamp;
 ```
 
@@ -43,7 +45,7 @@ reverts on the same section signal edit-warring.
 ```sql
 SELECT timestamp, section
 FROM 'events.jsonl'
-WHERE event_type = 'revert_detected'
+WHERE eventType = 'revert_detected'
 ORDER BY timestamp;
 ```
 
@@ -53,9 +55,9 @@ Policy templates. `NPOV`, `citation needed`, `dispute` — these are editorial s
 that someone flagged the content as problematic.
 
 ```sql
-SELECT timestamp, event_type, after
+SELECT timestamp, eventType, after
 FROM 'events.jsonl'
-WHERE event_type LIKE 'template_%'
+WHERE eventType LIKE 'template_%'
 ORDER BY timestamp;
 ```
 
@@ -67,28 +69,28 @@ accompanies major content rewrites.
 ```sql
 SELECT timestamp, section
 FROM 'events.jsonl'
-WHERE event_type = 'section_reorganized'
+WHERE eventType = 'section_reorganized'
 ORDER BY timestamp;
 ```
 
 ## Your first 3 queries
 
 ```bash
-refract analyze "Bitcoin" --depth detailed -c > bitcoin.jsonl
+refract analyze "Pluto" --from 71593043 --to 71601937 --depth detailed --json > pluto.jsonl
 ```
 
 ```sql
 duckdb -c "
-SELECT event_type, count(*) as n
-FROM 'bitcoin.jsonl'
-GROUP BY event_type
+SELECT eventType, count(*) as n
+FROM 'pluto.jsonl'
+GROUP BY eventType
 ORDER BY n DESC;
 "
 
 duckdb -c "
 SELECT section, count(*) as n
-FROM 'bitcoin.jsonl'
-WHERE event_type LIKE 'citation_%'
+FROM 'pluto.jsonl'
+WHERE eventType LIKE 'citation_%'
 GROUP BY section
 ORDER BY n DESC
 LIMIT 5;
@@ -96,8 +98,8 @@ LIMIT 5;
 
 duckdb -c "
 SELECT timestamp, after
-FROM 'bitcoin.jsonl'
-WHERE event_type = 'sentence_first_seen'
+FROM 'pluto.jsonl'
+WHERE eventType = 'sentence_first_seen'
 ORDER BY timestamp
 LIMIT 10;
 "
