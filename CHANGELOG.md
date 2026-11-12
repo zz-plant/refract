@@ -3,6 +3,7 @@
 ## 0.6.1 (2026-11-11)
 
 ### Changed
+- **The MCP registry entry is `io.github.zz-plant/refract`.** The registry grants a name to the GitHub account that owns the publishing repository, and the repository moved from refract-org to zz-plant. The registry treats this as a new server; the entry under the old name stays at its last published version. Each published package's `repository.url` names zz-plant/refract for the same reason: npm checks it against the publishing workflow's repository.
 - **The docs site is built with Starlight.** `apps/docs` moves from a hand-written `build.mjs` to Astro 7 and Starlight 0.42, which add a light theme beside the dark one, full-text search with Pagefind, previous and next links, and an edit link on every page. All 55 pages keep their URLs, titles, descriptions, canonical links, Open Graph tags and JSON-LD; `sitemap.xml` now indexes Starlight's `sitemap-0.xml`. Pages live in `apps/docs/src/content/docs/` with their title and description as frontmatter. Links to the review and usage guides name `docs/review.md` and `docs/usage.md`, so they also work on GitHub.
 
 ### Added
