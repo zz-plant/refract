@@ -129,6 +129,61 @@ the matching rules. See [state labels](./concepts/claim-state-timelines.md#state
 
 Response fields: `statement`, `page`, `context` (when one was passed), `revisions` (array of `revisionId` + `timestamp`), `status` (`present`, `absent`, `modified`, or `contested`), and `history_summary`.
 
+### `snapshot`
+
+Return the revision that was live at a date: the newest revision at or before
+it. The same lookup as `refract snapshot`, returned as JSON.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `page` | string | ✅ | Page title |
+| `at` | string | | ISO 8601 date or timestamp. Defaults to the current time |
+| `api` | string | | MediaWiki API base URL. Defaults to English Wikipedia |
+| `revisionLimit` | number | | Revisions to fetch at or before the date (default 500) |
+| `content` | enum | | `plain` (markup stripped, default), `wikitext`, or `none` |
+
+Response fields: `pageTitle`, `at`, `revisionId`, `pageId`, `timestamp`,
+`daysBeforeTarget`, `minor`, `user`, `size`, `comment`, `sections` (heading
+`level` and `name`), and `text` or `wikitext` as `content` selects.
+
+### `review`
+
+Observe changes to pages since their last acknowledged review and save a
+review report — the [review workflow](./review.md) for an agent. The tool
+observes; it never acknowledges.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `stateDir` | string | ✅ | Absolute path of the review state directory |
+| `pages` | string[] | | Page titles to review |
+| `api` | string | | MediaWiki API base URL. Defaults to English Wikipedia |
+| `from` | number | | Initial comparison baseline for a page with no acknowledged review |
+| `limit` | number | | New revisions per page per call (default 200); call again to resume |
+| `sample` | boolean | | Review the bundled fictional history offline instead of `pages` |
+| `eventTypes` | string[] | | Show only these event types in `view` |
+| `section` | string | | Show only events in this section in `view` |
+| `text` | string | | Show only events containing this text in `view` |
+
+The response is the saved `refract-review/v1` report with three additions:
+
+- `reportPath`: the saved report on disk. The response lists each page's input
+  revisions as `inputRevisionIds`; the saved report keeps their full text.
+- `view`: entries that match the filters. `pages` stays unfiltered.
+- `acknowledgment`: whether the report can be acknowledged and, when it can,
+  the `refract review --ack` command that does so.
+
+**Acknowledgment stays with a person.** Acknowledging moves the reviewed
+baseline past every revision in the report, including entries hidden by
+filters, and asserts that someone inspected them. No MCP tool does it. Give the
+person `reportPath` and the command; they run it after reading the report. An
+incomplete report, or one with a page that failed, has no command: call
+`review` again to resume.
+
+`stateDir` holds `state.json`, `reports/`, and a `.lock` while a call runs. The
+tool writes nothing outside it, and requires an absolute path because an MCP
+server's working directory is the client's choice. Use the same directory for
+the CLI acknowledgment, and a separate one for each independent review.
+
 ## Protocol details
 
 - **Transport:** stdio (stdin for requests, stdout for responses)
@@ -150,5 +205,5 @@ match, and unavailable source text. Status `unknown` covers partial latest
 matches or withheld latest text. Disappearance is measured against the latest
 fetched revision, not the last historical match.
 
-Use [saved source reviews](./review.md) through the CLI when you need an explicit
-review baseline; fetching a statement history does not acknowledge a review.
+Use the `review` tool when you need an explicit review baseline; fetching a
+statement history does not acknowledge a review.

@@ -51,8 +51,12 @@ the unscoped `refract` package, which is an unrelated project.
 | `cron` | One-shot re-observation of a list of pages |
 | `classify` | Classify one observation boundary with a model |
 | `get_statement_history` | When a statement or a close variant appeared, changed, or disappeared |
+| `snapshot` | The revision live at a date, with its ID and text |
+| `review` | Changes since the last acknowledged review, saved under an absolute `stateDir` |
 
-`review`, `snapshot`, `diff`, and `verify` are CLI-only.
+`review` never acknowledges a report. Give the person its `reportPath` and
+`acknowledgment.command`; they run it after inspecting the report. `diff` and
+`verify` are CLI-only.
 
 ## Event types
 

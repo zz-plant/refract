@@ -164,6 +164,36 @@ Track normalized text or partial word matches across revisions. Returns matched 
 | `depth` | enum | | `brief`, `detailed` (default), `forensic` |
 | `api` | string | | MediaWiki API base URL |
 
+### `snapshot`
+
+Return the revision that was live at a date: the newest revision at or before it, with its revision ID, timestamp, section headings, and text. The same lookup as `refract snapshot`, returned as JSON.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `page` | string | required | Page title |
+| `at` | string | | ISO 8601 date or timestamp (default: now) |
+| `api` | string | | MediaWiki API base URL |
+| `revisionLimit` | number | | Revisions to fetch at or before the date (default 500) |
+| `content` | enum | | `plain` (default), `wikitext`, `none` |
+
+### `review`
+
+Observe changes to pages since their last acknowledged review and return the saved review report as JSON: `refract review` for an agent. The response adds `reportPath`, a filtered `view`, and an `acknowledgment` field; it lists input revisions by ID, and the saved report keeps their text.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `stateDir` | string | required | Absolute path of the review state directory |
+| `pages` | string[] | | Page titles to review |
+| `api` | string | | MediaWiki API base URL |
+| `from` | number | | Initial baseline for a page with no acknowledged review |
+| `limit` | number | | New revisions per page per call (default 200) |
+| `sample` | boolean | | Review the bundled fictional history offline |
+| `eventTypes` | string[] | | Event types to show in `view` |
+| `section` | string | | Section to show in `view` |
+| `text` | string | | Text to match in `view` |
+
+The tool never acknowledges a report. Acknowledgment moves the reviewed baseline past every revision in the report, including entries hidden by filters, and records that a person inspected them. When a report can be acknowledged, `acknowledgment.command` is the `refract review --ack` command for that person to run after reading it; an incomplete report has none. All state and reports are written inside `stateDir`. See the [CLI reference](cli) for the review statuses.
+
 ## Protocol
 
 - **Transport:** stdio (stdin for requests, stdout for responses)

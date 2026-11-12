@@ -26,6 +26,8 @@ Name the scoped package: the unscoped npm package `refract` is an unrelated proj
 | `get_statement_history` | Tracks a statement or close match, with an overall status and a short change summary |
 | `export` | Returns all events as structured JSON |
 | `cron` | Reads a pages file, runs analysis once, and reports new events |
+| `snapshot` | Returns the revision live at a date, with its ID, section headings, and text |
+| `review` | Observes pages since their last acknowledged review and returns the saved report; acknowledgment stays a CLI step for a person |
 | `classify` | Asks a model to classify one observation boundary; it is the only tool that uses a model |
 
 [MCP setup and parameters](https://zz-plant.github.io/refract/mcp/) · [Repository](https://github.com/refract-org/refract)

@@ -10,27 +10,43 @@
     {
       "name": "analyze",
       "description": "Analyze the full edit history of a Wikipedia page. Returns structured events including claim changes, citation changes, section moves, template changes, reverts, and semantic enrichment fields.",
-      "input": { "page": "string (page title)", "depth": "brief | detailed | forensic (optional)" }
+      "input": {
+        "page": "string (page title)",
+        "depth": "brief | detailed | forensic (optional)"
+      }
     },
     {
       "name": "claim",
       "description": "Track a specific text claim across Wikipedia revisions. Returns claim lineage: when it first appeared, how it changed, when it was removed or reintroduced.",
-      "input": { "page": "string", "text": "string (exact claim text to track)" }
+      "input": {
+        "page": "string",
+        "text": "string (exact claim text to track)"
+      }
     },
     {
       "name": "export",
       "description": "Export page analysis as structured JSON, with revision, section, and timestamp provenance on each event.",
-      "input": { "page": "string", "depth": "brief | detailed | forensic (optional)", "api": "string optional (MediaWiki API base URL)", "since": "string optional (ISO timestamp)" }
+      "input": {
+        "page": "string",
+        "depth": "brief | detailed | forensic (optional)",
+        "api": "string optional (MediaWiki API base URL)",
+        "since": "string optional (ISO timestamp)"
+      }
     },
     {
       "name": "cron",
       "description": "One-shot re-observation: reads a pages file, analyzes each page, and reports its event count.",
-      "input": { "pagesFile": "string (path to file with page titles, one per line)" }
+      "input": {
+        "pagesFile": "string (path to file with page titles, one per line)"
+      }
     },
     {
       "name": "classify",
       "description": "Model-assisted classification of an inference boundary. Replaces default heuristic with an LLM-based decision for one boundary.",
-      "input": { "boundary": "revert | sentence_similarity | heuristic | template_signal | activity_spike", "input": "object (fields vary by boundary)" }
+      "input": {
+        "boundary": "revert | sentence_similarity | heuristic | template_signal | activity_spike",
+        "input": "object (fields vary by boundary)"
+      }
     },
     {
       "name": "get_statement_history",
@@ -42,10 +58,46 @@
         "depth": "brief | detailed | forensic (optional, default detailed)",
         "api": "string optional (MediaWiki API base URL)"
       }
+    },
+    {
+      "name": "snapshot",
+      "description": "Return the revision of a page that was live at a date, with its revision ID, timestamp, section headings, and text.",
+      "input": {
+        "page": "string",
+        "at": "string optional (ISO 8601 date, default now)",
+        "api": "string optional (MediaWiki API base URL)",
+        "revisionLimit": "number optional (default 500)",
+        "content": "plain | wikitext | none (optional, default plain)"
+      }
+    },
+    {
+      "name": "review",
+      "description": "Observe changes to pages since their last acknowledged review and return the saved review report. Never acknowledges; it returns the CLI command a person runs after inspecting the report.",
+      "input": {
+        "stateDir": "string (absolute path; all state and reports are written here)",
+        "pages": "string[] optional (page titles)",
+        "api": "string optional (MediaWiki API base URL)",
+        "from": "number optional (initial baseline revision ID)",
+        "limit": "number optional (default 200)",
+        "sample": "boolean optional (bundled fictional history)",
+        "eventTypes": "string[] optional (view filter)",
+        "section": "string optional (view filter)",
+        "text": "string optional (view filter)"
+      }
     }
   ],
-  "capabilities": ["tools"],
+  "capabilities": [
+    "tools"
+  ],
   "license": "AGPL-3.0",
   "repository": "https://github.com/refract-org/refract",
-  "keywords": ["wikipedia", "mediawiki", "revision-history", "claim-tracking", "citation-analysis", "provenance", "knowledge-change"]
+  "keywords": [
+    "wikipedia",
+    "mediawiki",
+    "revision-history",
+    "claim-tracking",
+    "citation-analysis",
+    "provenance",
+    "knowledge-change"
+  ]
 }
