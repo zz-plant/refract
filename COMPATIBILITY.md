@@ -23,21 +23,21 @@ as this tree. `publish.yml` publishes in the order the script prints.
 
 ## Version Matrix
 
-| Package | In this tree | On npm (2026-11-11) | Downstream consumers |
+| Package | In this tree | On npm (2026-11-12) | Downstream consumers |
 |---|---|---|---|
-| `@refract-org/evidence-graph` | 0.5.4 | 0.5.3 | every package; NextConsensus; `apps/ui` (types only, from this tree) |
-| `@refract-org/ingestion` | 0.3.5 | 0.3.4 | mcp, cli; NextConsensus |
-| `@refract-org/analyzers` | 0.5.4 | 0.5.3 | mcp, cli; NextConsensus |
-| `@refract-org/mcp` | 0.1.1 | 0.1.0 | cli |
-| `@refract-org/eval` | 0.2.3 | 0.2.2 | cli (optional) |
-| `@refract-org/cli` | 0.6.1 | 0.5.17 | `clients/python`, Docker image, operators |
+| `@refract-org/evidence-graph` | 0.5.4 | 0.5.4 | every package; NextConsensus; `apps/ui` (types only, from this tree) |
+| `@refract-org/ingestion` | 0.3.5 | 0.3.5 | mcp, cli; NextConsensus |
+| `@refract-org/analyzers` | 0.5.4 | 0.5.4 | mcp, cli; NextConsensus |
+| `@refract-org/mcp` | 0.1.1 | 0.1.1 | cli |
+| `@refract-org/eval` | 0.2.3 | 0.2.3 | cli (optional) |
+| `@refract-org/cli` | 0.6.1 | 0.6.1 | `clients/python`, Docker image, operators |
 | `@refract-org/persistence` | 0.1.1 | private | cli `--cache` from a source checkout |
 
 The npm column is what the registry served on that date. The 0.6.0 tag published
-`evidence-graph`, `ingestion`, `analyzers` and `eval` and then failed on `mcp`, so
-CLI 0.6.0 never reached npm. Once the 0.6.1 tag publishes, `npm install
-@refract-org/cli@0.6.1` into an empty directory resolves the tree column, and
-`refract --version` prints 0.6.1. The CLI on npm before 0.5.17 was 0.5.7,
+`evidence-graph`, `ingestion` and `analyzers` and then failed on `mcp`, so
+CLI 0.6.0 never reached npm. The 0.6.1 tag published all six public packages:
+`npm install @refract-org/cli@0.6.1` into an empty directory resolves the tree
+column, and `refract --version` prints 0.6.1. The CLI on npm before 0.5.17 was 0.5.7,
 which does not start: it declares `@refract-org/analyzers@^0.3.0` and imports code
 that only analyzers 0.5.0 has.
 
