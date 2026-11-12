@@ -1,7 +1,7 @@
 {
   "name": "@refract-org/cli",
   "version": "0.6.1",
-  "mcpName": "io.github.refract-org/refract",
+  "mcpName": "io.github.zz-plant/refract",
   "type": "module",
   "private": false,
   "description": "git log for Wikipedia: see how a page's sentences, citations, and structure changed, revision by revision",
