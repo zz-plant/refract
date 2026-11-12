@@ -9,7 +9,7 @@
   "types": "./dist/src/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/refract-org/refract.git",
+    "url": "git+https://github.com/zz-plant/refract.git",
     "directory": "packages/evidence-graph"
   },
   "homepage": "https://zz-plant.github.io/refract/",
