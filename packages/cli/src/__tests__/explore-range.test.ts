@@ -7,6 +7,7 @@ vi.mock("../commands/analyze.js", () => ({ runAnalyze: vi.fn(async () => ({ even
 import { runAnalyze } from "../commands/analyze.js";
 import { runExplore } from "../commands/explore.js";
 import { describeCoverage } from "../coverage.js";
+import * as htmlRenderer from "../html-renderer.js";
 
 let server: Server | undefined;
 afterEach(async () => {
@@ -97,7 +98,7 @@ describe("explorer origin boundary", () => {
   // Host is a forbidden header in the fetch spec, so this goes through node:http.
   function getWithHost(port: number, path: string, host: string): Promise<{ status?: number; body: string }> {
     return new Promise((resolve, reject) => {
-      get({ host: "127.0.0.1", port, path, headers: { Host: host } }, (res) => {
+      get({ host: "127.0.0.1", port, path, headers: { Host: host }, signal: AbortSignal.timeout(2_000) }, (res) => {
         let body = "";
         res.setEncoding("utf8");
         res.on("data", (chunk) => {
@@ -122,7 +123,7 @@ describe("explorer origin boundary", () => {
     const port = await startExplorer();
     const hosts = ["evil.example", `evil.example:${port}`, "localhost.evil.example", "127.0.0.1.evil.example"];
     for (const host of hosts) {
-      for (const route of routes) {
+      for (const route of [...routes, "//"]) {
         const res = await getWithHost(port, route, host);
         expect(res.status, `${host} ${route}`).toBe(403);
         expect(res.body, `${host} ${route}`).not.toContain(privateText);
@@ -137,5 +138,29 @@ describe("explorer origin boundary", () => {
       expect(res.status, host).toBe(200);
       expect(res.body, host).toContain(privateText);
     }
+  });
+
+  it("rejects a malformed request URL and keeps serving requests", async () => {
+    const port = await startExplorer();
+    const host = `localhost:${port}`;
+
+    expect(await getWithHost(port, "//", host)).toEqual({ status: 400, body: "Invalid request URL.\n" });
+    const revisions = await getWithHost(port, "/api/revisions", host);
+    expect(revisions.status).toBe(200);
+    expect(revisions.body).toContain(privateText);
+  });
+
+  it("renders the captured HTML report once, on demand", async () => {
+    const render = vi.spyOn(htmlRenderer, "renderHtmlReport");
+    const port = await startExplorer();
+    const host = `localhost:${port}`;
+
+    expect((await getWithHost(port, "/api/revisions", host)).status).toBe(200);
+    expect(render).not.toHaveBeenCalled();
+
+    const first = await getWithHost(port, "/", host);
+    expect(first.status).toBe(200);
+    expect(await getWithHost(port, "/?reload=1", host)).toEqual(first);
+    expect(render).toHaveBeenCalledTimes(1);
   });
 });
