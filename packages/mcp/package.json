@@ -1,6 +1,6 @@
 {
   "name": "@refract-org/mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "private": false,
   "description": "MCP server for Refract — exposes deterministic knowledge-change observation as AI agent tools",
@@ -21,7 +21,7 @@
   "dependencies": {
     "@refract-org/evidence-graph": "^0.5.4",
     "@refract-org/ingestion": "^0.3.5",
-    "@refract-org/analyzers": "^0.5.4"
+    "@refract-org/analyzers": "^0.5.5"
   },
   "devDependencies": {}
 }
