@@ -1,6 +1,6 @@
 {
   "name": "@refract-org/analyzers",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "type": "module",
   "private": false,
   "description": "Deterministic analyzers for public revision histories: section diffs, claim events, citation changes, reverts, talk-page signals, templates, categories, and wikilinks",

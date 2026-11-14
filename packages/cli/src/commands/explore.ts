@@ -52,13 +52,21 @@ export async function runExplore(
       config,
     ));
 
+  let html: string | undefined;
   const server = createServer((req, res) => {
     if (!LOOPBACK_HOST.test(req.headers.host ?? "")) {
       res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("The Refract explorer only answers at localhost or 127.0.0.1.\n");
       return;
     }
-    const url = new URL(req.url ?? "/", `http://localhost:${port}`);
+    let url: URL;
+    try {
+      url = new URL(req.url ?? "/", `http://localhost:${port}`);
+    } catch {
+      res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Invalid request URL.\n");
+      return;
+    }
     if (url.pathname === "/api/coverage") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(coverage ?? null));
@@ -74,7 +82,7 @@ export async function runExplore(
       res.end(JSON.stringify(revisions));
       return;
     }
-    const html = renderHtmlReport(pageTitle, events, revisions, true, coverage);
+    html ??= renderHtmlReport(pageTitle, events, revisions, true, coverage);
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(html);
   });
