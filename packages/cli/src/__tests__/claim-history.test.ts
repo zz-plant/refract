@@ -69,6 +69,89 @@ describe("claim history reads the latest revisions", () => {
     expect(log.mock.calls.flat().join("\n")).toContain("Status:      absent");
   });
 
+  describe("--json", () => {
+    // A passage added in the History section, reworded once, under markup the
+    // matcher has to see through.
+    const page = (sentence: string) =>
+      `{{Infobox bridge |name=Harbour Bridge}}\n'''Harbour Bridge''' crosses the bay.\n\n== History ==\n${sentence}<ref>{{cite news |title=Opening day}}</ref>\n\n== Design ==\nIt is a [[cable-stayed bridge]].`;
+    const history = () =>
+      new Response(
+        JSON.stringify({
+          query: {
+            pages: [
+              {
+                pageid: 7,
+                title: "Bridge",
+                revisions: [
+                  revision(1, "'''Harbour Bridge''' crosses the bay."),
+                  revision(2, page(CLAIM)),
+                  revision(3, page("The bridge opened to road traffic in 2031.")),
+                ],
+              },
+            ],
+          },
+        }),
+      );
+    const run = async (json: boolean) => {
+      vi.stubGlobal("fetch", vi.fn(history));
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      const range = { from: 1, to: 3 };
+      await runClaim("Bridge", CLAIM, false, API, undefined, undefined, undefined, range, { json });
+      return log.mock.calls.map((call) => call.join(" ")).join("\n");
+    };
+
+    it("prints the history as one JSON document and nothing else", async () => {
+      const output = await run(true);
+      const result = await runClaimHistory("Bridge", CLAIM, false, API, undefined, undefined, undefined, {
+        from: 1,
+        to: 3,
+      });
+
+      expect(JSON.parse(output)).toEqual({ ...result, claimId: expect.stringMatching(/^[0-9a-f]{16}$/) });
+      expect(output).toBe(JSON.stringify(JSON.parse(output), null, 2));
+      expect(JSON.parse(output)).toMatchObject({
+        statement: CLAIM,
+        page: "Bridge",
+        pageId: 7,
+        status: "unknown",
+        latestRevisionId: 3,
+        latestMatch: "partial",
+        revisions: [
+          { revisionId: 2, timestamp: "2030-02-01T00:00:00Z", text: CLAIM, section: "History", match: "exact" },
+          {
+            revisionId: 3,
+            timestamp: "2030-03-01T00:00:00Z",
+            text: "The bridge opened to road traffic in 2031.",
+            section: "History",
+            match: "partial",
+          },
+        ],
+      });
+    });
+
+    it("carries the claim ID the text output prints", async () => {
+      const { claimId } = JSON.parse(await run(true));
+      expect(await run(false)).toContain(`Claim ID:    ${claimId}`);
+    });
+
+    it("leaves the text output as it was without the flag", async () => {
+      const output = await run(false);
+      expect(output.split("\n").slice(0, 9)).toEqual([
+        'Tracking passage in "Bridge"...',
+        `Claim text: "${CLAIM}"`,
+        "",
+        "[2030-02-01T00:00:00Z] EXACT MATCH (rev 2)",
+        `  Matched text: "${CLAIM}"`,
+        "[2030-03-01T00:00:00Z] PARTIAL MATCH (rev 3)",
+        '  Matched text: "The bridge opened to road traffic in 2031."',
+        "",
+        "=== Passage History Summary ===",
+      ]);
+      expect(output).toContain("Status:      unknown");
+      expect(() => JSON.parse(output)).toThrow();
+    });
+  });
+
   it.each([
     [{ from: 3, to: 4 }, undefined, { rvdir: "newer", rvstartid: "3", rvendid: "4" }],
     [{ from: 3 }, undefined, { rvdir: "newer", rvstartid: "3", rvendid: null }],

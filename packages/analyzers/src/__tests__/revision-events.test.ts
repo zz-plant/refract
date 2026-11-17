@@ -59,6 +59,133 @@ describe("buildRevisionEvents", () => {
     ]);
   });
 
+  it("keeps a localized category tag out of sentence text", () => {
+    const tags = "[[Kategorie:Zwergplanet]]\n[[Catégorie:Planète naine|Pluton]]\n[[カテゴリ:準惑星]]";
+    const rest = "Seine Umlaufbahn ist stark exzentrisch und geneigt.";
+    const history = [
+      rev(1, 0, `${tags}\n\nPluto ist ein Zwergplanet im Kuipergürtel. ${rest}`),
+      rev(2, 10, `${tags}\n\nPluto ist ein kleiner Zwergplanet im Kuipergürtel. ${rest}`),
+    ];
+    const sentences = buildRevisionEvents(history, { similarityThreshold: 0.5 }).filter((e) =>
+      e.eventType.startsWith("sentence_"),
+    );
+
+    expect(sentences.map((e) => [e.eventType, e.before, e.after])).toEqual([
+      [
+        "sentence_modified",
+        "Pluto ist ein Zwergplanet im Kuipergürtel",
+        "Pluto ist ein kleiner Zwergplanet im Kuipergürtel",
+      ],
+    ]);
+  });
+
+  describe("sentences and section headings", () => {
+    // Shaped like the 2006 Pluto article: an infobox and references above the
+    // headings, a heading directly under another, a section that ends in a list.
+    const article = (discovery: string, charon: string) =>
+      [
+        "{{Infobox planet | name = Pluto | discovered = 1930 | discoverer = Clyde Tombaugh | moons = 3}}",
+        "'''Pluto''' is the second-largest known [[dwarf planet]] in the [[Solar System]].<ref>{{cite web |url=https://example.org/iau |title=Resolution 5A}}</ref>",
+        "",
+        "==Planetary status==",
+        "===Planet X?===",
+        discovery,
+        "",
+        "Objects found near it since 1992 include:",
+        "* [[Quaoar]]",
+        "* [[Sedna]]",
+        "==Charon==",
+        charon,
+        "",
+        "==Orbit==",
+        "The orbit of Pluto is eccentric and highly inclined to the ecliptic.",
+      ].join("\n");
+    const history = [
+      rev(
+        1,
+        0,
+        article(
+          "Pluto was originally discovered in 1930 during a search for a ninth planet.",
+          "Charon was found in 1978 and is about half the diameter of Pluto.",
+        ),
+      ),
+      rev(
+        2,
+        10,
+        article(
+          "Pluto was originally discovered in 1930 by Clyde Tombaugh during a search for a ninth planet.",
+          "Charon was found in 1978 by James Christy and is about half the diameter of Pluto.",
+        ),
+      ),
+    ];
+    const sentences = (revisions: Revision[]) =>
+      buildRevisionEvents(revisions, { similarityThreshold: 0.7 })
+        .filter((e) => e.eventType.startsWith("sentence_"))
+        .map((e) => ({ type: e.eventType, section: e.section, before: e.before, after: e.after }));
+
+    it("keeps headings out of sentence text and names each sentence's own section", () => {
+      expect(sentences(history)).toEqual([
+        {
+          type: "sentence_modified",
+          section: "Planet X?",
+          before: "Pluto was originally discovered in 1930 during a search for a ninth planet",
+          after: "Pluto was originally discovered in 1930 by Clyde Tombaugh during a search for a ninth planet",
+        },
+        {
+          type: "sentence_modified",
+          section: "Charon",
+          before: "Charon was found in 1978 and is about half the diameter of Pluto",
+          after: "Charon was found in 1978 by James Christy and is about half the diameter of Pluto",
+        },
+      ]);
+    });
+
+    it("emits no sentence text that holds a heading", () => {
+      const texts = buildRevisionEvents([rev(0, 0, "Stub."), ...history])
+        .filter((e) => e.eventType.startsWith("sentence_"))
+        .flatMap((e) => [e.before, e.after]);
+
+      expect(texts.length).toBeGreaterThan(4);
+      expect(texts.filter((text) => /==|Planetary status|Planet X\?/.test(text))).toEqual([]);
+    });
+
+    it("splits a document whose headings follow lines without punctuation", () => {
+      const page = (fee: string) =>
+        [
+          "Professions",
+          "== Contractor - Resident Licensure ==",
+          "Understand the requirements before you submit an application to the board.",
+          "",
+          "== Fees ==",
+          "== Board License Fees: ==",
+          `The application fee is ${fee} dollars and is not refundable.`,
+        ].join("\n");
+
+      expect(sentences([rev(1, 0, page("150")), rev(2, 10, page("175"))])).toEqual([
+        {
+          type: "sentence_modified",
+          section: "Board License Fees:",
+          before: "The application fee is 150 dollars and is not refundable.",
+          after: "The application fee is 175 dollars and is not refundable.",
+        },
+      ]);
+      expect(sentences([rev(1, 0, "Professions"), rev(2, 10, page("150"))])).toEqual([
+        {
+          type: "sentence_first_seen",
+          section: "Contractor - Resident Licensure",
+          before: "",
+          after: "Understand the requirements before you submit an application to the board",
+        },
+        {
+          type: "sentence_first_seen",
+          section: "Board License Fees:",
+          before: "",
+          after: "The application fee is 150 dollars and is not refundable.",
+        },
+      ]);
+    });
+  });
+
   it("places a citation event in the section that holds the reference", () => {
     const ref = (n: string) => `<ref>https://example.org/${n}</ref>`;
     const history = [

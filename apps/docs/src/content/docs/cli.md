@@ -87,8 +87,19 @@ refract claim <page> [options]
 | `--limit <n>` | `50` | Revisions read: the latest N. With both `--from` and `--to`, the whole range unless set |
 | `--from <revId>` | — | Start revision ID; reads forward from it |
 | `--to <revId>` | — | End revision ID; without `--from`, reads backward from it |
+| `-j, --json` | off | Print the result as one JSON document instead of text |
 | `-c, --cache` | off | Cache revisions in SQLite |
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
+
+`--json` prints one indented JSON object and nothing else on stdout: `statement`,
+`page`, `pageId`, `claimId`, `status`, `latestRevisionId`, `latestMatch`,
+`historySummary`, `caveats`, and `revisions`, where each entry has `revisionId`,
+`timestamp`, `text`, `section` and `match` (`exact` or `partial`). `claimId` is the
+ID the text output prints.
+
+```bash
+refract claim "Pluto" --text "ninth and smallest" --from 71593043 --to 71601937 --json | jq '.status, .revisions[0].revisionId'
+```
 
 ## `refract snapshot`
 

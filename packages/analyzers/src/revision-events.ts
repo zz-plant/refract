@@ -16,7 +16,7 @@ import {
 } from "./semantic-enrichment.js";
 import { buildParamChangeEvents, templateTracker } from "./template-tracker.js";
 import { diffWikilinks, extractWikilinks } from "./wikilink-extractor.js";
-import { buildSectionCharMap, findSectionForText, stripWikitext } from "./wikitext-parser.js";
+import { findSectionForText, type StrippedWikitext, stripWikitextWithSections } from "./wikitext-parser.js";
 
 /** What the per-pair diffs read from one revision's wikitext. */
 export interface ParsedContent {
@@ -402,7 +402,10 @@ function diffSentences(
   const beforePlain = getStripped(before);
   const afterPlain = getStripped(after);
 
-  const sentenceSplit = /(?:[.!?]\s+|[。！？؟]\s*)/;
+  // A blank line ends a paragraph, and stripWikitext leaves one where each
+  // heading stood, so a sentence cannot run from one block or section into the
+  // next when the first ends without punctuation, as a list or a caption does.
+  const sentenceSplit = /(?:[.!?]\s+|[。！？؟]\s*|\n{2,})/;
   const beforeSentences = beforePlain.split(sentenceSplit).filter((s) => s.trim().length > 20);
   const afterSentences = afterPlain.split(sentenceSplit).filter((s) => s.trim().length > 20);
 
@@ -516,25 +519,18 @@ export function buildRevisionEvents(
 
   const events: EvidenceEvent[] = [];
   const allSeenSentences = new Set<string>();
-  const strippedCache = new Map<number, string>();
-  const sectionCharMapCache = new Map<number, Array<{ charOffset: number; section: string }>>();
+  const strippedCache = new Map<number, StrippedWikitext>();
   const parsedCache = new Map<number, ParsedContent>();
 
-  const getStripped = (rev: Revision): string => {
+  const getStrippedPage = (rev: Revision): StrippedWikitext => {
     const cached = strippedCache.get(rev.revId);
-    if (cached !== undefined) return cached;
-    const result = stripWikitext(rev.content);
+    if (cached) return cached;
+    const result = stripWikitextWithSections(rev.content);
     strippedCache.set(rev.revId, result);
     return result;
   };
-
-  const getSectionCharMap = (rev: Revision): Array<{ charOffset: number; section: string }> => {
-    const cached = sectionCharMapCache.get(rev.revId);
-    if (cached) return cached;
-    const map = buildSectionCharMap(rev.content);
-    sectionCharMapCache.set(rev.revId, map);
-    return map;
-  };
+  const getStripped = (rev: Revision): string => getStrippedPage(rev).text;
+  const getSectionCharMap = (rev: Revision) => getStrippedPage(rev).sections;
 
   const getParsed = (rev: Revision): ParsedContent => {
     const cached = parsedCache.get(rev.revId);

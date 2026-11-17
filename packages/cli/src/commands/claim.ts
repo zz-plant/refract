@@ -206,8 +206,14 @@ export async function runClaim(
   auth?: AuthConfig,
   revisionLimit?: number,
   range?: ClaimRange,
+  output: { json?: boolean } = {},
 ): Promise<void> {
   const result = await runClaimHistory(pageTitle, claimText, useCache, apiUrl, cacheDir, auth, revisionLimit, range);
+  if (output.json) {
+    const { claimId } = createClaimIdentity({ text: claimText, section: "", pageTitle, pageId: result.pageId ?? 0 });
+    console.log(JSON.stringify({ ...result, claimId }, null, 2));
+    return;
+  }
   console.log(`Tracking passage in "${pageTitle}"...`);
   console.log(`Claim text: "${claimText}"\n`);
   for (const variant of result.revisions) {
