@@ -309,6 +309,7 @@ const claimCmd = program
   .option("--limit <n>", "max revisions to fetch (default: 50, or the whole range with --from and --to)", parseInt)
   .option("--from <revId>", "start revision ID", parseInt)
   .option("--to <revId>", "end revision ID", parseInt)
+  .option("-j, --json", "print the result as JSON instead of text")
   .option("-c, --cache", "cache revisions in SQLite; needs Bun and a source checkout");
 withGlobal(claimCmd);
 claimCmd.action(async (page, opts) => {
@@ -326,6 +327,7 @@ claimCmd.action(async (page, opts) => {
     extractAuth(opts),
     opts.limit as number | undefined,
     { from: opts.from as number | undefined, to: opts.to as number | undefined },
+    { json: !!opts.json },
   );
 });
 
