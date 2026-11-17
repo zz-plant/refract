@@ -50,6 +50,81 @@ describe("stripWikitext", () => {
   });
 });
 
+describe("stripWikitext on headings", () => {
+  it("removes heading lines so they cannot open the next sentence", () => {
+    expect(stripWikitext("==Planetary status==\n===Planet X?===\nPluto was found in 1930.")).toBe(
+      "Pluto was found in 1930.",
+    );
+    expect(stripWikitext("== Fees ==\n== Board License Fees: ==\nThe fee is due on filing.")).toBe(
+      "The fee is due on filing.",
+    );
+  });
+
+  it("leaves a paragraph break where a heading stood", () => {
+    expect(stripWikitext("Its moons include:\n* Charon\n== Orbit ==\nPluto orbits the Sun.")).toBe(
+      "Its moons include:\n* Charon\n\nPluto orbits the Sun.",
+    );
+    expect(stripWikitext("Lead.\n\n\n== A ==\n\n== B ==\n\nBody.")).toBe("Lead.\n\nBody.");
+  });
+
+  it("keeps equals signs that are not a heading line", () => {
+    expect(stripWikitext("Then a == b holds.\nx = 1")).toBe("Then a == b holds.\nx = 1");
+  });
+
+  it("drops a commented-out section with its heading", () => {
+    const page = "Lead.\n<!--\n== Draft ==\nUnfinished text.\n-->\n== Orbit ==\nPluto orbits the Sun.";
+    expect(stripWikitext(page)).toBe("Lead.\n\nPluto orbits the Sun.");
+    expect(buildSectionCharMap(page).map((m) => m.section)).toEqual(["(lead)", "Orbit"]);
+    expect(findSectionForText(page, "Pluto orbits the Sun.")).toBe("Orbit");
+  });
+});
+
+describe("section offsets", () => {
+  // Markup above a heading is removed from the text a sentence is searched in.
+  // Offsets taken in the wikitext ran ahead of that text by the markup's
+  // length, and by the headings' own, so a sentence was put under a heading
+  // that came before its own.
+  const page = [
+    "{{Infobox planet | name = Pluto | discovered = 1930 | discoverer = Clyde Tombaugh | moons = 5}}",
+    "'''Pluto''' is a [[dwarf planet]] in the [[Kuiper belt]].<ref>{{cite web |url=https://example.org/pluto |title=Pluto}}</ref>",
+    "",
+    "== Discovery ==",
+    'Pluto was found at [[Lowell Observatory]] in 1930.<ref name="lowell">{{cite book |title=Out of the Darkness |year=1980}}</ref>',
+    "",
+    "== Charon ==",
+    "Charon is the largest of the five known moons.",
+    "",
+    "== Orbit ==",
+    "The orbit is eccentric and inclined.",
+  ].join("\n");
+
+  it("starts each section where its prose starts in the stripped text", () => {
+    const text = stripWikitext(page).toLowerCase().replace(/\s+/g, " ");
+    expect(buildSectionCharMap(page).map((m) => [m.section, text.slice(m.charOffset, m.charOffset + 12)])).toEqual([
+      ["(lead)", "pluto is a d"],
+      ["Discovery", "pluto was fo"],
+      ["Charon", "charon is th"],
+      ["Orbit", "the orbit is"],
+    ]);
+  });
+
+  it("names the section each sentence sits in", () => {
+    expect(findSectionForText(page, "Pluto is a dwarf planet in the Kuiper belt.")).toBe("(lead)");
+    expect(findSectionForText(page, "Pluto was found at Lowell Observatory in 1930.")).toBe("Discovery");
+    expect(findSectionForText(page, "Charon is the largest of the five known moons.")).toBe("Charon");
+    expect(findSectionForText(page, "The orbit is eccentric and inclined.")).toBe("Orbit");
+  });
+
+  it("gives an empty section the offset of the next one", () => {
+    const nested = "Lead text.\n\n== Parent ==\n=== Child ===\nText in the child.";
+    expect(buildSectionCharMap(nested)).toEqual([
+      { charOffset: 0, section: "(lead)" },
+      { charOffset: 11, section: "Parent" },
+      { charOffset: 11, section: "Child" },
+    ]);
+  });
+});
+
 const SAMPLE = `'''Bold text''' and ''italic''.
 == History ==
 The {{citation needed}} theory was first proposed in 2005.<ref name="smith2005">Smith (2005)</ref>
@@ -217,9 +292,6 @@ describe("heading parsing on a hostile line", () => {
   // A line of "=" or "==" followed by thousands of spaces took time cubic in
   // its length until 2026-09-24: four minutes at 8,000 characters.
   const spaces = " ".repeat(3000);
-  // After the text being located: findSectionForText compares offsets in
-  // whitespace-collapsed text with offsets in the wikitext, so a long run of
-  // spaces before the text would move it, whatever the regex.
   const hostile = `Lead text.\n== History ==\nText in history.\n=${spaces}x\n==${spaces}x\n`;
 
   it("builds the section map in linear time", () => {
