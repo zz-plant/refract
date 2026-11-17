@@ -13,6 +13,21 @@ export function sanitizeWikitext(value: string): string {
     .trim();
 }
 
+/**
+ * The names a wiki gives its category namespace: the canonical English one,
+ * which every wiki accepts, then the local names of the editions Refract is
+ * tested against. Matched without regard to case. To cover another edition,
+ * add the name its wiki uses.
+ */
+const CATEGORY_NAMESPACE_NAMES: readonly string[] = [
+  "Category",
+  "Kategorie", // German
+  "Catégorie", // French
+  "カテゴリ", // Japanese
+];
+
+const CATEGORY_TAG = new RegExp(`\\[\\[\\s*(?:${CATEGORY_NAMESPACE_NAMES.join("|")})\\s*:[^\\]]*\\]\\]`, "giu");
+
 export function stripWikitext(wikitext: string): string {
   let text = wikitext;
   text = text.replace(/<!--[\s\S]*?-->/g, "");
@@ -24,7 +39,7 @@ export function stripWikitext(wikitext: string): string {
   text = text.replace(/''(.+?)''/g, "$1");
   // A category tag is page metadata, not prose. Left in, its name joined the next
   // sentence. A visible link to a category, [[:Category:X]], has its own syntax.
-  text = text.replace(/\[\[\s*Category\s*:[^\]]*\]\]/gi, "");
+  text = text.replace(CATEGORY_TAG, "");
   // An interlanguage link points at another edition of the wiki; its label is a
   // language code, not prose. Left in, "de:Pluto (Zwergplanet)" landed in sentence
   // events. A visible interlanguage link, [[:de:Pluto]], keeps its leading colon and

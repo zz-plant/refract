@@ -21,6 +21,19 @@ describe("stripWikitext", () => {
     expect(stripWikitext("See [[:Category:Dwarf planets]].")).toBe("See :Category:Dwarf planets.");
   });
 
+  it("drops category tags written with a wiki's local namespace name", () => {
+    expect(stripWikitext("[[Kategorie:Zwergplanet]]\n\nPluto ist klein.")).toBe("Pluto ist klein.");
+    expect(stripWikitext("Pluton est petite.\n[[Catégorie:Planète naine|Pluton]]")).toBe("Pluton est petite.");
+    expect(stripWikitext("Pluton est petite.\n[[CATÉGORIE : Planète naine]]")).toBe("Pluton est petite.");
+    expect(stripWikitext("冥王星は小さい。\n[[カテゴリ:準惑星]]\n[[Category:冥王星]]")).toBe("冥王星は小さい。");
+  });
+
+  it("keeps a visible link to a category under a local namespace name", () => {
+    expect(stripWikitext("Siehe [[:Kategorie:Zwergplanet]].")).toBe("Siehe :Kategorie:Zwergplanet.");
+    expect(stripWikitext("Voir [[:Catégorie:Planète naine]].")).toBe("Voir :Catégorie:Planète naine.");
+    expect(stripWikitext("[[:カテゴリ:準惑星]]を参照。")).toBe(":カテゴリ:準惑星を参照。");
+  });
+
   it("drops interlanguage links so their labels cannot join sentence text", () => {
     expect(stripWikitext("Pluto is small.\n\n[[de:Pluto (Zwergplanet)]]\n[[fr:Pluton]]")).toBe("Pluto is small.");
     expect(stripWikitext("[[zh-yue:冥王星]]Pluto is small.")).toBe("Pluto is small.");

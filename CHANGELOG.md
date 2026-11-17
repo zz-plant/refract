@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- **Category tags in German, French and Japanese no longer join sentence text.** `stripWikitext` removed `[[Category:X]]` only under its English name, so on other editions `[[Kategorie:Zwergplanet]]` stayed in the text as `Kategorie:Zwergplanet` and became part of the sentence after it. It now also removes `Kategorie`, `Catégorie` and `カテゴリ` tags, from one list in `wikitext-parser.ts` that takes further names. A visible link such as `[[:Kategorie:X]]` stays. Sentence events on pages that carry these tags lose the tag text, which changes those events' `eventId`.
+
 ## 0.6.2 (2026-11-13)
 
 ### Fixed

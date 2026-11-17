@@ -59,6 +59,26 @@ describe("buildRevisionEvents", () => {
     ]);
   });
 
+  it("keeps a localized category tag out of sentence text", () => {
+    const tags = "[[Kategorie:Zwergplanet]]\n[[Catégorie:Planète naine|Pluton]]\n[[カテゴリ:準惑星]]";
+    const rest = "Seine Umlaufbahn ist stark exzentrisch und geneigt.";
+    const history = [
+      rev(1, 0, `${tags}\n\nPluto ist ein Zwergplanet im Kuipergürtel. ${rest}`),
+      rev(2, 10, `${tags}\n\nPluto ist ein kleiner Zwergplanet im Kuipergürtel. ${rest}`),
+    ];
+    const sentences = buildRevisionEvents(history, { similarityThreshold: 0.5 }).filter((e) =>
+      e.eventType.startsWith("sentence_"),
+    );
+
+    expect(sentences.map((e) => [e.eventType, e.before, e.after])).toEqual([
+      [
+        "sentence_modified",
+        "Pluto ist ein Zwergplanet im Kuipergürtel",
+        "Pluto ist ein kleiner Zwergplanet im Kuipergürtel",
+      ],
+    ]);
+  });
+
   it("places a citation event in the section that holds the reference", () => {
     const ref = (n: string) => `<ref>https://example.org/${n}</ref>`;
     const history = [
