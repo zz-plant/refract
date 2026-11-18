@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CLIENT_OPENING, driveStdioServer } from "../../../../tests/support/mcp-stdio.js";
 import { handleToolCall, type McpServerOptions, runMcpServer } from "../index.js";
 
-// None of these messages reaches a tool, so no handler is ever called.
+// The stdio tests send no tool call, so these handlers are never called.
 const options: McpServerOptions = { analyze: vi.fn(), claim: vi.fn(), exportData: vi.fn(), cron: vi.fn() };
 const run = () => runMcpServer(options);
 
@@ -66,8 +66,9 @@ describe("get_statement_history", () => {
     expect(response.revisions[0]).toMatchObject({ text: "A passage.", match: "exact" });
   });
 
-  it("says so when no handler is configured", async () => {
-    const result = await handleToolCall("get_statement_history", { statement: "A", page: "P" }, options);
-    expect(result.content[0].text).toContain("no get_statement_history handler");
+  it("reports a missing callback instead of throwing", async () => {
+    const result = await handleToolCall("get_statement_history", { statement: "x", page: "Pluto" }, options);
+
+    expect(result.content[0].text).toBe("Error: no get_statement_history handler configured");
   });
 });

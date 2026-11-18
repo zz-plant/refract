@@ -50,7 +50,7 @@
     },
     {
       "name": "get_statement_history",
-      "description": "Track a statement's trajectory across revisions by normalized text or word-overlap matching: each transition (first seen, wording changed, removed, reintroduced) between the fetched revisions it lies between, with revert evidence and how long the result held, plus an overall status and a short change summary.",
+      "description": "Track a statement's trajectory across a page's revisions by normalized text or sentence word overlap (a partial match does not establish the same meaning): each transition (first seen, wording changed, removed, reintroduced) between the fetched revisions it lies between, with revert evidence and how long the result held, plus an overall status and a short change summary.",
       "input": {
         "statement": "string (raw text statement to track)",
         "page": "string (MediaWiki page title)",

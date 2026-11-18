@@ -111,7 +111,7 @@ export const TOOLS = [
   {
     name: "get_statement_history",
     description:
-      "Track a statement's trajectory across revisions by normalized text or word-overlap matching. Returns each transition (first seen, wording changed, removed, reintroduced) with the fetched revisions it lies between, revert evidence, how many revisions the result held, and the nearest remaining sentence on a removal; plus matched revisions, an overall status, and a short change summary.",
+      "Track a statement's trajectory across a page's revisions. A revision matches when its text contains the statement after lowercasing and collapsing whitespace, or else, partially, when one sentence holds at least 70% of the statement's words longer than three characters (at least three such words); a partial match does not establish the same meaning. Returns each transition (first seen, wording changed, removed, reintroduced) with the fetched revisions it lies between, revert evidence, how many revisions the result held, and the nearest remaining sentence on a removal; plus matched revisions, an overall status, and a short change summary.",
     inputSchema: {
       type: "object",
       properties: {
