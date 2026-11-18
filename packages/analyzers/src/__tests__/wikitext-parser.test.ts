@@ -221,6 +221,97 @@ describe("sanitizeWikitext", () => {
   });
 });
 
+describe("sanitizeWikitext without regex backtracking", () => {
+  // The regex version this replaced, kept here as the reference for its output.
+  function regexSanitize(value: string): string {
+    const withoutRefs = value
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<ref[^>/]*?>[\s\S]*?<\/ref>/gi, " ")
+      .replace(/<ref[^>]*\/>/gi, " ");
+    return removeTemplates(withoutRefs, " ")
+      .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
+      .replace(/\[https?:\/\/[^\s\]]+\s*([^\]]*)\]/g, "$1")
+      .replace(/'''/g, "")
+      .replace(/''/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  const cases = [
+    "plain",
+    "a <!-- c --> b <!-- unclosed",
+    "<!-->x-->y",
+    'x<ref name="a">c</ref>y<REF>d</Ref>z<ref name="b" />w<ref name=c/>v',
+    "x<ref>unclosed y<ref>z</ref>",
+    "x<ref a/b>c</ref>d",
+    "<references />and<references>x</references>",
+    "[[a]] [[a|b]] [[a|b|c]] [[a|]] [[|b]] [[]] [[a]b]] [[[a]] [[a]",
+    "[[x [[y]] z]]",
+    "[https://e.org label here] [http://e.org] [https:// x] [https://e.org  spaced  ] [http:/e.org x] [ftp://x y]",
+    "[https://e.org [[inner]] x] [[a|[https://e.org b]]]",
+    "'''bold''' ''it'' '''''both''''' ''''",
+    "{{a|{{b}}}} [[c|{{d}}e]] <ref>{{cite|url=x}}</ref>",
+  ];
+
+  it("gives the regex version's output on edge cases", () => {
+    for (const input of cases) expect([input, sanitizeWikitext(input)]).toEqual([input, regexSanitize(input)]);
+  });
+
+  it("gives the regex version's output on random markup", () => {
+    const pieces = [
+      "[[",
+      "]]",
+      "[",
+      "]",
+      "|",
+      "<!--",
+      "-->",
+      "<ref>",
+      "</ref>",
+      "<ref name=a/>",
+      "<ref a/b>",
+      "{{",
+      "}}",
+      "[https://e.org",
+      "[http://",
+      "'''",
+      "''",
+      " ",
+      "\n",
+      "a",
+      "b",
+      "<",
+      ">",
+      "/",
+    ];
+    let seed = 7;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed;
+    };
+    for (let n = 0; n < 5000; n++) {
+      let input = "";
+      const length = next() % 14;
+      for (let k = 0; k < length; k++) input += pieces[next() % pieces.length];
+      expect([input, sanitizeWikitext(input)]).toEqual([input, regexSanitize(input)]);
+    }
+  });
+
+  it("stays linear on many unclosed openers", () => {
+    const inputs = [
+      ...["<!--", "<ref>", "<ref", "[[", "[https://x", "[https:// ", "[[a]"].map((opener) => opener.repeat(20_000)),
+      `${"<ref".repeat(20_000)}>`,
+      `${"[https:// ".repeat(20_000)}]`,
+    ];
+    for (const opener of inputs) {
+      const input = opener;
+      const t0 = performance.now();
+      sanitizeWikitext(input);
+      expect([opener.slice(0, 12), performance.now() - t0 < 500]).toEqual([opener.slice(0, 12), true]);
+    }
+  });
+});
+
 describe("extractHeadingMap", () => {
   it("extracts headings with positions", () => {
     const map = extractHeadingMap(HEADING_SAMPLE);
