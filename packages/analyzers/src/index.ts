@@ -72,8 +72,13 @@ export {
   analyzeCitationNetwork,
   buildSourceId,
   buildSourceLineage,
+  type CitationAnchors,
   type CitationNetworkAnalysis,
+  citationDomain,
+  citationKey,
   citationTracker,
+  extractCitationAnchors,
+  normalizeAnchor,
 } from "./citation-tracker.js";
 export type { EditClusterOptions } from "./edit-cluster-detector.js";
 export { detectEditClusters } from "./edit-cluster-detector.js";

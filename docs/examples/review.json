@@ -209,6 +209,18 @@
             {
               "fact": "citation_changed",
               "detail": "type=removed"
+            },
+            {
+              "fact": "citation_source",
+              "detail": "domain=example.org url=https://example.org/rivergate/hours"
+            },
+            {
+              "fact": "citation_anchor",
+              "detail": "Rivergate Library is open until eight every weekday throughout the year."
+            },
+            {
+              "fact": "citation_anchor_status",
+              "detail": "anchors=1 kept=1 unsourced=1"
             }
           ],
           "layer": "observed",
@@ -229,8 +241,8 @@
           },
           "directionSignal": "neutral",
           "quantitativeFindings": [],
-          "eventId": "acfaff3682f061b8",
-          "entryId": "2610b462fc60104d373521dc0b550d571d250c0ad0c5151b66c0ad24118aadd0",
+          "eventId": "e3556964a7e210d7",
+          "entryId": "8f5f6b08df15b8e9171d37c38644d3958a8b4079c7ba7fabe136eb84239301ea",
           "source": {
             "kind": "fictional_sample",
             "key": "9f3e6db9080df0422d20f9e2dc269d082aa2bc9a22aa8fa56067ed6e015bd943",
@@ -593,5 +605,5 @@
       ]
     }
   ],
-  "reportId": "68f29815f0d6f5a65bcadb30456a0e36fd91dbb8c4c294e5d022118e3ebe0b0e"
+  "reportId": "2ac661b7d84b8cd6a70626585126e8b2771c0854eed5c087de3000ad87e9554b"
 }

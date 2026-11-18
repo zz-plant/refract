@@ -22,6 +22,24 @@ Each Refract event describes what changed at a revision boundary. Events are det
 | `citation_removed` | Existing `<ref>` tag removed |
 | `citation_replaced` | One citation swapped for another in the same position |
 
+Citation events carry facts about the source and the passage it supports:
+
+| Fact | On | Detail |
+|---|---|---|
+| `citation_source` | all three, when the reference names a URL | `domain=<host> url=<url>`. The URL is the `url=` parameter, or else the first bare http(s) URL in the reference |
+| `citation_anchor` | all three, except at `brief` depth | A passage the reference follows: the text from the start of its sentence up to the reference, in the later revision for an added or replaced reference and the earlier one for a removed one. One fact per passage, at most five. A reference inside a template, such as an infobox, follows no passage |
+| `citation_anchor_status` | `citation_removed` | `anchors=<n> kept=<k> unsourced=<u>`: of the `n` passages the reference followed, `k` are still in the later revision's prose, and `u` of those no other reference follows any more |
+
+`kept` above zero is a passage that outlived its citation; `unsourced` above
+zero is one left with no reference after it. Both compare exact text, so a
+passage reworded in the same edit counts as not kept. Find them with:
+
+```bash
+refract export "Page" --format ndjson |
+  jq -c 'select(.eventType == "citation_removed")
+         | select(any(.deterministicFacts[]; .fact == "citation_anchor_status" and (.detail | test("unsourced=[1-9]"))))'
+```
+
 ## Template changes
 
 | Event type | Trigger |

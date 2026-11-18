@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildSourceId, buildSourceLineage, citationTracker } from "../citation-tracker.js";
+import {
+  buildSourceId,
+  buildSourceLineage,
+  citationDomain,
+  citationTracker,
+  extractCitationAnchors,
+} from "../citation-tracker.js";
 
 describe("citationTracker", () => {
   it("extracts named refs from wikitext", () => {
@@ -222,5 +228,84 @@ describe("citationTracker.extractCitations on hostile and edge-case markup", () 
     expect(refs.map((r) => [r.refName, r.raw])).toEqual([["a", '<ref name="a">x</ref \n>']]);
     // A self-closing tag counts when "/" is its last non-space character.
     expect(citationTracker.extractCitations("<ref name=b / >").map((r) => r.refName)).toEqual(["b"]);
+  });
+});
+
+describe("references after a reused named reference", () => {
+  // <ref name="a"/> was read as an opener, so the match ran to the next
+  // </ref> and the full reference after it was never extracted.
+  it("extracts the full reference that follows a self-closing one", () => {
+    const wikitext =
+      'Alpha.<ref name="a">{{cite web|url=https://a.example/1}}</ref> Beta.<ref name="a"/> Gamma.<ref>{{cite web|url=https://b.example/2}}</ref>';
+    expect(citationTracker.extractCitations(wikitext).map((r) => r.url)).toEqual([
+      "https://a.example/1",
+      "https://b.example/2",
+    ]);
+  });
+});
+
+describe("citation URLs", () => {
+  it("reads a bare URL when there is no url parameter", () => {
+    expect(citationTracker.extractCitations("A.<ref>https://news.example/story</ref>")[0].url).toBe(
+      "https://news.example/story",
+    );
+    expect(citationTracker.extractCitations("A.<ref>[https://news.example/x Title]</ref>")[0].url).toBe(
+      "https://news.example/x",
+    );
+  });
+
+  it("takes the url parameter over an archive-url written before it", () => {
+    const ref = "A.<ref>{{cite web |archive-url=https://archive.example/a |url=https://origin.example/a}}</ref>";
+    expect(citationTracker.extractCitations(ref)[0].url).toBe("https://origin.example/a");
+  });
+
+  it("names the domain without www and in lower case", () => {
+    expect(citationDomain("https://WWW.News.Example/story")).toBe("news.example");
+    expect(citationDomain("not a url")).toBeUndefined();
+    expect(citationDomain(undefined)).toBeUndefined();
+  });
+});
+
+describe("extractCitationAnchors", () => {
+  it("links each reference to the sentence it follows", () => {
+    const { byKey } = extractCitationAnchors(
+      'First claim.<ref name="a">x</ref> Second claim is longer.<ref>{{cite web|url=https://b.example}}</ref>',
+    );
+    expect(byKey.get("a")).toEqual(["First claim."]);
+    expect([...byKey.values()]).toEqual([["First claim."], ["Second claim is longer."]]);
+  });
+
+  it("lists every sentence a reused named reference follows", () => {
+    const { byKey } = extractCitationAnchors('One.<ref name="a">x</ref> Two.<ref name="a"/>');
+    expect(byKey.get("a")).toEqual(["One.", "Two."]);
+  });
+
+  it("anchors a reference in mid-sentence to the text before it", () => {
+    const { byKey } = extractCitationAnchors('Smith said it rained,<ref name="a">x</ref> while Jones disagreed.');
+    expect(byKey.get("a")).toEqual(["Smith said it rained,"]);
+  });
+
+  it("gives a reference inside a template no anchor", () => {
+    const { byKey } = extractCitationAnchors(
+      '{{Infobox war\n| result = Victory<ref name="a">x</ref>\n}}\nThe war ended.<ref name="b">y</ref>',
+    );
+    expect(byKey.has("a")).toBe(false);
+    expect(byKey.get("b")).toEqual(["The war ended."]);
+  });
+
+  it("stays linear on a long line with no sentence breaks", () => {
+    const wikitext = `${"word ".repeat(200_000)}${'<ref name="r"/>'.repeat(20_000)}`;
+    const t0 = performance.now();
+    const anchor = extractCitationAnchors(wikitext).byKey.get("r")?.[0] ?? "";
+    expect(anchor.length).toBeLessThanOrEqual(1000);
+    expect(performance.now() - t0).toBeLessThan(3000);
+  });
+
+  it("counts the citations that follow each passage", () => {
+    const { citationsPerAnchor } = extractCitationAnchors(
+      'Shared.<ref name="a">x</ref><ref name="b">y</ref> Alone.<ref name="c">z</ref>',
+    );
+    expect(citationsPerAnchor.get("shared.")).toBe(2);
+    expect(citationsPerAnchor.get("alone.")).toBe(1);
   });
 });

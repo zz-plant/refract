@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { SourceAuthority, SourceLineage, SourceRecord, SourceType } from "@refract-org/evidence-graph";
 import type { CitationChange, CitationRef, CitationTracker } from "./index.js";
+import { stripWikitextWithSections } from "./wikitext-parser.js";
 
 // The three scans below replace regexes that took super-linear time on
 // unclosed or repeated markup: /<ref\b([^>]*?)>(.*?)<\/ref\s*>/gs and
@@ -33,9 +34,25 @@ function findClosingRef(text: string, from: number): { start: number; end: numbe
   }
 }
 
-/** Each match of /<ref\b([^>]*?)>(.*?)<\/ref\s*>/gs, in order. */
-function matchRefTags(text: string): Array<{ attrs: string; content: string; raw: string }> {
-  const tags: Array<{ attrs: string; content: string; raw: string }> = [];
+/** Whether the tag that ends at `gt` closes itself: its last non-space character before ">" is "/". */
+function selfCloses(text: string, gt: number): boolean {
+  let k = gt - 1;
+  while (k >= 0 && WHITESPACE.test(text[k])) k--;
+  return text[k] === "/";
+}
+
+/**
+ * Each `<ref …>…</ref>`, in order, with where it starts and ends.
+ *
+ * A self-closing `<ref name="x"/>` opens nothing. It was read as an opener,
+ * as /<ref\b([^>]*?)>(.*?)<\/ref\s*>/gs reads it, so the match ran on to the
+ * next `</ref>` and swallowed the reference after it: on a page that reuses
+ * a named reference, the next full reference was never seen.
+ */
+function matchRefTags(
+  text: string,
+): Array<{ attrs: string; content: string; raw: string; start: number; end: number }> {
+  const tags: Array<{ attrs: string; content: string; raw: string; start: number; end: number }> = [];
   let from = 0;
   let gt = -1;
   for (;;) {
@@ -49,12 +66,18 @@ function matchRefTags(text: string): Array<{ attrs: string; content: string; raw
     if (gt < attrsStart) gt = text.indexOf(">", attrsStart);
     // With no ">" or no closing tag after this opener, none follows a later one.
     if (gt < 0) break;
+    if (selfCloses(text, gt)) {
+      from = gt + 1;
+      continue;
+    }
     const close = findClosingRef(text, gt + 1);
     if (!close) break;
     tags.push({
       attrs: text.slice(attrsStart, gt),
       content: text.slice(gt + 1, close.start),
       raw: text.slice(open, close.end),
+      start: open,
+      end: close.end,
     });
     from = close.end;
   }
@@ -62,8 +85,8 @@ function matchRefTags(text: string): Array<{ attrs: string; content: string; raw
 }
 
 /** Each match of /<ref\b([^>]*?)\/\s*>/g, in order. */
-function matchSelfClosingRefs(text: string): Array<{ attrs: string; raw: string }> {
-  const tags: Array<{ attrs: string; raw: string }> = [];
+function matchSelfClosingRefs(text: string): Array<{ attrs: string; raw: string; start: number; end: number }> {
+  const tags: Array<{ attrs: string; raw: string; start: number; end: number }> = [];
   let from = 0;
   let gt = -1;
   let slash = -1;
@@ -84,7 +107,7 @@ function matchSelfClosingRefs(text: string): Array<{ attrs: string; raw: string 
       slash = text[k] === "/" ? k : -1;
     }
     if (slash >= attrsStart) {
-      tags.push({ attrs: text.slice(attrsStart, slash), raw: text.slice(open, gt + 1) });
+      tags.push({ attrs: text.slice(attrsStart, slash), raw: text.slice(open, gt + 1), start: open, end: gt + 1 });
       from = gt + 1;
     } else {
       from = open + 1;
@@ -120,6 +143,140 @@ function extractCitationTitle(content: string): string | undefined {
   }
 }
 
+/**
+ * The URL a reference cites: its `url=` parameter, or else the first bare
+ * http(s) URL in it. Only a parameter named exactly `url` counts, so an
+ * `archive-url=` or `chapter-url=` written first is not taken for it; a bare
+ * `<ref>https://…</ref>` or `<ref>[https://… Title]</ref>` used to have none.
+ */
+function citationUrl(content: string): string | undefined {
+  const param = content.match(/\|\s*url\s*=\s*([^\s|}\]<]+)/i);
+  if (param) return param[1].trim();
+  return content.match(/https?:\/\/[^\s|}\]<>"]+/i)?.[0];
+}
+
+/** The host a URL names, lowercased and without a leading "www.", or undefined when it does not parse. */
+export function citationDomain(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return undefined;
+  }
+}
+
+/** How citations are matched between revisions: by name, or by their whole text when unnamed. */
+export function citationKey(ref: CitationRef): string {
+  return ref.refName ?? ref.raw;
+}
+
+export interface CitationAnchors {
+  /**
+   * For each citation key (see citationKey), the prose each of its
+   * occurrences follows, in page order without repeats: the text from the
+   * start of the sentence up to the reference. A reference inside a template,
+   * a comment or a heading follows no prose and has none.
+   */
+  byKey: Map<string, string[]>;
+  /** How many distinct citations follow each anchor, keyed by its normalized text (see normalizeAnchor). */
+  citationsPerAnchor: Map<string, number>;
+  /** The page's prose, normalized as anchors are, to check whether an anchor is still there. */
+  normalizedProse: string;
+}
+
+/** Lowercase with whitespace runs as single spaces: the form anchors are compared in. */
+export function normalizeAnchor(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// Stand in for each reference while the page is stripped to prose. Control
+// characters cannot be saved in a page, and any in the input are dropped first.
+const MARK_OPEN = "\u0001";
+const MARK_CLOSE = "\u0002";
+const MARK = new RegExp(`${MARK_OPEN}(\\d+)${MARK_CLOSE}`, "g");
+
+// The longest anchor kept. Without a bound, a long line with no sentence
+// breaks and many references would be scanned back once per reference.
+const MAX_ANCHOR_CHARS = 1000;
+
+/** The text from the start of the sentence that `offset` ends, up to `offset`, at most MAX_ANCHOR_CHARS long. */
+function sentenceBefore(text: string, offset: number): string {
+  let end = offset;
+  while (end > 0 && WHITESPACE.test(text[end - 1])) end--;
+  const floor = Math.max(0, end - MAX_ANCHOR_CHARS);
+  let start = floor;
+  // From the character before the last: the last may be the sentence's own full stop.
+  for (let i = end - 2; i >= floor; i--) {
+    if (text[i] === "\n") {
+      start = i + 1;
+      break;
+    }
+    if ((text[i] === "." || text[i] === "!" || text[i] === "?") && WHITESPACE.test(text[i + 1])) {
+      start = i + 1;
+      break;
+    }
+  }
+  return text.slice(start, end).trim();
+}
+
+/**
+ * Which prose each citation follows. Each reference is replaced by a marker,
+ * the page is stripped to prose by the same code sentence events read, and
+ * the sentence before each surviving marker is the anchor. Markers inside a
+ * template or comment are removed with it, so those references have none.
+ */
+export function extractCitationAnchors(wikitext: string): CitationAnchors {
+  const text = wikitext.replaceAll(MARK_OPEN, "").replaceAll(MARK_CLOSE, "");
+  const spans: Array<{ start: number; end: number; key: string }> = [];
+  for (const tag of matchRefTags(text)) {
+    const name = tag.attrs.match(/name\s*=\s*["']?([^"'\s>]+)/i)?.[1];
+    spans.push({ start: tag.start, end: tag.end, key: name ?? tag.raw });
+  }
+  for (const tag of matchSelfClosingRefs(text)) {
+    const name = tag.attrs.match(/name\s*=\s*["']?([^"'\s>]+)/i)?.[1];
+    if (name) spans.push({ start: tag.start, end: tag.end, key: name });
+  }
+  spans.sort((a, b) => a.start - b.start);
+
+  const keys: string[] = [];
+  let marked = "";
+  let at = 0;
+  for (const span of spans) {
+    if (span.start < at) continue;
+    marked += `${text.slice(at, span.start)}${MARK_OPEN}${keys.length}${MARK_CLOSE}`;
+    keys.push(span.key);
+    at = span.end;
+  }
+  marked += text.slice(at);
+
+  const stripped = stripWikitextWithSections(marked).text;
+  let prose = "";
+  let last = 0;
+  const found: Array<{ key: string; offset: number }> = [];
+  for (const match of stripped.matchAll(MARK)) {
+    prose += stripped.slice(last, match.index);
+    found.push({ key: keys[Number(match[1])], offset: prose.length });
+    last = (match.index ?? 0) + match[0].length;
+  }
+  prose += stripped.slice(last);
+
+  const byKey = new Map<string, string[]>();
+  const keysPerAnchor = new Map<string, Set<string>>();
+  for (const { key, offset } of found) {
+    const anchor = sentenceBefore(prose, offset);
+    if (!anchor) continue;
+    const anchors = byKey.get(key) ?? [];
+    if (!anchors.includes(anchor)) anchors.push(anchor);
+    byKey.set(key, anchors);
+    const normalized = normalizeAnchor(anchor);
+    const holders = keysPerAnchor.get(normalized) ?? new Set<string>();
+    holders.add(key);
+    keysPerAnchor.set(normalized, holders);
+  }
+  const citationsPerAnchor = new Map([...keysPerAnchor].map(([anchor, holders]) => [anchor, holders.size]));
+  return { byKey, citationsPerAnchor, normalizedProse: normalizeAnchor(prose) };
+}
+
 export const citationTracker: CitationTracker = {
   extractCitations(wikitext: string): CitationRef[] {
     const refs: CitationRef[] = [];
@@ -130,7 +287,7 @@ export const citationTracker: CitationTracker = {
       const content = tag.content.trim();
 
       const nameMatch = attrs.match(/name\s*=\s*["']?([^"'\s>]+)/i);
-      const urlMatch = content.match(/url\s*=\s*([^\s|}\]]+)/i);
+      const url = citationUrl(content);
 
       const raw = tag.raw;
       const key = nameMatch ? nameMatch[1] : raw;
@@ -140,7 +297,7 @@ export const citationTracker: CitationTracker = {
 
       refs.push({
         refName: nameMatch?.[1],
-        url: urlMatch ? urlMatch[1].trim() : undefined,
+        url,
         title: extractCitationTitle(content),
         raw,
       });
@@ -193,7 +350,7 @@ export const citationTracker: CitationTracker = {
 function indexByKey(refs: CitationRef[]): Map<string, CitationRef> {
   const map = new Map<string, CitationRef>();
   for (const ref of refs) {
-    const key = ref.refName ?? ref.raw;
+    const key = citationKey(ref);
     map.set(key, ref);
   }
   return map;
