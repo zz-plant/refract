@@ -154,7 +154,7 @@ The tool calls the configured inference provider when an API key is available, a
 
 ### `get_statement_history`
 
-Track normalized text or partial word matches across revisions. Returns matched revision IDs, timestamps, an overall status, the latest match, and a short change summary. A partial match does not establish equivalent meaning.
+Track normalized text or partial word matches across revisions. Returns the passage's transitions (first seen, wording changed, removed, reintroduced), each placed between the two fetched revisions it lies between, with revert evidence and how many revisions the result held; plus matched revision IDs, timestamps, an overall status, the latest match, and a short change summary. A partial match does not establish equivalent meaning. See [transitions](./temporal-model.md#claim-trajectories) for each field.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -163,6 +163,9 @@ Track normalized text or partial word matches across revisions. Returns matched 
 | `context` | string | | Optional use-context slug |
 | `depth` | enum | | `brief`, `detailed` (default), `forensic` |
 | `api` | string | | MediaWiki API base URL |
+| `limit` | number | | Revisions to read (default 50, or the whole range when both `from` and `to` are given) |
+| `from` | number | | Read forward from this revision ID |
+| `to` | number | | Read back from this revision ID |
 
 ### `snapshot`
 

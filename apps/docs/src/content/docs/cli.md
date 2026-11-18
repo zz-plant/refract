@@ -128,9 +128,11 @@ refract claim --pages-file <path> --text <text> [options]
 
 `--json` prints one indented JSON object and nothing else on stdout: `statement`,
 `page`, `pageId`, `claimId`, `status`, `latestRevisionId`, `latestMatch`,
-`historySummary`, `caveats`, and `revisions`, where each entry has `revisionId`,
-`timestamp`, `text`, `section` and `match` (`exact` or `partial`). `claimId` is the
-ID the text output prints.
+`historySummary`, `caveats`, `revisions`, where each entry has `revisionId`,
+`timestamp`, `text`, `section` and `match` (`exact` or `partial`), and
+`transitions`, one per change in the passage's presence or wording (see
+[transitions](./temporal-model.md#claim-trajectories)). `claimId` is the ID the text output
+prints. The text output lists the same transitions, one per line.
 
 ```bash
 refract claim "Pluto" --text "ninth and smallest" --from 71593043 --to 71601937 --json | jq '.status, .revisions[0].revisionId'

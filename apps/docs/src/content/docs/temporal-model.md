@@ -43,6 +43,34 @@ Each event carries deterministic enrichment fields:
 
 All fields are byte-reproducible. Same source, same events, every time.
 
+## Claim trajectories
+
+`refract claim` (`--json`) and the MCP `get_statement_history` tool return a
+passage's `transitions`: each change in whether, or how, it appears —
+`first_seen`, `text_changed`, `removed`, `reintroduced` — with the evidence a
+consumer needs to weigh it:
+
+| Field | Meaning |
+|---|---|
+| `previousRevisionId`, `revisionId` | The change lies after the first and at or before the second. Absent `previousRevisionId` means the first revision read, so a passage first seen there may be older |
+| `adjacent` | The two are parent and child. When false, revisions not read lie between them and the change is in one of them |
+| `before`, `after` | Matched text either side; empty when the passage was absent |
+| `editSummary`, `revertSummary` | The edit summary, and whether it matches a default revert pattern |
+| `restoresRevisionId` | The revision's text is identical to this earlier one: an identity revert |
+| `heldRevisions`, `endedByRevisionId`, `endedAt` | How many revisions read the resulting state lasted, and the next transition that ended it; both end fields are absent when it held through the latest revision read |
+| `nearest` | On a removal, the remaining sentence carrying at least half of the passage's words, with that share. Below the matching threshold; shown so a rewrite is not taken for a deletion unseen |
+
+These are observations. Whether a state that held for N revisions counts as
+settled, or a removal is a correction, is a downstream reading.
+
+Wikidata statements have their own history in `@refract-org/ingestion`:
+`wikidataStatementHistory` reads revisions of an entity's page and reports each
+statement added, removed or changed (value, rank, qualifiers, references),
+matched by Wikidata's statement ID. Qualifiers such as start time (P580) and end
+time (P582) are dates the entity records, with their precision; when a
+statement was edited is the revision that changed it. Refract reports both and
+compares neither.
+
 ## Downstream use
 
 Refract provides the timeline. Downstream systems provide the judgment.

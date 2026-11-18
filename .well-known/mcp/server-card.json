@@ -50,13 +50,16 @@
     },
     {
       "name": "get_statement_history",
-      "description": "Track the history of a specific statement across revisions. Returns when the statement (or a semantic neighbor) appeared, disappeared, or changed, with revision IDs, timestamps, an overall status, and a short change summary.",
+      "description": "Track a statement's trajectory across revisions by normalized text or word-overlap matching: each transition (first seen, wording changed, removed, reintroduced) between the fetched revisions it lies between, with revert evidence and how long the result held, plus an overall status and a short change summary.",
       "input": {
         "statement": "string (raw text statement to track)",
         "page": "string (MediaWiki page title)",
         "context": "string optional (use-context slug)",
         "depth": "brief | detailed | forensic (optional, default detailed)",
-        "api": "string optional (MediaWiki API base URL)"
+        "api": "string optional (MediaWiki API base URL)",
+        "limit": "number optional (revisions to read, default 50)",
+        "from": "number optional (read forward from this revision ID)",
+        "to": "number optional (read back from this revision ID)"
       }
     },
     {
