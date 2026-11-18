@@ -3,6 +3,7 @@ import type { ClaimState, Revision } from "@refract-org/evidence-graph";
 import { createClaimIdentity } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
 import { MediaWikiClient } from "@refract-org/ingestion";
+import { forEachPage } from "./batch.js";
 import { saveRevisions } from "./cache.js";
 
 export interface ClaimHistoryVariant {
@@ -295,4 +296,51 @@ export function fuzzyFindText(claimText: string, plainText: string, preNormalize
   }
 
   return "";
+}
+
+/**
+ * Track one passage across every page in `titles`, as `runClaimHistory` does
+ * for one, reporting pages in the order given. With `json`, each page is one
+ * line of NDJSON: its result with `claimId`, or `{ page, status: "error",
+ * error }` when it could not be read. Text output is one line per page.
+ * Resolves with how many pages failed.
+ */
+export async function runClaimBatch(
+  titles: readonly string[],
+  claimText: string,
+  apiUrl?: string,
+  auth?: AuthConfig,
+  revisionLimit?: number,
+  concurrency = 4,
+  output: { json?: boolean; write?: (line: string) => void } = {},
+): Promise<{ failed: number }> {
+  if (!claimText.trim()) throw new Error("Supply nonempty passage text.");
+  const write = output.write ?? ((line: string) => console.log(line));
+  if (!output.json) write(`Tracking "${claimText}" across ${titles.length} pages\n`);
+  const { failed } = await forEachPage(
+    titles,
+    concurrency,
+    (title) => runClaimHistory(title, claimText, false, apiUrl, undefined, auth, revisionLimit),
+    ({ title, result, error }) => {
+      if (!result) {
+        if (output.json) write(JSON.stringify({ page: title, status: "error", error }));
+        else write(`${"error".padEnd(9)} ${title}: ${error}`);
+        return;
+      }
+      if (output.json) {
+        const { claimId } = createClaimIdentity({
+          text: claimText,
+          section: "",
+          pageTitle: title,
+          pageId: result.pageId ?? 0,
+        });
+        write(JSON.stringify({ ...result, claimId }));
+        return;
+      }
+      const first = result.revisions[0];
+      const seen = first ? `first matched rev ${first.revisionId} (${first.timestamp})` : "not matched";
+      write(`${result.status.padEnd(9)} ${title}: ${seen}; latest match ${result.latestMatch ?? "none"}`);
+    },
+  );
+  return { failed };
 }

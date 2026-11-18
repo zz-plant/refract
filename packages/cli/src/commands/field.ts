@@ -1,6 +1,7 @@
 import { sanitizeWikitext, templateTracker } from "@refract-org/analyzers";
 import type { Revision } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
+import { forEachPage } from "./batch.js";
 import { type ClaimRange, fetchRevisionRange } from "./claim.js";
 
 /** One revision at which the field's value differed from the revision before it. */
@@ -204,4 +205,45 @@ export async function runField(
   console.log(`Latest value:  ${result.latestText !== undefined ? `"${result.latestText}"` : "none"}`);
   console.log(`Changes:       ${result.changes.length} (${result.returns} back to an earlier value)`);
   for (const caveat of result.caveats) console.log(`Note: ${caveat}`);
+}
+
+/**
+ * Track one field across every page in `titles`, reporting pages in the order
+ * given. With `json`, each page is one line of NDJSON: its result, or
+ * `{ page, status: "error", error }` when it could not be read. Text output is
+ * one line per page. Resolves with how many pages failed.
+ */
+export async function runFieldBatch(
+  titles: readonly string[],
+  query: FieldQuery,
+  apiUrl?: string,
+  auth?: AuthConfig,
+  revisionLimit?: number,
+  concurrency = 4,
+  output: { json?: boolean; write?: (line: string) => void } = {},
+): Promise<{ failed: number }> {
+  if (!query.param.trim()) throw new Error("Supply a nonempty parameter name.");
+  const write = output.write ?? ((line: string) => console.log(line));
+  if (!output.json) write(`Tracking field "${query.param}" across ${titles.length} pages\n`);
+  const { failed } = await forEachPage(
+    titles,
+    concurrency,
+    (title) => runFieldHistory(title, query, apiUrl, auth, revisionLimit),
+    ({ title, result, error }) => {
+      if (!result) {
+        if (output.json) write(JSON.stringify({ page: title, status: "error", error }));
+        else write(`${"error".padEnd(8)} ${title}: ${error}`);
+        return;
+      }
+      if (output.json) {
+        write(JSON.stringify(result));
+        return;
+      }
+      const latest = result.latestText !== undefined ? `"${result.latestText}"` : "none";
+      write(
+        `${result.status.padEnd(8)} ${title}: ${latest}; ${result.changes.length} changes, ${result.returns} back to an earlier value`,
+      );
+    },
+  );
+  return { failed };
 }

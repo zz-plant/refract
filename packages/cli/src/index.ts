@@ -3,15 +3,16 @@ import type { InferenceBoundary } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
 import { Argument, Command } from "commander";
 import { buildConfig, buildObservationReport, runAnalyze } from "./commands/analyze.js";
-import { runClaim } from "./commands/claim.js";
+import { readPagesFile } from "./commands/batch.js";
+import { runClaim, runClaimBatch } from "./commands/claim.js";
 import { runCron } from "./commands/cron.js";
 import { DelegationInputError, runDelegation, WHEN_RULES } from "./commands/delegation.js";
 import type { DiffResult } from "./commands/diff.js";
 import { runDiff } from "./commands/diff.js";
 import { runEval } from "./commands/eval.js";
 import { runExplore } from "./commands/explore.js";
-import { runExport } from "./commands/export.js";
-import { runField } from "./commands/field.js";
+import { runBatchExport, runExport } from "./commands/export.js";
+import { runField, runFieldBatch } from "./commands/field.js";
 import { runInit } from "./commands/init.js";
 import { runMcpServer } from "./commands/mcp.js";
 import { acknowledgeReview, filterReviewEntries, observeReview, renderReview } from "./commands/review.js";
@@ -302,14 +303,53 @@ reviewCmd.action(async (page, opts) => {
   if (report.pages.some((p) => p.status === "error" || p.status === "incomplete")) process.exitCode = 2;
 });
 
+/**
+ * The titles a batch run reads, or undefined for a single page. Exits on a
+ * page title given with --pages-file, on neither being given, and on --from or
+ * --to with --pages-file: revision IDs belong to one page.
+ */
+function batchTitles(command: string, page: string | undefined, opts: Record<string, unknown>): string[] | undefined {
+  const pagesFile = opts.pagesFile as string | undefined;
+  if (!pagesFile) {
+    if (page) return undefined;
+    console.error(red(`Error: give a page title or --pages-file`));
+    console.error(gray(`  refract ${command} <page> [options]`));
+    process.exit(1);
+  }
+  if (page) {
+    console.error(red("Error: give a page title or --pages-file, not both"));
+    process.exit(1);
+  }
+  if (opts.from !== undefined || opts.to !== undefined) {
+    console.error(red("Error: --from and --to name one page's revisions; they cannot be used with --pages-file"));
+    process.exit(1);
+  }
+  const titles = readPagesFile(pagesFile);
+  if (titles.length === 0) {
+    console.error(red(`Error: no page titles in ${pagesFile}`));
+    process.exit(1);
+  }
+  return titles;
+}
+
+/** Exit 2 when some pages of a batch failed, as `review` does for a page it could not read. */
+function exitOnFailedPages(failed: number): void {
+  if (failed > 0) {
+    console.error(red(`${failed} page(s) failed.`));
+    process.exitCode = 2;
+  }
+}
+
 // ── claim ──
 const claimCmd = program
-  .command("claim <page>")
+  .command("claim [page]")
   .description("track a specific claim across revisions")
   .option("-t, --text <text>", "claim text to track (required)")
   .option("--limit <n>", "max revisions to fetch (default: 50, or the whole range with --from and --to)", parseInt)
   .option("--from <revId>", "start revision ID", parseInt)
   .option("--to <revId>", "end revision ID", parseInt)
+  .option("--pages-file <path>", "track the passage on each page in this file (one title per line)")
+  .option("--batch-concurrency <n>", "max pages read at once with --pages-file (default: 4)", parseInt)
   .option("-j, --json", "print the result as JSON instead of text")
   .option("-c, --cache", "cache revisions in SQLite; needs Bun and a source checkout");
 withGlobal(claimCmd);
@@ -318,6 +358,20 @@ claimCmd.action(async (page, opts) => {
   if (!claimText) {
     console.error(red("Error: --text is required"));
     process.exit(1);
+  }
+  const titles = batchTitles("claim", page, opts);
+  if (titles) {
+    const { failed } = await runClaimBatch(
+      titles,
+      claimText,
+      opts.api as string | undefined,
+      extractAuth(opts),
+      opts.limit as number | undefined,
+      opts.batchConcurrency as number | undefined,
+      { json: !!opts.json },
+    );
+    exitOnFailedPages(failed);
+    return;
   }
   await runClaim(
     page,
@@ -334,13 +388,15 @@ claimCmd.action(async (page, opts) => {
 
 // ── field ──
 const fieldCmd = program
-  .command("field <page>")
+  .command("field [page]")
   .description("track a template parameter, such as an infobox field, across revisions")
   .option("-p, --param <name>", "parameter to track (required), e.g. result")
   .option("--template <name>", "read the parameter only from this template, e.g. 'Infobox military conflict'")
   .option("--limit <n>", "max revisions to fetch (default: 50, or the whole range with --from and --to)", parseInt)
   .option("--from <revId>", "start revision ID", parseInt)
   .option("--to <revId>", "end revision ID", parseInt)
+  .option("--pages-file <path>", "track the field on each page in this file (one title per line)")
+  .option("--batch-concurrency <n>", "max pages read at once with --pages-file (default: 4)", parseInt)
   .option("-j, --json", "print the result as JSON instead of text");
 withGlobal(fieldCmd, false);
 fieldCmd.action(async (page, opts) => {
@@ -349,9 +405,24 @@ fieldCmd.action(async (page, opts) => {
     console.error(red("Error: --param is required"));
     process.exit(1);
   }
+  const query = { param, template: opts.template as string | undefined };
+  const titles = batchTitles("field", page, opts);
+  if (titles) {
+    const { failed } = await runFieldBatch(
+      titles,
+      query,
+      opts.api as string | undefined,
+      extractAuth(opts),
+      opts.limit as number | undefined,
+      opts.batchConcurrency as number | undefined,
+      { json: !!opts.json },
+    );
+    exitOnFailedPages(failed);
+    return;
+  }
   await runField(
     page,
-    { param, template: opts.template as string | undefined },
+    query,
     opts.api as string | undefined,
     extractAuth(opts),
     opts.limit as number | undefined,
@@ -382,7 +453,7 @@ snapshotCmd.action(async (page, opts) => {
 
 // ── export ──
 const exportCmd = program
-  .command("export <page>")
+  .command("export [page]")
   .description("export analysis as structured data")
   .option("-f, --format <format>", "output format: json, csv, ndjson, html, parquet", "json")
   .option("--bundle", "export as evidence bundle with a SHA-256 hash of its contents")
@@ -391,11 +462,31 @@ const exportCmd = program
   .option("--from <revId>", "start revision ID", parseInt)
   .option("--to <revId>", "end revision ID", parseInt)
   .option("--since <timestamp>", "re-observe from ISO timestamp")
-  .option("--flatten", "flatten nested fields into flat columns (for csv format)");
+  .option("--flatten", "flatten nested fields into flat columns (for csv format)")
+  .option("--pages-file <path>", "export each page in this file (one title per line) as NDJSON with pageTitle added")
+  .option("--batch-concurrency <n>", "max pages analyzed at once with --pages-file (default: 4)", parseInt);
 withGlobal(exportCmd);
 withAnalyzerConfig(exportCmd);
 exportCmd.action(async (page, opts) => {
   const config = buildConfig(opts);
+  const titles = batchTitles("export", page, opts);
+  if (titles) {
+    if (opts.format !== "ndjson" || opts.bundle || opts.manifest || opts.proof) {
+      console.error(
+        red("Error: --pages-file writes NDJSON; pass --format ndjson, without --bundle, --manifest or --proof"),
+      );
+      process.exit(1);
+    }
+    const { failed } = await runBatchExport(titles, {
+      apiUrl: opts.api as string | undefined,
+      auth: extractAuth(opts),
+      config,
+      since: opts.since as string | undefined,
+      concurrency: opts.batchConcurrency as number | undefined,
+    });
+    exitOnFailedPages(failed);
+    return;
+  }
   await runExport(
     page,
     opts.format as string,

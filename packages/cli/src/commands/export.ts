@@ -10,6 +10,7 @@ import type { AuthConfig } from "@refract-org/ingestion";
 import { renderHtmlReport } from "../html-renderer.js";
 import { REFRACT_VERSION } from "../version.js";
 import { runAnalyze } from "./analyze.js";
+import { forEachPage } from "./batch.js";
 
 interface EvidenceBundle {
   format: "refract-evidence-bundle/v1";
@@ -19,6 +20,73 @@ interface EvidenceBundle {
   inputRevisions: Revision[];
   outputEvents: EvidenceEvent[];
   bundleHash: string;
+}
+
+export interface BatchExportOptions {
+  apiUrl?: string;
+  auth?: AuthConfig;
+  config?: AnalyzerConfig;
+  since?: string;
+  concurrency?: number;
+  /** Where each NDJSON line goes; stdout by default. */
+  write?: (line: string) => void;
+}
+
+/**
+ * Analyze each page in `titles` and write its events as NDJSON, one event per
+ * line with `pageTitle` and `pageId` added, in the order the titles were
+ * given. Each event's `eventId` is the one a single-page export gives it.
+ * A page that fails is reported on stderr and skipped; resolves with how many
+ * failed.
+ */
+export async function runBatchExport(
+  titles: readonly string[],
+  options: BatchExportOptions = {},
+): Promise<{ failed: number; events: number }> {
+  const write = options.write ?? ((line: string) => console.log(line));
+  let total = 0;
+  const { failed } = await forEachPage(
+    titles,
+    options.concurrency ?? 4,
+    (title) =>
+      runAnalyze(
+        title,
+        "detailed",
+        undefined,
+        undefined,
+        options.since,
+        false,
+        options.apiUrl,
+        undefined,
+        undefined,
+        options.auth,
+        options.config,
+      ),
+    (outcome, index) => {
+      const position = `[${index + 1}/${titles.length}]`;
+      if (outcome.error !== undefined || !outcome.result) {
+        console.error(`${position} ${outcome.title}: failed: ${outcome.error}`);
+        return;
+      }
+      const { events, revisions } = outcome.result;
+      const pageTitle = revisions[0]?.pageTitle ?? outcome.title;
+      const pageId = revisions[0]?.pageId;
+      for (const event of events) {
+        write(
+          JSON.stringify({
+            pageTitle,
+            ...(pageId !== undefined ? { pageId } : {}),
+            ...event,
+            eventId: event.eventId ?? createEventIdentity(event),
+          }),
+        );
+      }
+      total += events.length;
+      console.error(`${position} ${outcome.title}: ${events.length} events from ${revisions.length} revisions`);
+    },
+  );
+  console.error(`Exported ${total} events from ${titles.length - failed} of ${titles.length} pages.`);
+  return { failed, events: total };
 }
 
 export async function runExport(

@@ -78,15 +78,18 @@ Track a specific claim across revisions.
 
 ```bash
 refract claim <page> [options]
+refract claim --pages-file <path> --text <text> [options]
 ```
 
 | Flag | Default | Description |
 |---|---|---|
-| `page` | required (positional) | Page title |
+| `page` | required unless `--pages-file` | Page title |
 | `-t, --text <text>` | required | Claim text to track |
 | `--limit <n>` | `50` | Revisions read: the latest N. With both `--from` and `--to`, the whole range unless set |
 | `--from <revId>` | — | Start revision ID; reads forward from it |
 | `--to <revId>` | — | End revision ID; without `--from`, reads backward from it |
+| `--pages-file <path>` | — | Track the passage on each page in this file, one title per line; `#` starts a comment. Not with `--from` or `--to` |
+| `--batch-concurrency <n>` | `4` | Pages read at once with `--pages-file` |
 | `-j, --json` | off | Print the result as one JSON document instead of text |
 | `-c, --cache` | off | Cache revisions in SQLite |
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
@@ -101,23 +104,33 @@ ID the text output prints.
 refract claim "Pluto" --text "ninth and smallest" --from 71593043 --to 71601937 --json | jq '.status, .revisions[0].revisionId'
 ```
 
+With `--pages-file`, pages are reported in the file's order. `--json` prints one
+line per page: the same object, or `{"page", "status": "error", "error"}` for a
+page that could not be read; text output is one line per page. The command exits
+2 when any page failed. Searching a set of pages finds a passage that moved
+between them, as when one article is merged into another.
+
+
 ## `refract field`
 
 Track a template parameter, such as an infobox field, across revisions.
 
 ```bash
 refract field <page> --param <name> [options]
+refract field --pages-file <path> --param <name> [options]
 ```
 
 | Flag | Default | Description |
 |---|---|---|
-| `page` | required (positional) | Page title |
+| `page` | required unless `--pages-file` | Page title |
 | `-p, --param <name>` | required | Parameter to track, e.g. `result` |
 | `--template <name>` | any | Read the parameter only from this template, e.g. `Infobox military conflict`. Without it, the first top-level template in page order that has the parameter is read, and a note names any others. |
 | `--limit <n>` | `50` | Revisions read: the latest N. With both `--from` and `--to`, the whole range unless set |
 | `--from <revId>` | — | Start revision ID; reads forward from it |
 | `--to <revId>` | — | End revision ID; without `--from`, reads backward from it |
-| `-j, --json` | off | Print the result as one JSON document instead of text |
+| `--pages-file <path>` | — | Track the field on each page in this file, one title per line. Not with `--from` or `--to` |
+| `--batch-concurrency <n>` | `4` | Pages read at once with `--pages-file` |
+| `-j, --json` | off | Print the result as one JSON document instead of text; with `--pages-file`, one line per page as `claim` does |
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
 
 Each entry in `changes` is a revision whose value differed from the one before
@@ -259,7 +272,7 @@ refract export <page> [options]
 
 | Flag | Default | Description |
 |---|---|---|
-| `page` | required (positional) | Page title |
+| `page` | required unless `--pages-file` | Page title |
 | `-f, --format <fmt>` | `json` | Output format: `json`, `csv`, `ndjson`, `html`, `parquet` |
 | `--bundle` | off | Export as evidence bundle with a SHA-256 hash of its contents (not signed). See [bundle format](bundle-manifest.md). |
 | `--manifest` | off | Export as replay manifest with all hashes. See [manifest format](bundle-manifest.md). |
@@ -268,6 +281,8 @@ refract export <page> [options]
 | `--to <revId>` | — | End revision ID |
 | `--since <ts>` | — | Analyze revisions from this ISO timestamp |
 | `--flatten` | off | Flatten nested fields into columns (`csv`) |
+| `--pages-file <path>` | — | Export each page in this file, one title per line, as NDJSON. Needs `--format ndjson`; not with `--from`, `--to`, `--bundle`, `--manifest` or `--proof` |
+| `--batch-concurrency <n>` | `4` | Pages analyzed at once with `--pages-file` |
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
 
 Also accepts the [analyzer options](#analyzer-options).
@@ -275,6 +290,16 @@ Also accepts the [analyzer options](#analyzer-options).
 `export` analyzes at `detailed` depth: the page's full history, or the range that `--from`, `--to` or `--since` selects. With no events it
 writes nothing to stdout (the notice goes to stderr), so an empty NDJSON file stays
 empty.
+
+With `--pages-file`, each line is one event with `pageTitle` and `pageId` added,
+pages in the file's order, and each event keeps the `eventId` a single-page
+export gives it. Progress and a total go to stderr. A page that cannot be read
+is reported on stderr and skipped, and the command exits 2.
+
+```bash
+refract export --pages-file pages.txt --format ndjson --since 2026-06-01 > events.ndjson
+```
+
 
 ## `refract verify`
 

@@ -25,7 +25,7 @@ refract init
 | `claim <page> --text "<text>"` | Track a specific claim across revisions |
 | `field <page> --param <name>` | Track a template parameter, such as an infobox field, across revisions |
 | `snapshot <page> --at <date>` | Show page state at or before a date |
-| `export <page> --format <format>` | Export analysis as json, csv, ndjson, parquet, or html |
+| `export <page> --format <format>` | Export analysis as json, csv, ndjson, parquet, or html; `--pages-file` exports many pages as NDJSON |
 | `verify <bundle>` | Check a verification bundle's events, manifest hash, Merkle root, and proofs |
 | `delegation <page>` | Write STD-07 discrepancy records for another system to read |
 | `visualize <page>` | Print the evidence graph as a Mermaid or DOT diagram |
