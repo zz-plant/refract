@@ -50,7 +50,7 @@
     },
     {
       "name": "get_statement_history",
-      "description": "Track the history of a specific statement across revisions. Returns when the statement (or a semantic neighbor) appeared, disappeared, or changed, with revision IDs, timestamps, an overall status, and a short change summary.",
+      "description": "Track a statement across a page's revisions. A revision matches when its text contains the statement after lowercasing and collapsing whitespace, or else, partially, when one sentence holds at least 70% of the statement's words longer than three characters (at least three such words); a partial match does not establish the same meaning. Returns when the statement appeared, disappeared, or changed, with revision IDs, timestamps, an overall status, and a short change summary.",
       "input": {
         "statement": "string (raw text statement to track)",
         "page": "string (MediaWiki page title)",

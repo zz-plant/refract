@@ -667,27 +667,6 @@ export async function runMcpServer(): Promise<void> {
       }
     },
 
-    getStatementHistory: async (statement) => {
-      // page is not needed for getStatementHistory in the callback version
-      // since we only track the statement, not a full page history
-      // But runClaimHistory needs a page... let's use a dummy
-      const history = await runClaimHistory("", statement, false, undefined, undefined, undefined);
-
-      const trimmedRevisions = history.revisions.map((r: any) => ({
-        revisionId: r.revisionId,
-        timestamp: r.timestamp,
-      }));
-
-      const response = {
-        statement: history.statement,
-        page: history.page,
-        revisions: trimmedRevisions,
-        status: history.status,
-        history_summary: history.historySummary,
-      };
-      return response;
-    },
-
     snapshot: snapshotTool,
     review: reviewTool,
   };

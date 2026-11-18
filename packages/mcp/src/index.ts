@@ -111,7 +111,7 @@ export const TOOLS = [
   {
     name: "get_statement_history",
     description:
-      "Track the history of a specific statement across revisions. Returns when the statement (or a semantic neighbor) appeared, disappeared, or changed, with revision IDs, timestamps, an overall status, and a short change summary.",
+      "Track a statement across a page's revisions. A revision matches when its text contains the statement after lowercasing and collapsing whitespace, or else, partially, when one sentence holds at least 70% of the statement's words longer than three characters (at least three such words); a partial match does not establish the same meaning. Returns when the statement appeared, disappeared, or changed, with revision IDs, timestamps, an overall status, and a short change summary.",
     inputSchema: {
       type: "object",
       properties: {
@@ -257,7 +257,8 @@ export interface McpServerOptions {
   exportData: (page: string, options?: { depth?: string; api?: string; since?: string }) => Promise<unknown>;
   cron: (pagesFile: string) => Promise<unknown>;
   classify?: (boundary: string, input: unknown) => Promise<unknown>;
-  getStatementHistory?: (statement: string) => Promise<unknown>;
+  /** Receives the statement, the page it is tracked on, and the tool's `api`, which is undefined for the default wiki. */
+  getStatementHistory?: (statement: string, page: string, options?: { api?: string }) => Promise<unknown>;
   /** Receives the `snapshot` tool's arguments; the result is returned as JSON. */
   snapshot?: (args: Record<string, unknown>) => Promise<unknown>;
   /** Receives the `review` tool's arguments; the result is returned as JSON. */
@@ -421,7 +422,10 @@ export async function handleToolCall(
       const depth = (params.depth as string) ?? "detailed";
       const context = params.context as string | undefined;
 
-      const history = await options.getStatementHistory!(statement);
+      if (!options.getStatementHistory) {
+        return { content: [{ type: "text", text: "Error: no get_statement_history handler configured" }] };
+      }
+      const history = await options.getStatementHistory(statement, page, { api: apiUrl });
 
       const trimmedRevisions =
         depth === "brief"
