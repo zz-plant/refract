@@ -42,8 +42,38 @@ refract analyze [page] [options]
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
 | `--cache-dir <path>` | `~/.wikihistory` | Cache directory path |
 | `-r, --report` | off | Output `ObservationReport` instead of raw events |
+| `--dump <path>` | — | Read revisions from a MediaWiki XML export file instead of the API. See [other revision sources](#other-revision-sources) |
+| `--wayback` | off | Read the page's Internet Archive snapshots instead of the API. See [other revision sources](#other-revision-sources) |
 
 Also accepts the [analyzer options](#analyzer-options).
+
+### Other revision sources
+
+`analyze`, `export`, `claim` and `field` read a page's revisions from the
+wiki's API unless told otherwise.
+
+- `--dump <path>` reads a MediaWiki XML export: a file saved from
+  `Special:Export` with full history, or an uncompressed database dump. The
+  title is matched with underscores as spaces. Revision IDs, parent links,
+  editors and edit summaries are the wiki's, and a revision whose text was
+  deleted is skipped rather than read as a blank page. Nothing is fetched: the
+  page's moves, protection log and talk page are not read, so their events do
+  not appear. A dated file gives the same output on every run, however the
+  live wiki has changed since; with `--pages-file`, the file is read once for
+  every page in it. The file is read into memory whole.
+- `--wayback` reads the Internet Archive's snapshots of the page: the page
+  argument as a URL, or the article's URL on the `--api` wiki. A snapshot's
+  ID is its 14-digit timestamp (`20240101120000`), so `--from` and `--to` take
+  those. Snapshots are rendered pages reduced to text, not wikitext: sentence
+  events and `claim` work, while citation, template and `field` results do
+  not. A page deleted from the wiki can still be read this way. A failed
+  request to the archive is an error, not an empty history.
+
+```bash
+refract export "Example" --dump Example-history.xml --format ndjson
+refract claim "Example" --wayback --text "the disputed sentence" --limit 20
+```
+
 
 ## `refract review`
 
@@ -90,6 +120,8 @@ refract claim --pages-file <path> --text <text> [options]
 | `--to <revId>` | — | End revision ID; without `--from`, reads backward from it |
 | `--pages-file <path>` | — | Track the passage on each page in this file, one title per line; `#` starts a comment. Not with `--from` or `--to` |
 | `--batch-concurrency <n>` | `4` | Pages read at once with `--pages-file` |
+| `--dump <path>` | — | Read revisions from a MediaWiki XML export file instead of the API. See [other revision sources](#other-revision-sources) |
+| `--wayback` | off | Read the page's Internet Archive snapshots instead of the API. See [other revision sources](#other-revision-sources) |
 | `-j, --json` | off | Print the result as one JSON document instead of text |
 | `-c, --cache` | off | Cache revisions in SQLite |
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
@@ -130,6 +162,8 @@ refract field --pages-file <path> --param <name> [options]
 | `--to <revId>` | — | End revision ID; without `--from`, reads backward from it |
 | `--pages-file <path>` | — | Track the field on each page in this file, one title per line. Not with `--from` or `--to` |
 | `--batch-concurrency <n>` | `4` | Pages read at once with `--pages-file` |
+| `--dump <path>` | — | Read revisions from a MediaWiki XML export file instead of the API. See [other revision sources](#other-revision-sources) |
+| `--wayback` | off | Read the page's Internet Archive snapshots instead of the API. See [other revision sources](#other-revision-sources) |
 | `-j, --json` | off | Print the result as one JSON document instead of text; with `--pages-file`, one line per page as `claim` does |
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
 
@@ -324,6 +358,8 @@ refract export <page> [options]
 | `--flatten` | off | Flatten nested fields into columns (`csv`) |
 | `--pages-file <path>` | — | Export each page in this file, one title per line, as NDJSON. Needs `--format ndjson`; not with `--from`, `--to`, `--bundle`, `--manifest` or `--proof` |
 | `--batch-concurrency <n>` | `4` | Pages analyzed at once with `--pages-file` |
+| `--dump <path>` | — | Read revisions from a MediaWiki XML export file instead of the API. See [other revision sources](#other-revision-sources) |
+| `--wayback` | off | Read the page's Internet Archive snapshots instead of the API. See [other revision sources](#other-revision-sources) |
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
 
 Also accepts the [analyzer options](#analyzer-options).

@@ -3,6 +3,7 @@ import type { Revision } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
 import { forEachPage } from "./batch.js";
 import { type ClaimRange, fetchRevisionRange } from "./claim.js";
+import type { RevisionSourceSpec } from "./revision-source.js";
 
 /** One revision at which the field's value differed from the revision before it. */
 export interface FieldChange {
@@ -221,6 +222,7 @@ export async function runFieldBatch(
   revisionLimit?: number,
   concurrency = 4,
   output: { json?: boolean; write?: (line: string) => void } = {},
+  source?: RevisionSourceSpec,
 ): Promise<{ failed: number }> {
   if (!query.param.trim()) throw new Error("Supply a nonempty parameter name.");
   const write = output.write ?? ((line: string) => console.log(line));
@@ -228,7 +230,7 @@ export async function runFieldBatch(
   const { failed } = await forEachPage(
     titles,
     concurrency,
-    (title) => runFieldHistory(title, query, apiUrl, auth, revisionLimit),
+    (title) => runFieldHistory(title, query, apiUrl, auth, revisionLimit, { source }),
     ({ title, result, error }) => {
       if (!result) {
         if (output.json) write(JSON.stringify({ page: title, status: "error", error }));

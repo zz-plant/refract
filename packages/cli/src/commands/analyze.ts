@@ -24,11 +24,11 @@ import {
   DEFAULT_ANALYZER_CONFIG,
 } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
-
 import type { HistoryCoverage } from "../coverage.js";
 import { contiguousRevisionGroups } from "../coverage.js";
 import { REFRACT_VERSION } from "../version.js";
 import { correlateTalkPages, fetchRevisionsWithCache, finalizeEvents } from "./analyze-helpers.js";
+import type { RevisionSourceSpec } from "./revision-source.js";
 
 interface BatchPageResult {
   pageTitle: string;
@@ -179,10 +179,22 @@ export async function runAnalyze(
   cacheDir?: string,
   auth?: AuthConfig,
   config?: AnalyzerConfig,
-  { recordObservation = true }: { recordObservation?: boolean } = {},
+  { recordObservation = true, source }: { recordObservation?: boolean; source?: RevisionSourceSpec } = {},
 ): Promise<{ events: EvidenceEvent[]; revisions: Revision[]; coverage?: HistoryCoverage }> {
   if (pagesFile) {
-    return runBatch(pagesFile, depth, fromRevId, toRevId, fromTimestamp, useCache, apiUrl, cacheDir, auth, config);
+    return runBatch(
+      pagesFile,
+      depth,
+      fromRevId,
+      toRevId,
+      fromTimestamp,
+      useCache,
+      apiUrl,
+      cacheDir,
+      auth,
+      config,
+      source,
+    );
   }
 
   const {
@@ -200,24 +212,29 @@ export async function runAnalyze(
     cacheDir,
     auth,
     config?.briefRevisionLimit,
+    source,
   );
   if (sortedRevs.length < 2) return { events: [], revisions: sortedRevs, coverage };
 
   const events: EvidenceEvent[] = [];
 
-  const [pageMoves, protectionLogs, talkRevs] = await Promise.all([
-    client.fetchPageMoves(pageTitle),
-    client.fetchProtectionLogs(pageTitle),
-    // The talk edits leading up to the last analyzed revision. "newer" with a
-    // limit read the talk page's first ten edits, years before most windows.
-    client
-      .fetchTalkRevisions(pageTitle, {
-        direction: "older",
-        start: new Date(sortedRevs[sortedRevs.length - 1].timestamp),
-        limit: 10,
-      })
-      .then((revs) => [...revs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())),
-  ]);
+  // A dump or an archive holds the page's text and nothing else: its moves,
+  // protection log and talk page are not read, so no network is needed.
+  const [pageMoves, protectionLogs, talkRevs] = source
+    ? [[], [], []]
+    : await Promise.all([
+        client.fetchPageMoves(pageTitle),
+        client.fetchProtectionLogs(pageTitle),
+        // The talk edits leading up to the last analyzed revision. "newer" with a
+        // limit read the talk page's first ten edits, years before most windows.
+        client
+          .fetchTalkRevisions(pageTitle, {
+            direction: "older",
+            start: new Date(sortedRevs[sortedRevs.length - 1].timestamp),
+            limit: 10,
+          })
+          .then((revs) => [...revs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())),
+      ]);
   // Bound moves to the analyzed span: the move log covers the page's whole
   // lifetime, and a --since window must not open with moves from 2005.
   events.push(
@@ -292,6 +309,7 @@ async function runBatch(
   cacheDir?: string,
   auth?: AuthConfig,
   config?: AnalyzerConfig,
+  source?: RevisionSourceSpec,
 ): Promise<{ events: EvidenceEvent[]; revisions: Revision[] }> {
   const content = readFileSync(pagesFile, "utf-8");
   const titles: string[] = content
@@ -323,6 +341,7 @@ async function runBatch(
           cacheDir,
           auth,
           config,
+          { source },
         );
         return { pageTitle: title, pageId: 0, eventCount: events.length, events };
       }),

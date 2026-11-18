@@ -11,6 +11,7 @@ import { renderHtmlReport } from "../html-renderer.js";
 import { REFRACT_VERSION } from "../version.js";
 import { runAnalyze } from "./analyze.js";
 import { forEachPage } from "./batch.js";
+import type { RevisionSourceSpec } from "./revision-source.js";
 
 interface EvidenceBundle {
   format: "refract-evidence-bundle/v1";
@@ -28,6 +29,8 @@ export interface BatchExportOptions {
   config?: AnalyzerConfig;
   since?: string;
   concurrency?: number;
+  /** Read revisions from a dump or the Wayback Machine instead of the API. */
+  source?: RevisionSourceSpec;
   /** Where each NDJSON line goes; stdout by default. */
   write?: (line: string) => void;
 }
@@ -61,6 +64,7 @@ export async function runBatchExport(
         undefined,
         options.auth,
         options.config,
+        { source: options.source },
       ),
     (outcome, index) => {
       const position = `[${index + 1}/${titles.length}]`;
@@ -102,6 +106,7 @@ export async function runExport(
   fromRev?: number,
   toRev?: number,
   since?: string,
+  source?: RevisionSourceSpec,
 ): Promise<void> {
   if (proof) {
     const { events, revisions } = await runAnalyze(
@@ -116,6 +121,7 @@ export async function runExport(
       undefined,
       auth,
       config,
+      { source },
     );
     const proofBundle = createVerificationBundle({
       pageTitle,
@@ -140,6 +146,7 @@ export async function runExport(
       undefined,
       auth,
       config,
+      { source },
     );
     const bundleData = buildBundle(pageTitle, events, revisions);
     console.log(JSON.stringify(bundleData, null, 2));
@@ -159,6 +166,7 @@ export async function runExport(
       undefined,
       auth,
       config,
+      { source },
     );
     const manifestData = createReplayManifest({
       pageTitle,
@@ -182,6 +190,7 @@ export async function runExport(
     undefined,
     auth,
     config,
+    { source },
   );
 
   if (format === "html") {

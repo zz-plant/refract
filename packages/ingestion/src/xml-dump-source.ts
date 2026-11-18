@@ -9,7 +9,13 @@ function decodeXmlEntities(text: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&#(\d+);/g, (_m, n) => String.fromCodePoint(parseInt(n, 10)));
+    .replace(/&#(\d+);/g, (_m, n) => String.fromCodePoint(parseInt(n, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_m, n) => String.fromCodePoint(parseInt(n, 16)));
+}
+
+/** Titles compare with underscores as spaces, as MediaWiki stores them. */
+function sameTitle(a: string, b: string): boolean {
+  return a.replace(/_/g, " ").trim() === b.replace(/_/g, " ").trim();
 }
 
 function extractPageXml(text: string, title: string): string | null {
@@ -18,7 +24,7 @@ function extractPageXml(text: string, title: string): string | null {
   // biome-ignore lint/suspicious/noAssignInExpressions: Standard regex loop pattern
   while ((match = pattern.exec(text)) !== null) {
     const titleMatch = match[1].match(/<title>(.*?)<\/title>/);
-    if (titleMatch && decodeXmlEntities(titleMatch[1]) === title) {
+    if (titleMatch && sameTitle(decodeXmlEntities(titleMatch[1]), title)) {
       return match[1];
     }
   }
@@ -39,11 +45,20 @@ function extractRevisions(pageXml: string, pageTitle: string, pageId: number, op
 
     const revId = parseInt(idMatch[1], 10);
 
-    const commentRaw = xml.match(/<comment>(.*?)<\/comment>/);
+    const parentMatch = xml.match(/<parentid>(\d+)<\/parentid>/);
+    const commentRaw = xml.match(/<comment>([\s\S]*?)<\/comment>/);
     const comment = commentRaw ? decodeXmlEntities(commentRaw[1]) : "";
+    const userMatch = xml.match(
+      /<contributor>[\s\S]*?<(?:username|ip)>([\s\S]*?)<\/(?:username|ip)>[\s\S]*?<\/contributor>/,
+    );
 
-    const textMatch = xml.match(/<text[^>]*>([\s\S]*?)<\/text>/);
+    // A revision whose text was deleted is exported as <text … deleted="deleted" />.
+    // Read as empty text, it looked like the page being blanked.
+    const textTag = xml.match(/<text\b([^>]*?)(\/?)>/);
+    const textHidden = textTag ? /\bdeleted\s*=/.test(textTag[1]) : false;
+    const textMatch = textTag && textTag[2] !== "/" ? xml.match(/<text[^>]*>([\s\S]*?)<\/text>/) : null;
     const content = textMatch ? decodeXmlEntities(textMatch[1]) : "";
+    const bytes = textTag?.[1].match(/\bbytes\s*=\s*"(\d+)"/);
 
     const ts = timestampMatch[1];
     if (options?.start && new Date(ts) < options.start) continue;
@@ -51,13 +66,16 @@ function extractRevisions(pageXml: string, pageTitle: string, pageId: number, op
 
     revs.push({
       revId,
+      ...(parentMatch ? { parentId: parseInt(parentMatch[1], 10) } : {}),
+      ...(textHidden || !textTag ? { contentAvailable: false } : {}),
       pageId,
       pageTitle,
       timestamp: ts,
+      ...(userMatch ? { user: decodeXmlEntities(userMatch[1]) } : {}),
       comment,
       content,
-      size: content.length,
-      minor: false,
+      size: bytes ? parseInt(bytes[1], 10) : Buffer.byteLength(content, "utf8"),
+      minor: /<minor\s*\/>/.test(xml),
     });
 
     if (options?.limit && revs.length >= options.limit) break;
@@ -66,15 +84,22 @@ function extractRevisions(pageXml: string, pageTitle: string, pageId: number, op
   return revs;
 }
 
+/**
+ * Revisions from a MediaWiki XML export: a Special:Export file or an
+ * uncompressed dump. The whole file is read into memory once, on first use,
+ * and kept for later pages, so one instance can serve every page in it.
+ */
 export class XmlDumpRevisionSource implements RevisionSource {
   private filePath: string;
+  private text: string | undefined;
 
   constructor(filePath: string) {
     this.filePath = filePath;
   }
 
   async *revisions(pageTitle: string, options?: RevisionOptions): AsyncIterable<Revision> {
-    const text = readFileSync(this.filePath, "utf-8");
+    this.text ??= readFileSync(this.filePath, "utf-8");
+    const text = this.text;
     const pageXml = extractPageXml(text, pageTitle);
     if (!pageXml) return;
 

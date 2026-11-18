@@ -17,6 +17,7 @@ import { runInit } from "./commands/init.js";
 import { runLinkSearch } from "./commands/linksearch.js";
 import { runMcpServer } from "./commands/mcp.js";
 import { acknowledgeReview, filterReviewEntries, observeReview, renderReview } from "./commands/review.js";
+import { type RevisionSourceSpec, revisionSourceFromOptions } from "./commands/revision-source.js";
 import { runSnapshot } from "./commands/snapshot.js";
 import { runStream } from "./commands/stream.js";
 import { runVerify } from "./commands/verify.js";
@@ -133,9 +134,11 @@ const analyzeCmd = program
   .option("-j, --json", "force JSON output to stdout (disable interactive web UI)");
 withGlobal(analyzeCmd);
 withAnalyzerConfig(analyzeCmd);
+withRevisionSource(analyzeCmd);
 analyzeCmd.action(async (page, opts) => {
   const pagesFile = opts.pagesFile as string | undefined;
   const auth = extractAuth(opts);
+  const source = sourceOrExit(opts);
 
   const config = buildConfig(opts);
 
@@ -152,6 +155,7 @@ analyzeCmd.action(async (page, opts) => {
       opts.cacheDir as string | undefined,
       auth,
       config,
+      { source },
     );
     console.log(`\n${success(`Batch complete. ${result.events.length} events total.`)}`);
     return;
@@ -175,6 +179,7 @@ analyzeCmd.action(async (page, opts) => {
     opts.cacheDir as string | undefined,
     auth,
     config,
+    { source },
   );
 
   const { events, revisions, coverage } = analysis;
@@ -304,6 +309,22 @@ reviewCmd.action(async (page, opts) => {
   if (report.pages.some((p) => p.status === "error" || p.status === "incomplete")) process.exitCode = 2;
 });
 
+function withRevisionSource(cmd: Command): Command {
+  return cmd
+    .option("--dump <path>", "read revisions from a MediaWiki XML export file instead of the API")
+    .option("--wayback", "read the page's Internet Archive snapshots instead of the API (page title or URL)");
+}
+
+/** The source --dump or --wayback names, exiting when both are given. */
+function sourceOrExit(opts: Record<string, unknown>): RevisionSourceSpec | undefined {
+  try {
+    return revisionSourceFromOptions(opts);
+  } catch (error) {
+    console.error(red(`Error: ${error instanceof Error ? error.message : String(error)}`));
+    process.exit(1);
+  }
+}
+
 /**
  * The titles a batch run reads, or undefined for a single page. Exits on a
  * page title given with --pages-file, on neither being given, and on --from or
@@ -354,12 +375,14 @@ const claimCmd = program
   .option("-j, --json", "print the result as JSON instead of text")
   .option("-c, --cache", "cache revisions in SQLite; needs Bun and a source checkout");
 withGlobal(claimCmd);
+withRevisionSource(claimCmd);
 claimCmd.action(async (page, opts) => {
   const claimText = opts.text as string | undefined;
   if (!claimText) {
     console.error(red("Error: --text is required"));
     process.exit(1);
   }
+  const source = sourceOrExit(opts);
   const titles = batchTitles("claim", page, opts);
   if (titles) {
     const { failed } = await runClaimBatch(
@@ -370,6 +393,7 @@ claimCmd.action(async (page, opts) => {
       opts.limit as number | undefined,
       opts.batchConcurrency as number | undefined,
       { json: !!opts.json },
+      source,
     );
     exitOnFailedPages(failed);
     return;
@@ -382,7 +406,7 @@ claimCmd.action(async (page, opts) => {
     opts.cacheDir as string | undefined,
     extractAuth(opts),
     opts.limit as number | undefined,
-    { from: opts.from as number | undefined, to: opts.to as number | undefined },
+    { from: opts.from as number | undefined, to: opts.to as number | undefined, source },
     { json: !!opts.json },
   );
 });
@@ -400,12 +424,14 @@ const fieldCmd = program
   .option("--batch-concurrency <n>", "max pages read at once with --pages-file (default: 4)", parseInt)
   .option("-j, --json", "print the result as JSON instead of text");
 withGlobal(fieldCmd, false);
+withRevisionSource(fieldCmd);
 fieldCmd.action(async (page, opts) => {
   const param = opts.param as string | undefined;
   if (!param?.trim()) {
     console.error(red("Error: --param is required"));
     process.exit(1);
   }
+  const source = sourceOrExit(opts);
   const query = { param, template: opts.template as string | undefined };
   const titles = batchTitles("field", page, opts);
   if (titles) {
@@ -417,6 +443,7 @@ fieldCmd.action(async (page, opts) => {
       opts.limit as number | undefined,
       opts.batchConcurrency as number | undefined,
       { json: !!opts.json },
+      source,
     );
     exitOnFailedPages(failed);
     return;
@@ -427,7 +454,7 @@ fieldCmd.action(async (page, opts) => {
     opts.api as string | undefined,
     extractAuth(opts),
     opts.limit as number | undefined,
-    { from: opts.from as number | undefined, to: opts.to as number | undefined },
+    { from: opts.from as number | undefined, to: opts.to as number | undefined, source },
     { json: !!opts.json },
   );
 });
@@ -491,8 +518,10 @@ const exportCmd = program
   .option("--batch-concurrency <n>", "max pages analyzed at once with --pages-file (default: 4)", parseInt);
 withGlobal(exportCmd);
 withAnalyzerConfig(exportCmd);
+withRevisionSource(exportCmd);
 exportCmd.action(async (page, opts) => {
   const config = buildConfig(opts);
+  const source = sourceOrExit(opts);
   const titles = batchTitles("export", page, opts);
   if (titles) {
     if (opts.format !== "ndjson" || opts.bundle || opts.manifest || opts.proof) {
@@ -507,6 +536,7 @@ exportCmd.action(async (page, opts) => {
       config,
       since: opts.since as string | undefined,
       concurrency: opts.batchConcurrency as number | undefined,
+      source,
     });
     exitOnFailedPages(failed);
     return;
@@ -524,6 +554,7 @@ exportCmd.action(async (page, opts) => {
     opts.from as number | undefined,
     opts.to as number | undefined,
     opts.since as string | undefined,
+    source,
   );
 });
 

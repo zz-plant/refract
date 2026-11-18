@@ -83,12 +83,22 @@ export class WaybackRevisionSource implements RevisionSource {
     cdxUrl.searchParams.set("filter", "statuscode:200");
     cdxUrl.searchParams.set("fl", "timestamp,original,digest");
 
+    // A failed index request is an error, not an empty history: returning
+    // nothing made an unreachable archive read as a page never archived.
     let rows: string[][];
+    let res: Response;
     try {
-      const res = await this.fetchFn(cdxUrl.toString());
-      if (!res.ok) return;
+      res = await this.fetchFn(cdxUrl.toString());
+    } catch (error) {
+      throw new Error(
+        `Wayback Machine index request failed for ${targetUrl}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    if (!res.ok) throw new Error(`Wayback Machine index returned HTTP ${res.status} for ${targetUrl}`);
+    try {
       rows = (await res.json()) as string[][];
     } catch {
+      // The index answers an empty body, not "[]", for a URL it has never captured.
       return;
     }
 
@@ -111,8 +121,10 @@ export class WaybackRevisionSource implements RevisionSource {
     });
 
     let count = 0;
-    let revId = 1;
     let lastDigest = "";
+    // "older" reads the latest snapshots first, so a limit keeps the latest N
+    // without fetching every snapshot before them.
+    if (options?.direction === "older") filteredSnapshots.reverse();
 
     for (const snap of filteredSnapshots) {
       // Skip identical consecutive snapshots if digest is identical
@@ -134,8 +146,10 @@ export class WaybackRevisionSource implements RevisionSource {
       lastDigest = snap.digest;
       const isoTimestamp = parseWaybackTimestamp(snap.timestamp);
 
+      // The snapshot's 14-digit timestamp is its ID: the same snapshot keeps the
+      // same ID whatever date range is asked for, which a running count did not.
       yield {
-        revId: revId++,
+        revId: Number(snap.timestamp.padEnd(14, "0")),
         pageId: 1,
         pageTitle: targetUrl,
         timestamp: isoTimestamp,

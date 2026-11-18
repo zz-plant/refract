@@ -5,6 +5,7 @@ import type { AuthConfig } from "@refract-org/ingestion";
 import { MediaWikiClient } from "@refract-org/ingestion";
 import { forEachPage } from "./batch.js";
 import { saveRevisions } from "./cache.js";
+import { type RevisionSourceSpec, readRevisionsFromSource } from "./revision-source.js";
 
 export interface ClaimHistoryVariant {
   revisionId: number;
@@ -29,6 +30,8 @@ export interface ClaimHistoryResult {
 export interface ClaimRange {
   from?: number;
   to?: number;
+  /** Read the revisions from a dump or the Wayback Machine instead of the wiki's API. */
+  source?: RevisionSourceSpec;
 }
 
 /**
@@ -54,6 +57,14 @@ export async function fetchRevisionRange(
   const limit = revisionLimit ?? (from !== undefined && to !== undefined ? undefined : 50);
   if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1))
     throw new Error("--limit must be a positive integer.");
+  if (range.source) {
+    return readRevisionsFromSource(
+      range.source,
+      pageTitle,
+      { fromRevId: from, toRevId: to, limit, newest: from === undefined },
+      apiUrl,
+    );
+  }
   const client = new MediaWikiClient(apiUrl ? { apiUrl, auth } : auth ? { auth } : undefined);
 
   return client.fetchRevisions(
@@ -76,7 +87,7 @@ export async function runClaimHistory(
 ): Promise<ClaimHistoryResult> {
   if (!claimText.trim()) throw new Error("Supply nonempty passage text.");
   const revisions = await fetchRevisionRange(pageTitle, range, revisionLimit, apiUrl, auth);
-  if (useCache && !apiUrl && revisions.length > 0) await saveRevisions(revisions, cacheDir);
+  if (useCache && !apiUrl && !range.source && revisions.length > 0) await saveRevisions(revisions, cacheDir);
 
   if (revisions.length === 0) {
     return {
@@ -313,6 +324,7 @@ export async function runClaimBatch(
   revisionLimit?: number,
   concurrency = 4,
   output: { json?: boolean; write?: (line: string) => void } = {},
+  source?: RevisionSourceSpec,
 ): Promise<{ failed: number }> {
   if (!claimText.trim()) throw new Error("Supply nonempty passage text.");
   const write = output.write ?? ((line: string) => console.log(line));
@@ -320,7 +332,7 @@ export async function runClaimBatch(
   const { failed } = await forEachPage(
     titles,
     concurrency,
-    (title) => runClaimHistory(title, claimText, false, apiUrl, undefined, auth, revisionLimit),
+    (title) => runClaimHistory(title, claimText, false, apiUrl, undefined, auth, revisionLimit, { source }),
     ({ title, result, error }) => {
       if (!result) {
         if (output.json) write(JSON.stringify({ page: title, status: "error", error }));
