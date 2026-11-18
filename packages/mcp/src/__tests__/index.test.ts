@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { CLIENT_OPENING, driveStdioServer } from "../../../../tests/support/mcp-stdio.js";
-import { type McpServerOptions, runMcpServer } from "../index.js";
+import { handleToolCall, type McpServerOptions, runMcpServer } from "../index.js";
 
-// None of these messages reaches a tool, so no handler is ever called.
+// The stdio tests send no tool call, so these handlers are never called.
 const options: McpServerOptions = { analyze: vi.fn(), claim: vi.fn(), exportData: vi.fn(), cron: vi.fn() };
 const run = () => runMcpServer(options);
 
@@ -26,5 +26,31 @@ describe("mcp stdio transport", () => {
       { jsonrpc: "2.0", id: 3, error: { code: -32601, message: "Method not found: not/a-method" } },
       { jsonrpc: "2.0", id: 4, error: { code: -32601, message: "Method not found: initialized" } },
     ]);
+  });
+});
+
+describe("get_statement_history", () => {
+  it("passes the page and API URL to the consumer's callback", async () => {
+    const getStatementHistory = vi.fn(async () => ({
+      revisions: [{ revisionId: 12, timestamp: "2024-01-02T00:00:00Z", section: "History" }],
+      status: "present",
+      historySummary: "Tracked.",
+    }));
+    const result = await handleToolCall(
+      "get_statement_history",
+      { statement: "Pluto is a dwarf planet.", page: "Pluto", api: "https://de.wikipedia.org/w/api.php" },
+      { ...options, getStatementHistory },
+    );
+
+    expect(getStatementHistory).toHaveBeenCalledExactlyOnceWith("Pluto is a dwarf planet.", "Pluto", {
+      api: "https://de.wikipedia.org/w/api.php",
+    });
+    expect(JSON.parse(result.content[0].text)).toMatchObject({ page: "Pluto", status: "present" });
+  });
+
+  it("reports a missing callback instead of throwing", async () => {
+    const result = await handleToolCall("get_statement_history", { statement: "x", page: "Pluto" }, options);
+
+    expect(result.content[0].text).toBe("Error: no get_statement_history handler configured");
   });
 });

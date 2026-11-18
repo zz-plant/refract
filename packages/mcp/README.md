@@ -23,7 +23,7 @@ Name the scoped package: the unscoped npm package `refract` is an unrelated proj
 |------|--------------|
 | `analyze` | Returns a page's event stream: claims, citations, sections, templates, categories, wikilinks, and reverts |
 | `claim` | Tracks a sentence across revisions: when it appeared, was removed, or returned |
-| `get_statement_history` | Tracks a statement or close match, with an overall status and a short change summary |
+| `get_statement_history` | Tracks a statement on a page by normalized text, or by sentence word overlap as a partial match, with an overall status and a short change summary |
 | `export` | Returns all events as structured JSON |
 | `cron` | Reads a pages file, runs analysis once, and reports new events |
 | `snapshot` | Returns the revision live at a date, with its ID, section headings, and text |

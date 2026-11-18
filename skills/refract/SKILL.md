@@ -50,7 +50,7 @@ the unscoped `refract` package, which is an unrelated project.
 | `export` | Export analysis as JSON |
 | `cron` | One-shot re-observation of a list of pages |
 | `classify` | Classify one observation boundary with a model |
-| `get_statement_history` | When a statement or a close variant appeared, changed, or disappeared |
+| `get_statement_history` | When a statement, or a sentence sharing most of its words, appeared, changed, or disappeared |
 | `snapshot` | The revision live at a date, with its ID and text |
 | `review` | Changes since the last acknowledged review, saved under an absolute `stateDir` |
 
