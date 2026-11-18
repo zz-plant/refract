@@ -1,7 +1,7 @@
 import { isAbsolute, join } from "node:path";
 import { stripWikitext } from "@refract-org/analyzers";
 import type { AnalyzerConfig, EvidenceEvent, InferenceBoundary } from "@refract-org/evidence-graph";
-import { buildInferencePrompt, DEFAULT_ANALYZER_CONFIG } from "@refract-org/evidence-graph";
+import { buildInferencePrompt, DEFAULT_ANALYZER_CONFIG, parseInferenceResponse } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
 import { createMcpServer, type McpServerOptions } from "@refract-org/mcp";
 import { OpenAICompatibleProvider } from "../inference-provider.js";
@@ -41,6 +41,52 @@ const PROTOCOL_VERSION = "2025-06-18";
 
 let _clientCapabilities: Record<string, unknown> | null = null;
 const pendingSampling = new Map<string, { resolve: (value: JsonRpcResponse) => void; reject: (err: Error) => void }>();
+// Set once stdin ends: no reply to a sampling request can arrive after that.
+let _clientInputClosed = false;
+
+/**
+ * Ask the connected client's model, through MCP sampling, and return its reply
+ * and the model the client says answered. The reply arrives as a line on
+ * stdin, which the server's read loop hands to `pendingSampling`.
+ */
+async function requestSampling(prompt: string): Promise<{ text: string; model?: string }> {
+  if (_clientInputClosed) throw new Error("MCP client closed its input before the sampling request was sent");
+  const samplingId = `classify-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingSampling.delete(samplingId);
+      reject(new Error("MCP sampling timeout"));
+    }, 30000);
+    pendingSampling.set(samplingId, {
+      resolve: (value) => {
+        clearTimeout(timeout);
+        const result = value.result as { content?: unknown; model?: unknown } | undefined;
+        // A CreateMessageResult holds one content block; clients on later
+        // protocol versions may send a list. This read only a list, so a reply
+        // in the shape the 2025-06-18 protocol defines was taken for empty.
+        const blocks = Array.isArray(result?.content) ? result.content : [result?.content];
+        const text = (blocks as Array<{ type?: string; text?: unknown } | undefined>).find(
+          (block) => typeof block?.text === "string" && block.text !== "",
+        )?.text as string | undefined;
+        if (text === undefined) reject(new Error("Empty sampling response"));
+        else resolve({ text, ...(typeof result?.model === "string" ? { model: result.model } : {}) });
+      },
+      reject: (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      },
+    });
+    sendRequest({
+      jsonrpc: "2.0",
+      id: samplingId,
+      method: "sampling/createMessage",
+      params: {
+        messages: [{ role: "user", content: { type: "text", text: prompt } }],
+        maxTokens: 64,
+      },
+    });
+  });
+}
 
 /** TOOLS array re-exported from @refract-org/mcp */
 export const TOOLS = (await import("@refract-org/mcp")).TOOLS;
@@ -240,40 +286,10 @@ export async function handleToolCall(
           const provider = new OpenAICompatibleProvider({ endpoint, apiKey, model });
           result = await provider.infer(boundaryFromParams(params), inputFromParams(params));
         } else if (_clientCapabilities?.sampling) {
-          const prompt = buildInferencePrompt(boundaryFromParams(params), inputFromParams(params));
-          const samplingId = `classify-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-          const { parseInferenceResponse } = await import("@refract-org/evidence-graph");
-
-          const samplingResult = await new Promise<{ content: { text: string } }>((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error("MCP sampling timeout")), 30000);
-            pendingSampling.set(samplingId, {
-              resolve: (value) => {
-                clearTimeout(timeout);
-                const content = (value.result as { content?: Array<{ text?: string }> })?.content?.[0];
-                if (content?.text) resolve({ content: { text: content.text } });
-                else reject(new Error("Empty sampling response"));
-              },
-              reject: (err) => {
-                clearTimeout(timeout);
-                reject(err);
-              },
-            });
-            sendRequest({
-              jsonrpc: "2.0",
-              id: samplingId,
-              method: "sampling/createMessage",
-              params: {
-                messages: [{ role: "user", content: { type: "text", text: prompt } }],
-                maxTokens: 64,
-              },
-            });
-          });
-
-          result = parseInferenceResponse(
-            boundaryFromParams(params),
-            samplingResult.content.text,
-            inputFromParams(params),
-          );
+          const boundary = boundaryFromParams(params);
+          const input = inputFromParams(params);
+          const reply = await requestSampling(buildInferencePrompt(boundary, input));
+          result = parseInferenceResponse(boundary, reply.text, input, reply.model);
         } else {
           return {
             content: [
@@ -632,37 +648,10 @@ export async function runMcpServer(): Promise<void> {
           const provider = new OpenAICompatibleProvider({ endpoint, apiKey, model });
           result = await provider.infer(boundary as InferenceBoundary, input as any);
         } else if (_clientCapabilities?.sampling) {
-          const prompt = buildInferencePrompt(boundary as InferenceBoundary, input as Record<string, unknown>);
-          const samplingId = `classify-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-          const { parseInferenceResponse } = await import("@refract-org/evidence-graph");
-
-          const samplingResult = await new Promise<{ content: { text: string } }>((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error("MCP sampling timeout")), 30000);
-            pendingSampling.set(samplingId, {
-              resolve: (value) => {
-                clearTimeout(timeout);
-                const content = (value.result as { content?: Array<{ text?: string }> })?.content?.[0];
-                if (content?.text) resolve({ content: { text: content.text } });
-                else reject(new Error("Empty sampling response"));
-              },
-              reject: (err) => {
-                clearTimeout(timeout);
-                reject(err);
-              },
-            });
-            sendRequest({
-              jsonrpc: "2.0",
-              id: samplingId,
-              method: "sampling/createMessage",
-              params: {
-                messages: [{ role: "user", content: { type: "text", text: prompt } }],
-                maxTokens: 64,
-              },
-            });
-          });
-
-          result = parseInferenceResponse(boundary as InferenceBoundary, samplingResult.content.text, input as any);
+          const reply = await requestSampling(
+            buildInferencePrompt(boundary as InferenceBoundary, input as Record<string, unknown>),
+          );
+          result = parseInferenceResponse(boundary as InferenceBoundary, reply.text, input as any, reply.model);
         } else {
           return {
             boundary,
@@ -709,6 +698,13 @@ export async function runMcpServer(): Promise<void> {
 
   process.stdin.setEncoding("utf-8");
 
+  // Requests are handled one at a time, in the order they arrive, but the loop
+  // keeps reading while one is handled. It used to await each request before
+  // reading the next line, so a `classify` waiting on a sampling reply never
+  // saw it: the reply was the next line. Every sampling request timed out.
+  let handling = Promise.resolve();
+  _clientInputClosed = false;
+
   for await (const chunk of process.stdin) {
     buffer += chunk;
     const lines = buffer.split("\n");
@@ -752,11 +748,22 @@ export async function runMcpServer(): Promise<void> {
       // action here, and any other notification is dropped the same way.
       if (!("id" in msg)) continue;
 
-      await handleRequest(request, options).catch((err) => {
-        process.stderr.write(`Unhandled error: ${err.message}\n`);
-      });
+      handling = handling.then(() =>
+        handleRequest(request, options).catch((err) => {
+          process.stderr.write(`Unhandled error: ${err.message}\n`);
+        }),
+      );
     }
   }
+
+  // No reply can arrive once input ends, so a request waiting on one fails now
+  // rather than at its timeout; then the remaining requests finish.
+  _clientInputClosed = true;
+  for (const [id, pending] of pendingSampling) {
+    pendingSampling.delete(id);
+    pending.reject(new Error("MCP client closed its input before answering the sampling request"));
+  }
+  await handling;
 }
 
 async function handleRequest(

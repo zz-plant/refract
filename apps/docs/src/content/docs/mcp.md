@@ -142,7 +142,7 @@ Re-observe pages for scheduled monitoring.
 
 Ask a model to classify a single observation boundary. See [CLI reference](cli) for the boundary table and all options.
 
-The tool calls the configured inference provider when an API key is available, and otherwise asks the connected client through MCP sampling. With neither, the result has an empty `output` and a `note` saying no provider is configured; `refract classify` on the command line applies the boundary's default rule instead.
+The tool calls the configured inference provider when an API key is available, and otherwise asks the connected client through MCP sampling. With neither, the result has an empty `output` and a `note` saying no provider is configured; `refract classify` on the command line applies the boundary's default rule instead. A model's result carries its reply as `answer`, the `model` that gave it, and no `confidence`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

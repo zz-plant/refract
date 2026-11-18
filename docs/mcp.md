@@ -102,7 +102,8 @@ Classify one observation boundary. Uses the configured inference provider when a
 key is available, and otherwise asks the connected client through MCP sampling. With
 neither a key nor a client that supports sampling, the result has an empty `output` and
 a `note` saying no provider is configured; `refract classify` on the command line
-applies the boundary's default rule instead.
+applies the boundary's default rule instead. A model's result carries its reply as `answer`, the `model` that gave it, and no
+`confidence`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

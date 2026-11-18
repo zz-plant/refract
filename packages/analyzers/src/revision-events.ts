@@ -76,7 +76,13 @@ function templateTypeToPolicyDimension(type: TemplateType): string | null {
   }
 }
 
-function wordOverlapRatio(a: string, b: string): number {
+/**
+ * The share of distinct whitespace-separated words two sentences have in
+ * common, ignoring case: the measure sentence events compare with
+ * `similarityThreshold`. Punctuation stays on its word, so "Sun," and "Sun"
+ * differ. Two strings with no words give NaN, which no threshold reaches.
+ */
+export function wordOverlapRatio(a: string, b: string): number {
   const wordsA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
   const wordsB = new Set(b.toLowerCase().split(/\s+/).filter(Boolean));
   const intersection = new Set([...wordsA].filter((w) => wordsB.has(w)));
