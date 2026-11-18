@@ -10,7 +10,7 @@ hero:
     - text: "Analyze a history"
       link: "quickstart/"
       variant: secondary
-    - text: "Review a watchlist"
+    - text: "Review changes to pages you rely on"
       link: "review/"
       variant: secondary
 ---
