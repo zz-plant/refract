@@ -24,6 +24,7 @@ refract init
 | `review [page]` | Inspect source changes since the last acknowledged review |
 | `claim <page> --text "<text>"` | Track a specific claim across revisions |
 | `field <page> --param <name>` | Track a template parameter, such as an infobox field, across revisions |
+| `linksearch <domain>` | List pages that link to a domain, one title per line, for `--pages-file` |
 | `snapshot <page> --at <date>` | Show page state at or before a date |
 | `export <page> --format <format>` | Export analysis as json, csv, ndjson, parquet, or html; `--pages-file` exports many pages as NDJSON |
 | `verify <bundle>` | Check a verification bundle's events, manifest hash, Merkle root, and proofs |

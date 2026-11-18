@@ -122,6 +122,19 @@ interface LogEventResponse {
   };
 }
 
+/** One page's link to a URL, as `list=exturlusage` reports it. */
+export interface ExternalLinkUsage {
+  pageId: number;
+  namespace: number;
+  title: string;
+  url: string;
+}
+
+interface ExternalLinkUsageResponse {
+  continue?: Record<string, string | number>;
+  query?: { exturlusage?: Array<{ pageid: number; ns: number; title: string; url: string }> };
+}
+
 interface CompareResponse {
   compare?: {
     fromrevid: number;
@@ -345,6 +358,47 @@ export class MediaWikiClient implements RevisionFetcher, RevisionSource, DiffFet
     }
 
     return events;
+  }
+
+  /**
+   * Pages that currently link to a URL pattern, from `list=exturlusage` (what
+   * Special:LinkSearch shows). `query` is a host with an optional path and no
+   * protocol, e.g. `example.org` or `example.org/news`; a leading `*.` also
+   * matches subdomains. Both http and https links match. Results are links
+   * in the wiki's link table now: a link already removed from every page is
+   * not found. Follows MediaWiki's `continue` protocol until done or until
+   * `maxLinks` links have been read.
+   */
+  async fetchExternalLinkUsage(
+    query: string,
+    options: { namespace?: number; maxLinks?: number } = {},
+  ): Promise<ExternalLinkUsage[]> {
+    const links: ExternalLinkUsage[] = [];
+    const max = options.maxLinks ?? Number.POSITIVE_INFINITY;
+    let next: Record<string, string> = {};
+    while (links.length < max) {
+      const params = new URLSearchParams({
+        action: "query",
+        list: "exturlusage",
+        euquery: query,
+        euprop: "ids|title|url",
+        eunamespace: String(options.namespace ?? 0),
+        eulimit: "500",
+        format: "json",
+        formatversion: "2",
+        ...next,
+      });
+      const data = await this.getJson<ExternalLinkUsageResponse>(`${this.apiUrl}?${params.toString()}`);
+      for (const entry of data.query?.exturlusage ?? []) {
+        if (links.length >= max) break;
+        links.push({ pageId: entry.pageid, namespace: entry.ns, title: entry.title, url: entry.url });
+      }
+      if (!data.continue) break;
+      // Pass every continuation value back, whatever its key: euoffset on
+      // older MediaWiki, eucontinue on newer.
+      next = Object.fromEntries(Object.entries(data.continue).map(([key, value]) => [key, String(value)]));
+    }
+    return links;
   }
 
   async fetchEntities(query: SourceQuery): Promise<SourceEntity[]> {

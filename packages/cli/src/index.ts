@@ -14,6 +14,7 @@ import { runExplore } from "./commands/explore.js";
 import { runBatchExport, runExport } from "./commands/export.js";
 import { runField, runFieldBatch } from "./commands/field.js";
 import { runInit } from "./commands/init.js";
+import { runLinkSearch } from "./commands/linksearch.js";
 import { runMcpServer } from "./commands/mcp.js";
 import { acknowledgeReview, filterReviewEntries, observeReview, renderReview } from "./commands/review.js";
 import { runSnapshot } from "./commands/snapshot.js";
@@ -427,6 +428,29 @@ fieldCmd.action(async (page, opts) => {
     extractAuth(opts),
     opts.limit as number | undefined,
     { from: opts.from as number | undefined, to: opts.to as number | undefined },
+    { json: !!opts.json },
+  );
+});
+
+// ── linksearch ──
+const linksearchCmd = program
+  .command("linksearch <domain>")
+  .description("list pages that link to a domain, one title per line, for --pages-file")
+  .option("--subdomains", "also match subdomains (queries *.<domain> too)")
+  .option("--namespace <n>", "namespace to search (default: 0, articles)", parseInt)
+  .option("--limit <n>", "max links read per query (default: 10000)", parseInt)
+  .option("-j, --json", "print pages with their matching URLs as JSON");
+withGlobal(linksearchCmd, false);
+linksearchCmd.action(async (domain, opts) => {
+  await runLinkSearch(
+    domain,
+    {
+      subdomains: !!opts.subdomains,
+      namespace: opts.namespace as number | undefined,
+      maxLinks: opts.limit as number | undefined,
+      apiUrl: opts.api as string | undefined,
+      auth: extractAuth(opts),
+    },
     { json: !!opts.json },
   );
 });

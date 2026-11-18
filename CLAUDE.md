@@ -36,7 +36,7 @@ action API for tests whose subject is Refract's own code — a self-diff compari
 a wiki against itself, or the throughput bound, which measures section and
 citation diffing and never included the fetch that fed it.
 
-Five tests are not faked, because a fixture cannot settle what they ask. They
+Six tests are not faked, because a fixture cannot settle what they ask. They
 check that this client still parses what Wikipedia actually returns, and
 asserting that against a response this repo also wrote would only confirm the
 fixture matches itself — while the failure they exist to catch, MediaWiki
@@ -50,7 +50,7 @@ trusting a change to `mediawiki-client.ts`.
 
 `.github/workflows/api-contract.yml` runs them daily and on demand, off the
 pull-request path so a Wikipedia outage cannot redden an unrelated PR. Gating
-them out of the PR gate without running them anywhere would have retired five
+them out of the PR gate without running them anywhere would have retired six
 tests while the suite went green — check that workflow's last run before
 trusting the parser.
 

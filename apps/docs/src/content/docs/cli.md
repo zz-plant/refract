@@ -147,6 +147,35 @@ to case. Refract records what the field said, not whether it was right.
 refract field "Pluto" --param discoverer --template "Infobox planet" --json | jq '.changes[] | [.revisionId, .kind, .text]'
 ```
 
+## `refract linksearch`
+
+List the pages that link to a domain, as Special:LinkSearch does, one title per
+line so the output can be a `--pages-file`.
+
+```bash
+refract linksearch <domain> [options]
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `domain` | required (positional) | A host with an optional path, e.g. `example.org` or `example.org/news`. A protocol is dropped; a leading `*.` also matches subdomains. Both http and https links match |
+| `--subdomains` | off | Also match subdomains, by querying `*.<domain>` as well |
+| `--namespace <n>` | `0` | Namespace to search; `0` is articles |
+| `--limit <n>` | `10000` | Links read per query. A note says when a query stopped there |
+| `-j, --json` | off | Print `queries`, `namespace`, `pages` (each with `title`, `pageId` and its matching `urls`), `links`, `truncated` and `caveats` |
+| `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
+
+Titles go to stdout sorted, and the count and notes to stderr. The wiki
+reports the links pages have now: a link removed before the search is not
+found, so a page that dropped a source has to be named some other way. Any
+link on the page counts, not only one inside a reference. The domain is
+yours to choose; Refract keeps no list of sources to look for.
+
+```bash
+refract linksearch example.org --subdomains > pages.txt
+refract export --pages-file pages.txt --format ndjson > events.ndjson
+```
+
 ## `refract snapshot`
 
 Reconstruct page state at a point in time.

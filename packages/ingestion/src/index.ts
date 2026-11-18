@@ -107,7 +107,13 @@ export interface RevisionOptions {
 }
 
 export { GitRevisionSource, type GitRevisionSourceOptions } from "./git-source.js";
-export { DEFAULT_USER_AGENT, MediaWikiApiError, MediaWikiClient, retryAfterMs } from "./mediawiki-client.js";
+export {
+  DEFAULT_USER_AGENT,
+  type ExternalLinkUsage,
+  MediaWikiApiError,
+  MediaWikiClient,
+  retryAfterMs,
+} from "./mediawiki-client.js";
 export { RateLimiter } from "./rate-limiter.js";
 export { SnapshotDirectorySource, type SnapshotItem } from "./snapshot-source.js";
 export type { StreamClientOptions, StreamEvent } from "./stream-client.js";
