@@ -200,10 +200,10 @@ describe("XmlDumpRevisionSource", () => {
   it("stays linear on a revision with many unclosed tags", async () => {
     const dir = mkdtempSync(join(tmpdir(), "refract-xml-test-"));
     const filePath = join(dir, "dump.xml");
-    const junk = `${"&lt;contributor&gt;".repeat(1)}${"<contributor>".repeat(20_000)}${"<text ".repeat(20_000)}`;
+    const junk = `<comment>${"<comment>".repeat(20_000)}${"<contributor>".repeat(20_000)}${"<text>".repeat(20_000)}`;
     writeFileSync(
       filePath,
-      `<mediawiki><page><title>T</title><id>1</id><revision><id>5</id><timestamp>2026-01-01T00:00:00Z</timestamp>${junk}</revision></page></mediawiki>`,
+      `<mediawiki><page><title>T</title><id>1</id><revision><id>5</id><timestamp>2026-01-01T00:00:00Z</timestamp>${junk}</revision></page>${"<page><revision>".repeat(20_000)}</mediawiki>`,
       "utf-8",
     );
     const source = new XmlDumpRevisionSource(filePath);
@@ -214,7 +214,8 @@ describe("XmlDumpRevisionSource", () => {
     rmSync(dir, { recursive: true });
     expect(revs).toHaveLength(1);
     expect(revs[0].user).toBeUndefined();
-    expect(revs[0].contentAvailable).toBe(false);
+    expect(revs[0].comment).toBe("");
+    expect(revs[0].content).toBe("");
     expect(elapsed).toBeLessThan(500);
   });
 
