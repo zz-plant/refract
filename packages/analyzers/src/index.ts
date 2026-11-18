@@ -103,6 +103,7 @@ export {
   computeStructuralDiffs,
   detectEditorialSignals,
   parseContent,
+  wordOverlapRatio,
 } from "./revision-events.js";
 export type { SectionEvent, SectionLineage } from "./section-differ.js";
 export { buildSectionLineage, sectionDiffer } from "./section-differ.js";

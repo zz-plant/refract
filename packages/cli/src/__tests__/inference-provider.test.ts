@@ -1,6 +1,9 @@
 import { execFile } from "node:child_process";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
+import { wordOverlapRatio } from "@refract-org/analyzers";
 import { describe, expect, it } from "vitest";
 import { INFERENCE_BOUNDARIES, OpenAICompatibleProvider } from "../inference-provider.js";
 
@@ -65,5 +68,69 @@ describe("OpenAICompatibleProvider default inference", () => {
 
     expect(result.output).toEqual({ kind: "sourcing" });
     expect(result.source).toBe("default");
+  });
+});
+
+describe("OpenAICompatibleProvider sentence similarity default", () => {
+  const similarity = async (before: string, after: string) =>
+    (await new OpenAICompatibleProvider({}).infer("sentence_similarity", { before, after })).output;
+
+  it("measures overlap as sentence events do", async () => {
+    const before = "Pluto is the ninth planet, discovered in 1930.";
+    const after = "Pluto is the ninth planet discovered in 1930";
+
+    // "planet," and "1930." are words of their own to the sentence matcher.
+    expect((await similarity(before, after)).matchRatio).toBe(wordOverlapRatio(before, after));
+    expect((await similarity(before, after)).isSameClaim).toBe(false);
+  });
+
+  it("does not call two different sentences in another script the same", async () => {
+    // The old tokenizer kept only a-z and 0-9, found no words in either, and
+    // scored them 1.
+    expect(await similarity("冥王星は準惑星である", "地球は第三惑星である")).toEqual({
+      isSameClaim: false,
+      matchRatio: 0,
+    });
+  });
+});
+
+describe("OpenAICompatibleProvider model path", () => {
+  it("records the reply and the model that gave it, with no confidence or ratio", async () => {
+    const requests: Record<string, unknown>[] = [];
+    const server = createServer((request, response) => {
+      let body = "";
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        requests.push(JSON.parse(body) as Record<string, unknown>);
+        response.setHeader("content-type", "application/json");
+        response.end(
+          JSON.stringify({ model: "served-model-v2", choices: [{ message: { role: "assistant", content: "Yes" } }] }),
+        );
+      });
+    });
+    await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const provider = new OpenAICompatibleProvider({
+        endpoint: `http://127.0.0.1:${port}/v1/chat/completions`,
+        apiKey: "test-key",
+        model: "requested-model",
+      });
+
+      const result = await provider.infer("sentence_similarity", { before: "A sentence.", after: "Another one." });
+
+      expect(requests[0]).toMatchObject({ model: "requested-model", temperature: 0 });
+      expect(result).toEqual({
+        boundary: "sentence_similarity",
+        output: { isSameClaim: true },
+        source: "model",
+        answer: "Yes",
+        model: "served-model-v2",
+      });
+    } finally {
+      await new Promise((done) => server.close(done));
+    }
   });
 });

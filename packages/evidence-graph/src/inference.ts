@@ -7,9 +7,21 @@ export interface InferenceRequest {
 
 export interface InferenceResult {
   boundary: InferenceBoundary;
+  /** Empty when a model's reply held no answer the prompt allows; `note` then says so. */
   output: Record<string, unknown>;
+  /**
+   * Set only by a default rule, as a fixed number per rule, not a measurement.
+   * A model result has none: the prompt asks for a bare answer, so the model
+   * reports no confidence, and Refract does not invent one.
+   */
   confidence?: number;
   source: "model" | "default";
+  /** The model's reply, verbatim. Set on every model result, so the reading of it can be checked. */
+  answer?: string;
+  /** The model that answered, as the provider or MCP client named it. */
+  model?: string;
+  /** Why `output` is empty. */
+  note?: string;
 }
 
 export interface RevertInput {
@@ -28,7 +40,8 @@ export interface SentenceSimilarityInput {
 
 export interface SentenceSimilarityOutput {
   isSameClaim: boolean;
-  matchRatio: number;
+  /** The word-overlap ratio the default rule measured. A model measures none, so a model result omits it. */
+  matchRatio?: number;
   rationale?: string;
 }
 
@@ -113,47 +126,73 @@ export function buildInferencePrompt(boundary: InferenceBoundary, input: Record<
   }
 }
 
+// The answers each prompt above allows, and the output field each fills.
+const YES_NO: Record<string, boolean> = { yes: true, no: false };
+const HEURISTIC_KINDS = [
+  "revert",
+  "vandalism",
+  "sourcing",
+  "major_addition",
+  "major_removal",
+  "cosmetic",
+  "minor",
+  "unknown",
+];
+const TEMPLATE_SIGNALS = ["citation", "neutrality", "blp", "dispute", "cleanup", "protection", "other"];
+
+/**
+ * Read a model's reply to buildInferencePrompt. The reply must begin with an
+ * answer the prompt allows, ignoring case and any punctuation or markdown
+ * before it: "Yes.", "**no**" and "major_addition" are read; "I think yes" and
+ * "not a revert" are not, since the prompts ask for the answer alone. A reply
+ * that does not begin with one leaves `output` empty and says so in `note`,
+ * rather than guessing.
+ *
+ * The result carries the reply as `answer` and, when known, the `model` that
+ * gave it. It has no `confidence`: the model reports none.
+ */
 export function parseInferenceResponse(
   boundary: InferenceBoundary,
   text: string,
   _input: Record<string, unknown>,
+  model?: string,
 ): InferenceResult {
-  const cleaned = text.trim().toLowerCase();
-  const confidence =
-    cleaned.includes("yes") ||
-    cleaned.match(
-      /^(revert|vandalism|sourcing|major_addition|major_removal|cosmetic|minor|unknown|citation|neutrality|blp|dispute|cleanup|protection|other)/,
-    )
-      ? 0.85
-      : 0.5;
+  const first = text.toLowerCase().match(/[a-z_]+/)?.[0] ?? "";
+  const allowed =
+    boundary === "heuristic"
+      ? HEURISTIC_KINDS
+      : boundary === "template_signal"
+        ? TEMPLATE_SIGNALS
+        : Object.keys(YES_NO);
 
-  let output: Record<string, unknown>;
-  switch (boundary) {
-    case "revert":
-      output = { isRevert: cleaned.startsWith("y") };
-      break;
-    case "sentence_similarity":
-      output = { isSameClaim: cleaned.startsWith("y"), matchRatio: cleaned.startsWith("y") ? 0.9 : 0.2 };
-      break;
-    case "heuristic": {
-      const kind =
-        ["revert", "vandalism", "sourcing", "major_addition", "major_removal", "cosmetic", "minor"].find((k) =>
-          cleaned.includes(k),
-        ) ?? "unknown";
-      output = { kind };
-      break;
+  const read = allowed.includes(first);
+  let output: Record<string, unknown> = {};
+  if (read) {
+    switch (boundary) {
+      case "revert":
+        output = { isRevert: YES_NO[first] };
+        break;
+      case "sentence_similarity":
+        output = { isSameClaim: YES_NO[first] };
+        break;
+      case "heuristic":
+        output = { kind: first };
+        break;
+      case "template_signal":
+        output = { signalType: first };
+        break;
+      case "activity_spike":
+        output = { isSpike: YES_NO[first] };
+        break;
     }
-    case "template_signal": {
-      const signalType =
-        ["citation", "neutrality", "blp", "dispute", "cleanup", "protection"].find((s) => cleaned.includes(s)) ??
-        "other";
-      output = { signalType };
-      break;
-    }
-    case "activity_spike":
-      output = { isSpike: cleaned.startsWith("y") };
-      break;
   }
 
-  return { boundary, output, confidence, source: "model" };
+  return {
+    boundary,
+    output,
+    source: "model",
+    answer: text,
+    ...(model ? { model } : {}),
+    ...(read ? {} : { note: `The reply does not begin with ${allowed.join(", ")}, so no answer was read from it.` }),
+  };
 }

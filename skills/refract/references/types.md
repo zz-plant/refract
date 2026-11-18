@@ -194,9 +194,12 @@ type InferenceBoundary = "revert" | "sentence_similarity" | "heuristic" | "templ
 
 interface InferenceResult {
   boundary: InferenceBoundary;
-  output: Record<string, unknown>;   // shape depends on the boundary
-  confidence?: number;
+  output: Record<string, unknown>;   // shape depends on the boundary; empty if a model's reply held no answer
+  confidence?: number;               // default rule only: a fixed number per rule
   source: "model" | "default";
+  answer?: string;                   // model only: its reply, verbatim
+  model?: string;                    // model only: the model that answered, when named
+  note?: string;                     // why output is empty
 }
 ```
 

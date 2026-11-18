@@ -67,14 +67,21 @@ Output:
 ```json
 {
   "boundary": "revert",
-  "output": { "isRevert": true, "rationale": "The edit comment explicitly states 'reverted vandalism'" },
+  "output": { "isRevert": true },
   "source": "model",
-  "confidence": 0.98
+  "answer": "yes",
+  "model": "gpt-4o-mini-2024-07-18"
 }
 ```
 
-`source: "model"` + `confidence` — the model classified the boundary, and you know
-how confident it was.
+`source: "model"` means the model classified the boundary. `answer` is its reply,
+verbatim, and `model` is the model the endpoint says answered, so the reading
+can be checked against what was said. A model result has no `confidence`: the
+prompt asks for a bare answer, and Refract does not invent a number for it.
+
+The reply must begin with an answer the prompt allows (`yes`, `**No**.` and
+`major_addition` do; `I think yes` does not). When it does not, `output` is
+empty and `note` says why.
 
 ## Step 3: Try different providers
 
@@ -129,9 +136,11 @@ refract classify sentence_similarity \
   --model gpt-4o-mini
 ```
 
-The default uses word-overlap ratio (threshold 0.8) and returns `isSameClaim` and
-`matchRatio`. The model considers semantic meaning. Same input, different
-reasoning, and each result names its `source`.
+The default applies the word-overlap ratio sentence events use (threshold 0.8),
+so it agrees with `refract analyze` on which wordings are one sentence, and
+returns `isSameClaim` and `matchRatio`. The model considers meaning and returns
+`isSameClaim` alone: it measures no ratio. Same input, different reasoning, and
+each result names its `source`.
 
 ## Step 5: Audit which path was taken
 

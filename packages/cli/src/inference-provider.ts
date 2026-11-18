@@ -1,4 +1,4 @@
-import { classifyHeuristic, revertDetector } from "@refract-org/analyzers";
+import { classifyHeuristic, revertDetector, wordOverlapRatio } from "@refract-org/analyzers";
 import type { InferenceBoundary, InferenceResult } from "@refract-org/evidence-graph";
 import { buildInferencePrompt, parseInferenceResponse } from "@refract-org/evidence-graph";
 
@@ -20,24 +20,6 @@ function asString(value: unknown): string {
 
 function asNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function tokenize(text: string): Set<string> {
-  return new Set(text.toLowerCase().match(/[a-z0-9]+/g) ?? []);
-}
-
-function lexicalSimilarity(before: string, after: string): number {
-  const left = tokenize(before);
-  const right = tokenize(after);
-  if (left.size === 0 && right.size === 0) return 1;
-  if (left.size === 0 || right.size === 0) return 0;
-
-  let intersection = 0;
-  for (const token of left) {
-    if (right.has(token)) intersection += 1;
-  }
-  const union = new Set([...left, ...right]).size;
-  return union === 0 ? 0 : intersection / union;
 }
 
 function defaultInference(boundary: InferenceBoundary, input: Record<string, unknown>): InferenceResult {
@@ -64,7 +46,13 @@ function defaultInference(boundary: InferenceBoundary, input: Record<string, unk
       };
     }
     case "sentence_similarity": {
-      const matchRatio = lexicalSimilarity(asString(input.before), asString(input.after));
+      // The measure sentence events use, so this agrees with `refract analyze`
+      // on which wordings count as one sentence. This used its own tokenizer,
+      // which dropped punctuation and every non-ASCII word, so two sentences in
+      // another script compared as identical.
+      const before = asString(input.before);
+      const after = asString(input.after);
+      const matchRatio = before.trim() === "" && after.trim() === "" ? 1 : wordOverlapRatio(before, after);
       return {
         boundary,
         output: { isSameClaim: matchRatio >= 0.8, matchRatio },
@@ -152,10 +140,11 @@ export class OpenAICompatibleProvider implements InferenceProvider {
       }
 
       const data = (await response.json()) as {
+        model?: string;
         choices: Array<{ message: { content: string } }>;
       };
       const text = data.choices?.[0]?.message?.content ?? "";
-      return parseInferenceResponse(boundary, text, input);
+      return parseInferenceResponse(boundary, text, input, data.model || this.model);
     }
 
     return defaultInference(boundary, input);
