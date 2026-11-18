@@ -10,7 +10,7 @@ hero:
     - text: "Analyze a history"
       link: "quickstart/"
       variant: secondary
-    - text: "Review changes to pages you rely on"
+    - text: "Review changes to wiki pages you rely on"
       link: "review/"
       variant: secondary
 ---
@@ -25,7 +25,7 @@ npx @refract-org/cli@0.6.1 claim "Pluto" --text "ninth and smallest" --from 7159
 
 The sentence starts at "Pluto is the ninth…" and passes through "Pluto was until recently considered the ninth…". The [captured walkthrough](https://github.com/refract-org/refract/blob/main/docs/example-output.md) links each change to its revisions.
 
-For repeated review, [review a watchlist](../../../../../docs/review.md). Refract remembers the last revision you explicitly acknowledged.
+To come back to the same pages, see [Review changes to wiki pages you rely on](../../../../../docs/review.md). Refract remembers the last revision you explicitly acknowledged.
 
 ## What you receive
 
@@ -60,9 +60,9 @@ For repeated review, [review a watchlist](../../../../../docs/review.md). Refrac
 
 <div class="usecase-grid not-content">
   <div class="usecase-card">
-    <h3>Review sources you revisit</h3>
-    <p>Inspect pending changes since your last acknowledgment. Keep fetched progress separate from reviewed progress.</p>
-    <div class="usecase-steps"><a href="review/">Source-build review guide</a></div>
+    <h3>Review changes to wiki pages you rely on</h3>
+    <p>See what changed on each page since your last review. Checking for new edits never marks them reviewed: you do that yourself, after reading the report.</p>
+    <div class="usecase-steps"><a href="review/">Review changes to wiki pages you rely on</a></div>
   </div>
   <div class="usecase-card">
     <h3>Inspect an earlier record</h3>

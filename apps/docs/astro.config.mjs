@@ -98,7 +98,7 @@ export default defineConfig({
 						page("Compare to alternatives", "compare"),
 						page("Demo", "demo"),
 						page("Quick start", "quickstart"),
-						guide("Review your sources", "review"),
+						guide("Review changes to wiki pages you rely on", "review"),
 						guide("History ranges and output", "usage"),
 						page("Common events", "quickstart-events"),
 						page("Complete workflow", "complete-workflow"),

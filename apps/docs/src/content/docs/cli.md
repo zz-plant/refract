@@ -48,7 +48,7 @@ Also accepts the [analyzer options](#analyzer-options).
 ## `refract review`
 
 Inspect source changes since the last acknowledged review. Fetched and
-acknowledged revisions are kept separately. [Review your sources](../../../../../docs/review.md) covers the
+acknowledged revisions are kept separately. [Review changes to wiki pages you rely on](../../../../../docs/review.md) covers the
 workflow, saved-report format, and coverage requirements.
 
 ```bash

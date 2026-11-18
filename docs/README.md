@@ -8,7 +8,7 @@ tutorials, and integration guides. This directory holds the guides maintained wi
 
 ## Getting Started
 
-- [Review your sources](./review.md) — watchlists, saved baselines, coverage, and explicit acknowledgment
+- [Review changes to wiki pages you rely on](./review.md) — watchlists, saved baselines, coverage, and explicit acknowledgment
 
 - [Install](../README.md#install) — first commands to try
 - [Offline walkthrough](./recipes.md#try-the-offline-walkthrough) — changed wording, a removed reference, and returned text
