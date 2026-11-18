@@ -11,6 +11,7 @@ import { runDiff } from "./commands/diff.js";
 import { runEval } from "./commands/eval.js";
 import { runExplore } from "./commands/explore.js";
 import { runExport } from "./commands/export.js";
+import { runField } from "./commands/field.js";
 import { runInit } from "./commands/init.js";
 import { runMcpServer } from "./commands/mcp.js";
 import { acknowledgeReview, filterReviewEntries, observeReview, renderReview } from "./commands/review.js";
@@ -324,6 +325,34 @@ claimCmd.action(async (page, opts) => {
     !!opts.cache,
     opts.api as string | undefined,
     opts.cacheDir as string | undefined,
+    extractAuth(opts),
+    opts.limit as number | undefined,
+    { from: opts.from as number | undefined, to: opts.to as number | undefined },
+    { json: !!opts.json },
+  );
+});
+
+// ── field ──
+const fieldCmd = program
+  .command("field <page>")
+  .description("track a template parameter, such as an infobox field, across revisions")
+  .option("-p, --param <name>", "parameter to track (required), e.g. result")
+  .option("--template <name>", "read the parameter only from this template, e.g. 'Infobox military conflict'")
+  .option("--limit <n>", "max revisions to fetch (default: 50, or the whole range with --from and --to)", parseInt)
+  .option("--from <revId>", "start revision ID", parseInt)
+  .option("--to <revId>", "end revision ID", parseInt)
+  .option("-j, --json", "print the result as JSON instead of text");
+withGlobal(fieldCmd, false);
+fieldCmd.action(async (page, opts) => {
+  const param = opts.param as string | undefined;
+  if (!param?.trim()) {
+    console.error(red("Error: --param is required"));
+    process.exit(1);
+  }
+  await runField(
+    page,
+    { param, template: opts.template as string | undefined },
+    opts.api as string | undefined,
     extractAuth(opts),
     opts.limit as number | undefined,
     { from: opts.from as number | undefined, to: opts.to as number | undefined },

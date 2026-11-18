@@ -23,6 +23,7 @@ refract init
 | `analyze <page>` | Full edit history analysis with configurable depth |
 | `review [page]` | Inspect source changes since the last acknowledged review |
 | `claim <page> --text "<text>"` | Track a specific claim across revisions |
+| `field <page> --param <name>` | Track a template parameter, such as an infobox field, across revisions |
 | `snapshot <page> --at <date>` | Show page state at or before a date |
 | `export <page> --format <format>` | Export analysis as json, csv, ndjson, parquet, or html |
 | `verify <bundle>` | Check a verification bundle's events, manifest hash, Merkle root, and proofs |

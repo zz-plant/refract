@@ -7,9 +7,53 @@ import {
   extractAnchorSnippet,
   extractHeadingMap,
   findSectionForText,
+  removeTemplates,
   sanitizeWikitext,
   stripWikitext,
 } from "../wikitext-parser.js";
+
+describe("nested templates", () => {
+  // Real infoboxes hold other templates. A single pass that removed only
+  // templates with none inside left the infobox's own braces and parameters in
+  // the prose, so "| result = …" lines were read as sentences.
+  const infobox = [
+    "{{Infobox military conflict",
+    "| conflict = Example war",
+    "| date = {{start date|2026|2|28}} – {{end date|2026|6|17}}",
+    "| result = Example victory{{efn|disputed}}",
+    "}}",
+    "The war began in February.",
+  ].join("\n");
+
+  it("removes an infobox that contains other templates", () => {
+    expect(stripWikitext(infobox)).toBe("The war began in February.");
+  });
+
+  it("removes nested templates from sanitized text", () => {
+    expect(sanitizeWikitext(infobox)).toBe("The war began in February.");
+    expect(sanitizeWikitext("A{{outer|{{inner}}}}B")).toBe("A B");
+  });
+
+  it("keeps an opener that never closes, with balanced templates inside it removed", () => {
+    expect(removeTemplates("before {{unclosed {{cn}} after", "")).toBe("before {{unclosed  after");
+  });
+
+  it("keeps a closer with no opener", () => {
+    expect(removeTemplates("text }} more {{cn}} end", "")).toBe("text }} more  end");
+  });
+
+  it("returns text without templates unchanged", () => {
+    expect(removeTemplates("plain prose", "")).toBe("plain prose");
+  });
+
+  it("stays linear on deep nesting", () => {
+    const depth = 50_000;
+    const text = `start ${"{{a|".repeat(depth)}${"}}".repeat(depth)} end`;
+    const t0 = performance.now();
+    expect(removeTemplates(text, "")).toBe("start  end");
+    expect(performance.now() - t0).toBeLessThan(1000);
+  });
+});
 
 describe("stripWikitext", () => {
   it("drops category tags so they cannot join the next sentence", () => {

@@ -1,5 +1,5 @@
 import { findSectionForText, stripWikitext } from "@refract-org/analyzers";
-import type { ClaimState } from "@refract-org/evidence-graph";
+import type { ClaimState, Revision } from "@refract-org/evidence-graph";
 import { createClaimIdentity } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
 import { MediaWikiClient } from "@refract-org/ingestion";
@@ -30,17 +30,18 @@ export interface ClaimRange {
   to?: number;
 }
 
-export async function runClaimHistory(
+/**
+ * The revisions `claim` and `field` read: the latest `limit` (50 by default),
+ * forward from `from`, or backward from `to`. A closed range is read whole
+ * unless a limit is given.
+ */
+export async function fetchRevisionRange(
   pageTitle: string,
-  claimText: string,
-  useCache = false,
-  apiUrl?: string,
-  cacheDir?: string,
-  auth?: AuthConfig,
+  range: ClaimRange,
   revisionLimit?: number,
-  range: ClaimRange = {},
-): Promise<ClaimHistoryResult> {
-  if (!claimText.trim()) throw new Error("Supply nonempty passage text.");
+  apiUrl?: string,
+  auth?: AuthConfig,
+): Promise<Revision[]> {
   const { from, to } = range;
   for (const id of [from, to]) {
     if (id !== undefined && (!Number.isSafeInteger(id) || id < 1))
@@ -54,12 +55,26 @@ export async function runClaimHistory(
     throw new Error("--limit must be a positive integer.");
   const client = new MediaWikiClient(apiUrl ? { apiUrl, auth } : auth ? { auth } : undefined);
 
-  const revisions = await client.fetchRevisions(
+  return client.fetchRevisions(
     pageTitle,
     from !== undefined
       ? { direction: "newer", startRevId: from, endRevId: to, limit }
       : { direction: "older", startRevId: to, limit },
   );
+}
+
+export async function runClaimHistory(
+  pageTitle: string,
+  claimText: string,
+  useCache = false,
+  apiUrl?: string,
+  cacheDir?: string,
+  auth?: AuthConfig,
+  revisionLimit?: number,
+  range: ClaimRange = {},
+): Promise<ClaimHistoryResult> {
+  if (!claimText.trim()) throw new Error("Supply nonempty passage text.");
+  const revisions = await fetchRevisionRange(pageTitle, range, revisionLimit, apiUrl, auth);
   if (useCache && !apiUrl && revisions.length > 0) await saveRevisions(revisions, cacheDir);
 
   if (revisions.length === 0) {

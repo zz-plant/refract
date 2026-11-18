@@ -1,16 +1,59 @@
 export function sanitizeWikitext(value: string): string {
-  return value
+  const withoutRefs = value
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<ref[^>/]*?>[\s\S]*?<\/ref>/gi, " ")
     .replace(/<ref[^>]*/gi, (match) => (match.endsWith("/>") ? " " : match))
-    .replace(/<ref[^>]*\/>/gi, " ")
-    .replace(/\{\{[^}]*\}\}/g, " ")
+    .replace(/<ref[^>]*\/>/gi, " ");
+  return removeTemplates(withoutRefs, " ")
     .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
     .replace(/\[https?:\/\/[^\s\]]+\s*([^\]]*)\]/g, "$1")
     .replace(/'''/g, "")
     .replace(/''/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Remove every balanced `{{…}}`, nested ones included, putting `replacement`
+ * where each outermost one stood.
+ *
+ * One pass of /\{\{[^{}]*?\}\}/ removed only templates with none inside them,
+ * so a template that held another kept its own braces and parameters: an
+ * infobox with a {{start date}} in it came through whole as prose, and its
+ * "| result = …" lines became sentences. Repeating the regex until nothing
+ * changes would take one pass per level of nesting. This is one scan: each
+ * "{{" marks where the output stood, and its matching "}}" cuts the output
+ * back to that mark. An opener that never closes, and a closer with no opener,
+ * stay as text, with any balanced templates inside them still removed.
+ */
+export function removeTemplates(text: string, replacement: string): string {
+  if (!text.includes("{{")) return text;
+  // Chunks of output; a mark is how many chunks stood before its "{{", so
+  // cutting back is setting the array's length, and each chunk is written once.
+  const parts: string[] = [];
+  const marks: number[] = [];
+  let from = 0;
+  let i = 0;
+  while (i < text.length - 1) {
+    const opens = text[i] === "{" && text[i + 1] === "{";
+    const closes = !opens && marks.length > 0 && text[i] === "}" && text[i + 1] === "}";
+    if (!opens && !closes) {
+      i++;
+      continue;
+    }
+    if (i > from) parts.push(text.slice(from, i));
+    if (opens) {
+      marks.push(parts.length);
+      parts.push("{{");
+    } else {
+      parts.length = marks.pop() as number;
+      if (replacement) parts.push(replacement);
+    }
+    i += 2;
+    from = i;
+  }
+  if (from < text.length) parts.push(text.slice(from));
+  return parts.join("");
 }
 
 /**
@@ -110,7 +153,7 @@ function stripMarkup(wikitext: string): string {
   text = text.replace(/<ref\b[^>]*\/\s*>/gi, "");
   text = text.replace(/<ref\b[^>]*>[\s\S]*?<\/ref\s*>/gi, "");
   text = text.replace(/<[^>]+>/g, "");
-  text = text.replace(/\{\{[^{}]*?\}\}/g, "");
+  text = removeTemplates(text, "");
   text = text.replace(/'''(.+?)'''/g, "$1");
   text = text.replace(/''(.+?)''/g, "$1");
   // A category tag is page metadata, not prose. Left in, its name joined the next

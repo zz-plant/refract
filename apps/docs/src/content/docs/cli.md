@@ -101,6 +101,39 @@ ID the text output prints.
 refract claim "Pluto" --text "ninth and smallest" --from 71593043 --to 71601937 --json | jq '.status, .revisions[0].revisionId'
 ```
 
+## `refract field`
+
+Track a template parameter, such as an infobox field, across revisions.
+
+```bash
+refract field <page> --param <name> [options]
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `page` | required (positional) | Page title |
+| `-p, --param <name>` | required | Parameter to track, e.g. `result` |
+| `--template <name>` | any | Read the parameter only from this template, e.g. `Infobox military conflict`. Without it, the first top-level template in page order that has the parameter is read, and a note names any others. |
+| `--limit <n>` | `50` | Revisions read: the latest N. With both `--from` and `--to`, the whole range unless set |
+| `--from <revId>` | — | Start revision ID; reads forward from it |
+| `--to <revId>` | — | End revision ID; without `--from`, reads backward from it |
+| `-j, --json` | off | Print the result as one JSON document instead of text |
+| `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
+
+Each entry in `changes` is a revision whose value differed from the one before
+it. Its `kind` is `added` or `removed` when the field appears or goes, `text`
+when its prose changes, and `markup` when only its wikitext does: a reference
+removed while the words stay is a `markup` change. `returnsToEarlierText` marks
+a value that matches one seen earlier in the selection, and `returns` counts
+them, which is how back-and-forth over a field shows. `value` is the
+parameter's wikitext; `text` is it with references, comments, templates and
+link markup removed. Names of templates and parameters compare without regard
+to case. Refract records what the field said, not whether it was right.
+
+```bash
+refract field "Pluto" --param discoverer --template "Infobox planet" --json | jq '.changes[] | [.revisionId, .kind, .text]'
+```
+
 ## `refract snapshot`
 
 Reconstruct page state at a point in time.
