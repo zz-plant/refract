@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { marked } from "marked";
 import { describe, expect, it } from "vitest";
 import { rewriteLink } from "../links.mjs";
+import { rewriteLinks } from "../llms.mjs";
 import { BASE, CORE_ASSETS, CORE_GUIDES } from "../site.mjs";
 import {
 	DIST_DIR,
@@ -11,6 +12,7 @@ import {
 	findFiles,
 	findMarkdownFiles,
 	PUBLIC_DIR,
+	pageSlugs,
 	ROOT_DIR,
 } from "./site";
 
@@ -238,6 +240,105 @@ describe("Generated site links", () => {
 			redirects,
 			`These internal links redirect:\n${redirects.join("\n")}`,
 		).toEqual([]);
+	});
+});
+
+// llms.txt and llms-full.txt are read by agents, outside any page, so every
+// link in them has to be an absolute URL that the published site answers.
+describe("llms.txt and llms-full.txt", () => {
+	// The pages an agent needs to use Refract.
+	const AGENT_PAGES = [
+		"quickstart",
+		"install",
+		"cli",
+		"mcp",
+		"tutorials/mcp-agent",
+		"schema",
+		"events",
+		"review",
+		"demo",
+		"boundary",
+	];
+
+	it("publishes llms.txt as a title, a summary and sections of links", async () => {
+		const text = await readFile(join(DIST_DIR, "llms.txt"), "utf-8");
+		const [title, blank, summary] = text.split("\n");
+		expect(title).toBe("# Refract");
+		expect(blank).toBe("");
+		expect(summary).toMatch(/^> \S/);
+		expect(text.match(/^## \S/gm)?.length).toBeGreaterThan(1);
+		expect(text, "llmstxt.org sections are H2").not.toMatch(/^#{3,} /m);
+
+		const links = extractLinks(text);
+		const missing = AGENT_PAGES.map((slug) => `${SITE_URL}${slug}/`).filter(
+			(url) => !links.includes(url),
+		);
+		expect(missing, `llms.txt does not link:\n${missing.join("\n")}`).toEqual(
+			[],
+		);
+		expect(links).toContain(`${SITE_URL}llms-full.txt`);
+	});
+
+	it.each(["llms.txt", "llms-full.txt"])(
+		"links from %s only to absolute URLs that resolve",
+		async (file) => {
+			const path = join(DIST_DIR, file);
+			const links = extractLinks(await readFile(path, "utf-8"));
+			const relative = links.filter((href) => !isExternalLink(href));
+			const broken: string[] = [];
+			for (const href of links) {
+				const { isValid, resolvedPath } = await checkGeneratedLink(path, href);
+				if (!isValid) broken.push(`${href} (resolved: ${resolvedPath})`);
+			}
+
+			expect(links.length).toBeGreaterThan(10);
+			expect(relative, `Relative links in ${file}`).toEqual([]);
+			expect(broken, `Broken links in ${file}:\n${broken.join("\n")}`).toEqual(
+				[],
+			);
+		},
+	);
+
+	it("gives llms-full.txt every page once, under its address", async () => {
+		const text = await readFile(join(DIST_DIR, "llms-full.txt"), "utf-8");
+		const urls = Array.from(text.matchAll(/^URL: (\S+)$/gm), ([, url]) => url);
+		const expected = (await pageSlugs()).map((slug) =>
+			slug === "index" ? SITE_URL : `${SITE_URL}${slug}/`,
+		);
+		expect(urls.sort()).toEqual(expected.sort());
+		expect(urls[0]).toBe(SITE_URL);
+	});
+});
+
+describe("rewriteLinks", () => {
+	const resolve = (href: string) => `<${href}>`;
+
+	it.each([
+		["[CLI](cli.md)", "[CLI](<cli.md>)"],
+		["![Flow](flow.svg)", "![Flow](<flow.svg>)"],
+		["[a](a.md) and [b](b.md#x)", "[a](<a.md>) and [b](<b.md#x>)"],
+		["[ref]: cli.md", "[ref]: <cli.md>"],
+		['<a href="review/">Review</a>', '<a href="<review/>">Review</a>'],
+		["[`refract review`](review.md)", "[`refract review`](<review.md>)"],
+	])("rewrites %s", (markdown, expected) => {
+		expect(rewriteLinks(markdown, resolve)).toBe(expected);
+	});
+
+	it.each([
+		"Write `[CLI](cli.md)` for a link.",
+		"Write ``[CLI](cli.md)`` for a link.",
+		"```markdown\n[CLI](cli.md)\n```",
+		"~~~\n[CLI](cli.md)\n~~~",
+		"- Step:\n\n  ```markdown\n  [CLI](cli.md)\n  ```",
+		"````markdown\n```\n[CLI](cli.md)\n```\n````",
+	])("leaves code as it is: %s", (markdown) => {
+		expect(rewriteLinks(markdown, resolve)).toBe(markdown);
+	});
+
+	it("rewrites links after a code block closes", () => {
+		expect(rewriteLinks("```\n[a](a.md)\n```\n[b](b.md)", resolve)).toBe(
+			"```\n[a](a.md)\n```\n[b](<b.md>)",
+		);
 	});
 });
 
