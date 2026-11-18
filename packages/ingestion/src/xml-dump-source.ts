@@ -31,6 +31,47 @@ function extractPageXml(text: string, title: string): string | null {
   return null;
 }
 
+// The two readers below scan with indexOf rather than a regex. Lazy runs
+// such as /<contributor>[\s\S]*?<username>…/ and /<text\b([^>]*?)(\/?)>/ were
+// retried from every opener in text that never closed one, which took time
+// quadratic in its length.
+
+/** The editor a revision's <contributor> names: its <username>, or the <ip> of a logged-out edit. */
+function readContributor(xml: string): string | undefined {
+  const open = xml.indexOf("<contributor>");
+  if (open < 0) return undefined;
+  const close = xml.indexOf("</contributor>", open);
+  if (close < 0) return undefined;
+  const block = xml.slice(open, close);
+  for (const tag of ["username", "ip"]) {
+    const start = block.indexOf(`<${tag}>`);
+    if (start < 0) continue;
+    const end = block.indexOf(`</${tag}>`, start);
+    if (end >= 0) return block.slice(start + tag.length + 2, end);
+  }
+  return undefined;
+}
+
+/** The first <text …> tag: its attributes, and whether it closes itself. */
+function readTextTag(xml: string): { attrs: string; selfClosing: boolean } | undefined {
+  let from = 0;
+  for (;;) {
+    const open = xml.indexOf("<text", from);
+    if (open < 0) return undefined;
+    const next = xml[open + 5];
+    // "<textarea" or similar is not a <text> tag.
+    if (next !== undefined && /[A-Za-z0-9_:-]/.test(next)) {
+      from = open + 5;
+      continue;
+    }
+    const gt = xml.indexOf(">", open + 5);
+    if (gt < 0) return undefined;
+    const inside = xml.slice(open + 5, gt).trimEnd();
+    const selfClosing = inside.endsWith("/");
+    return { attrs: selfClosing ? inside.slice(0, -1) : inside, selfClosing };
+  }
+}
+
 function extractRevisions(pageXml: string, pageTitle: string, pageId: number, options?: RevisionOptions): Revision[] {
   const revs: Revision[] = [];
   const re = /<revision>([\s\S]*?)<\/revision>/g;
@@ -48,17 +89,15 @@ function extractRevisions(pageXml: string, pageTitle: string, pageId: number, op
     const parentMatch = xml.match(/<parentid>(\d+)<\/parentid>/);
     const commentRaw = xml.match(/<comment>([\s\S]*?)<\/comment>/);
     const comment = commentRaw ? decodeXmlEntities(commentRaw[1]) : "";
-    const userMatch = xml.match(
-      /<contributor>[\s\S]*?<(?:username|ip)>([\s\S]*?)<\/(?:username|ip)>[\s\S]*?<\/contributor>/,
-    );
+    const user = readContributor(xml);
 
     // A revision whose text was deleted is exported as <text … deleted="deleted" />.
     // Read as empty text, it looked like the page being blanked.
-    const textTag = xml.match(/<text\b([^>]*?)(\/?)>/);
-    const textHidden = textTag ? /\bdeleted\s*=/.test(textTag[1]) : false;
-    const textMatch = textTag && textTag[2] !== "/" ? xml.match(/<text[^>]*>([\s\S]*?)<\/text>/) : null;
+    const textTag = readTextTag(xml);
+    const textHidden = textTag ? /\bdeleted\s*=/.test(textTag.attrs) : false;
+    const textMatch = textTag && !textTag.selfClosing ? xml.match(/<text[^>]*>([\s\S]*?)<\/text>/) : null;
     const content = textMatch ? decodeXmlEntities(textMatch[1]) : "";
-    const bytes = textTag?.[1].match(/\bbytes\s*=\s*"(\d+)"/);
+    const bytes = textTag?.attrs.match(/\bbytes\s*=\s*"(\d+)"/);
 
     const ts = timestampMatch[1];
     if (options?.start && new Date(ts) < options.start) continue;
@@ -71,7 +110,7 @@ function extractRevisions(pageXml: string, pageTitle: string, pageId: number, op
       pageId,
       pageTitle,
       timestamp: ts,
-      ...(userMatch ? { user: decodeXmlEntities(userMatch[1]) } : {}),
+      ...(user !== undefined ? { user: decodeXmlEntities(user) } : {}),
       comment,
       content,
       size: bytes ? parseInt(bytes[1], 10) : Buffer.byteLength(content, "utf8"),

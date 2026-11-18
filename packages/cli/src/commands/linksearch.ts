@@ -36,10 +36,12 @@ const DEFAULT_MAX_LINKS = 10_000;
 
 /** A host and optional path, without protocol or trailing slash: what `exturlusage` takes. */
 export function linkSearchPattern(input: string): string {
-  const pattern = input
-    .trim()
-    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
-    .replace(/\/+$/, "");
+  const withoutProtocol = input.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  // Trailing slashes are cut by hand: /\/+$/ retried from every "/" in a long
+  // run of them, which took time quadratic in its length.
+  let end = withoutProtocol.length;
+  while (end > 0 && withoutProtocol[end - 1] === "/") end--;
+  const pattern = withoutProtocol.slice(0, end);
   if (!pattern || /\s/.test(pattern)) throw new Error(`Not a domain or URL prefix: "${input}"`);
   return pattern;
 }

@@ -14,6 +14,13 @@ describe("linkSearchPattern", () => {
     expect(linkSearchPattern("*.news.example")).toBe("*.news.example");
   });
 
+  it("stays linear on a long run of slashes", () => {
+    const input = `a${"/".repeat(50_000)}x`;
+    const t0 = performance.now();
+    expect(linkSearchPattern(input)).toBe(input);
+    expect(performance.now() - t0).toBeLessThan(200);
+  });
+
   it("rejects an empty pattern or one with spaces", () => {
     expect(() => linkSearchPattern("  ")).toThrow();
     expect(() => linkSearchPattern("news example")).toThrow();

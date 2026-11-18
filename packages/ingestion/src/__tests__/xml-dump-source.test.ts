@@ -195,6 +195,29 @@ describe("XmlDumpRevisionSource", () => {
     });
   });
 
+  // /<contributor>[\s\S]*?<username>…/ and /<text\b([^>]*?)(\/?)>/ took
+  // seconds on revisions like these: quadratic in the openers left unclosed.
+  it("stays linear on a revision with many unclosed tags", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "refract-xml-test-"));
+    const filePath = join(dir, "dump.xml");
+    const junk = `${"&lt;contributor&gt;".repeat(1)}${"<contributor>".repeat(20_000)}${"<text ".repeat(20_000)}`;
+    writeFileSync(
+      filePath,
+      `<mediawiki><page><title>T</title><id>1</id><revision><id>5</id><timestamp>2026-01-01T00:00:00Z</timestamp>${junk}</revision></page></mediawiki>`,
+      "utf-8",
+    );
+    const source = new XmlDumpRevisionSource(filePath);
+    const t0 = performance.now();
+    const revs = [];
+    for await (const rev of source.revisions("T")) revs.push(rev);
+    const elapsed = performance.now() - t0;
+    rmSync(dir, { recursive: true });
+    expect(revs).toHaveLength(1);
+    expect(revs[0].user).toBeUndefined();
+    expect(revs[0].contentAvailable).toBe(false);
+    expect(elapsed).toBeLessThan(500);
+  });
+
   it("reads the file once for every page it serves", async () => {
     const dir = mkdtempSync(join(tmpdir(), "refract-xml-test-"));
     const filePath = join(dir, "dump.xml");
