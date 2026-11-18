@@ -4,7 +4,7 @@ import { diffCategories, extractCategories } from "./category-tracker.js";
 import { citationTracker } from "./citation-tracker.js";
 import type { CitationRef, Template, TemplateType } from "./index.js";
 import type { ProtectionLogRecord } from "./protection-tracker.js";
-import { revertDetector } from "./revert-detector.js";
+import { findIdentityReverts, revertDetector } from "./revert-detector.js";
 import { sectionDiffer } from "./section-differ.js";
 import {
   computeCertaintyProfile,
@@ -279,6 +279,7 @@ export function detectEditorialSignals(
   extraFacts: DeterministicFact[],
   protectionLogs: readonly ProtectionLogRecord[] = [],
   revertPatterns?: RegExp[],
+  restoredRevisionId?: number,
 ): EvidenceEvent[] {
   const events: EvidenceEvent[] = [];
 
@@ -341,7 +342,10 @@ export function detectEditorialSignals(
   );
   events.push(...paramChangeEvents);
 
-  if (isRevRevert) {
+  // A revert is found by its edit summary, by its text being identical to an
+  // earlier revision's (restoredRevisionId), or both; one event either way,
+  // with a fact for each basis that held.
+  if (isRevRevert || restoredRevisionId !== undefined) {
     events.push({
       eventType: "revert_detected",
       fromRevisionId: before.revId,
@@ -350,7 +354,10 @@ export function detectEditorialSignals(
       before: "",
       after: isBrief ? "" : after.comment,
       deterministicFacts: [
-        { fact: "revert_detected", detail: after.comment },
+        ...(isRevRevert ? [{ fact: "revert_detected", detail: after.comment }] : []),
+        ...(restoredRevisionId !== undefined
+          ? [{ fact: "identity_revert", detail: `restores=${restoredRevisionId}` }]
+          : []),
         { fact: "policy_signal", detail: "dimension=edit_warring signal=revert_detected" },
         ...extraFacts,
       ],
@@ -540,6 +547,8 @@ export function buildRevisionEvents(
     return result;
   };
 
+  const identityReverts = findIdentityReverts(sortedRevs);
+
   for (let i = 1; i < sortedRevs.length; i++) {
     const before = sortedRevs[i - 1];
     const after = sortedRevs[i];
@@ -568,6 +577,7 @@ export function buildRevisionEvents(
         pairExtraFacts,
         protectionLogs,
         options.revertPatterns,
+        identityReverts.get(after.revId),
       ),
       ...diffSentences(
         before,

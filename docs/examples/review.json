@@ -493,6 +493,56 @@
           }
         },
         {
+          "eventType": "revert_detected",
+          "fromRevisionId": 4,
+          "toRevisionId": 5,
+          "section": "",
+          "before": "",
+          "after": "Fictional onboarding revision",
+          "deterministicFacts": [
+            {
+              "fact": "identity_revert",
+              "detail": "restores=3"
+            },
+            {
+              "fact": "policy_signal",
+              "detail": "dimension=edit_warring signal=revert_detected"
+            }
+          ],
+          "layer": "policy_coded",
+          "timestamp": "2025-01-05T12:00:00Z",
+          "schemaVersion": "0.5.0",
+          "editMagnitude": "minor",
+          "contentChange": "expansion",
+          "keyTerms": [
+            "fictional",
+            "onboarding",
+            "revision"
+          ],
+          "certaintyProfile": {
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "hedging": 0
+          },
+          "directionSignal": "neutral",
+          "quantitativeFindings": [],
+          "eventId": "cf6b939916beafe4",
+          "entryId": "af1b571b25a1b79fda9910dc54aaad563519e7cbacc7730506558ee1935b5c20",
+          "source": {
+            "kind": "fictional_sample",
+            "key": "9f3e6db9080df0422d20f9e2dc269d082aa2bc9a22aa8fa56067ed6e015bd943",
+            "apiUrl": "https://example.org/w/api.php",
+            "pageTitle": "Rivergate Library (fictional)",
+            "pageId": 1
+          },
+          "revisionLinks": {
+            "before": "https://example.org/w/index.php?oldid=4",
+            "after": "https://example.org/w/index.php?oldid=5",
+            "diff": "https://example.org/w/index.php?oldid=4&diff=5"
+          }
+        },
+        {
           "eventType": "sentence_reintroduced",
           "fromRevisionId": 4,
           "toRevisionId": 5,
@@ -543,5 +593,5 @@
       ]
     }
   ],
-  "reportId": "79a802e0e02cf61d4741ef311eb3d174a42103d8c585070047ff8e7ceaf33041"
+  "reportId": "68f29815f0d6f5a65bcadb30456a0e36fd91dbb8c4c294e5d022118e3ebe0b0e"
 }

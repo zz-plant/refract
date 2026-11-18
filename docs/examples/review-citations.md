@@ -1,6 +1,6 @@
 # Source change review
 
-Report: 79a802e0e02cf61d4741ef311eb3d174a42103d8c585070047ff8e7ceaf33041
+Report: 68f29815f0d6f5a65bcadb30456a0e36fd91dbb8c4c294e5d022118e3ebe0b0e
 Analyzer: 0.6.2; scope: article revisions only.
 
 ## Rivergate Library (fictional)
@@ -11,7 +11,7 @@ Coverage: complete; 5 revisions (1 → 5).
 
 Fictional sample: dates, revision IDs, and URLs are illustrative. Inspect inputRevisions in the saved JSON report.
 
-1 shown; 8 hidden by filters. Acknowledgment covers all revisions and events in the unfiltered saved report.
+1 shown; 9 hidden by filters. Acknowledgment covers all revisions and events in the unfiltered saved report.
 
 ### citation_removed — (lead)
 
@@ -29,4 +29,4 @@ After:
 (empty)
 ```
 
-After inspecting the saved report: refract review --state-dir './review-state' --ack 79a802e0e02cf61d4741ef311eb3d174a42103d8c585070047ff8e7ceaf33041
+After inspecting the saved report: refract review --state-dir './review-state' --ack 68f29815f0d6f5a65bcadb30456a0e36fd91dbb8c4c294e5d022118e3ebe0b0e

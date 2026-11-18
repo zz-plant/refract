@@ -57,7 +57,7 @@ continuous semantic claim identity. See [claim-state timelines](./concepts/claim
 
 | Event type | Trigger |
 |---|---|
-| `revert_detected` | Edit summary matches one of six default patterns: `revert…`, `undid revision`, `rvv`, `rollback`, `restore…`, `[[WP:ROLLBACK]]`. A bare "rv" or "undo" does not match |
+| `revert_detected` | The edit summary matches one of six default patterns (`revert…`, `undid revision`, `rvv`, `rollback`, `restore…`, `[[WP:ROLLBACK]]`; a bare "rv" or "undo" does not match), or the revision's text is identical to an earlier analyzed revision other than the one directly before it. Facts say which: `revert_detected` carries the summary, `identity_revert` names the revision restored (`restores=<revId>`). A revert to a state older than every analyzed revision is found only by its summary |
 | `edit_cluster_detected` | 3+ edits within a configurable time window (default: 1 hour) |
 
 An `edit_cluster_detected` event spans the cluster: `fromRevisionId` is its first revision and `toRevisionId` its last. `--cluster-window` sets the window in minutes.
