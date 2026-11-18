@@ -115,10 +115,11 @@ applies the boundary's default rule instead. A model's result carries its reply 
 
 ### `get_statement_history`
 
-Track normalized text or partial word matches across revisions. Returns matched
-revision IDs, timestamps, an overall status, and a short change summary. A
-partial match is not a guarantee of equivalent meaning; state labels summarize
-the matching rules. See [state labels](./concepts/claim-state-timelines.md#state-labels).
+Track normalized text or partial word matches across revisions. Returns the
+passage's transitions, matched revision IDs, timestamps, an overall status, and a
+short change summary. A partial match is not a guarantee of equivalent meaning;
+state labels summarize the matching rules. See [state labels](./concepts/claim-state-timelines.md#state-labels)
+and [transitions](./concepts/claim-state-timelines.md#transitions).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -127,8 +128,11 @@ the matching rules. See [state labels](./concepts/claim-state-timelines.md#state
 | `context` | string | | Optional use-context slug |
 | `depth` | enum | | `brief`, `detailed` (default), or `forensic` |
 | `api` | string | | MediaWiki API base URL. Defaults to English Wikipedia |
+| `limit` | number | | Revisions to read (default 50, or the whole range when both `from` and `to` are given) |
+| `from` | number | | Read forward from this revision ID |
+| `to` | number | | Read back from this revision ID |
 
-Response fields: `statement`, `page`, `context` (when one was passed), `revisions` (array of `revisionId` + `timestamp`), `status` (`present`, `absent`, `modified`, or `contested`), and `history_summary`.
+Response fields: `statement`, `page`, `context` (when one was passed), `revisions`, `transitions`, `status` (`present`, `absent`, `modified`, `contested`, or `unknown`), `history_summary`, `latest_revision_id`, `latest_match`, and `caveats`. At `brief` depth a revision is its `revisionId` and `timestamp`, and a transition keeps `kind`, `revisionId`, `timestamp`, `previousRevisionId`, `adjacent`, `heldRevisions`, `endedByRevisionId` and `endedAt`; `detailed` (the default) adds each revision's `section`, `text` and `match` and each transition's full record; `forensic` keeps everything.
 
 ### `snapshot`
 

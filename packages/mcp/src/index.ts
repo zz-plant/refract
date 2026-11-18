@@ -111,7 +111,7 @@ export const TOOLS = [
   {
     name: "get_statement_history",
     description:
-      "Track a statement across a page's revisions. A revision matches when its text contains the statement after lowercasing and collapsing whitespace, or else, partially, when one sentence holds at least 70% of the statement's words longer than three characters (at least three such words); a partial match does not establish the same meaning. Returns when the statement appeared, disappeared, or changed, with revision IDs, timestamps, an overall status, and a short change summary.",
+      "Track a statement's trajectory across a page's revisions. A revision matches when its text contains the statement after lowercasing and collapsing whitespace, or else, partially, when one sentence holds at least 70% of the statement's words longer than three characters (at least three such words); a partial match does not establish the same meaning. Returns each transition (first seen, wording changed, removed, reintroduced) with the fetched revisions it lies between, revert evidence, how many revisions the result held, and the nearest remaining sentence on a removal; plus matched revisions, an overall status, and a short change summary.",
     inputSchema: {
       type: "object",
       properties: {
@@ -124,6 +124,12 @@ export const TOOLS = [
           description: "History depth: brief, detailed, or forensic",
         },
         api: { type: "string", description: "MediaWiki API base URL. Defaults to English Wikipedia." },
+        limit: {
+          type: "number",
+          description: "Revisions to read (default 50, or the whole range when both from and to are given)",
+        },
+        from: { type: "number", description: "Read forward from this revision ID" },
+        to: { type: "number", description: "Read back from this revision ID" },
       },
       required: ["statement", "page"],
     },
@@ -241,6 +247,73 @@ function formatAnalyzeSummary(events: EvidenceEvent[], report: unknown): string 
   return lines.join("\n");
 }
 
+/** The read options `get_statement_history` passes on: which wiki, and which revisions. */
+export interface StatementHistoryOptions {
+  api?: string;
+  limit?: number;
+  from?: number;
+  to?: number;
+}
+
+/** The `get_statement_history` read options in `params`, checked. A bound or limit must be a positive integer. */
+export function statementHistoryOptions(params: Record<string, unknown>): StatementHistoryOptions {
+  const options: StatementHistoryOptions = {};
+  if (typeof params.api === "string") options.api = params.api;
+  for (const key of ["limit", "from", "to"] as const) {
+    const value = params[key];
+    if (value === undefined) continue;
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1)
+      throw new Error(`get_statement_history: ${key} must be a positive integer.`);
+    options[key] = value;
+  }
+  return options;
+}
+
+type Row = Record<string, unknown>;
+const pick = (row: Row, keys: readonly string[]): Row =>
+  Object.fromEntries(keys.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
+
+const BRIEF_REVISION = ["revisionId", "timestamp"] as const;
+const DETAILED_REVISION = ["revisionId", "timestamp", "section", "text", "match"] as const;
+const BRIEF_TRANSITION = [
+  "kind",
+  "revisionId",
+  "timestamp",
+  "previousRevisionId",
+  "adjacent",
+  "heldRevisions",
+  "endedByRevisionId",
+  "endedAt",
+] as const;
+
+/**
+ * The `get_statement_history` response for a claim history: matched revisions
+ * and transitions cut to `depth` (`brief` keeps IDs, times and how long each
+ * state held; `detailed` adds text; `forensic` keeps everything), with the
+ * status, summary, latest match and caveats.
+ */
+export function statementHistoryResponse(params: Record<string, unknown>, history: unknown): Row {
+  const h = (history ?? {}) as Row;
+  const depth = (params.depth as string) ?? "detailed";
+  const rows = (value: unknown) => (Array.isArray(value) ? (value as Row[]) : []);
+  const revisions = rows(h.revisions).map((r) =>
+    depth === "forensic" ? r : pick(r, depth === "brief" ? BRIEF_REVISION : DETAILED_REVISION),
+  );
+  const transitions = rows(h.transitions).map((t) => (depth === "brief" ? pick(t, BRIEF_TRANSITION) : t));
+  return {
+    statement: params.statement,
+    page: params.page,
+    context: params.context,
+    revisions,
+    transitions,
+    status: h.status,
+    history_summary: h.historySummary,
+    latest_revision_id: h.latestRevisionId,
+    latest_match: h.latestMatch,
+    caveats: h.caveats,
+  };
+}
+
 export interface McpServerOptions {
   analyze: (
     page: string,
@@ -257,8 +330,8 @@ export interface McpServerOptions {
   exportData: (page: string, options?: { depth?: string; api?: string; since?: string }) => Promise<unknown>;
   cron: (pagesFile: string) => Promise<unknown>;
   classify?: (boundary: string, input: unknown) => Promise<unknown>;
-  /** Receives the statement, the page it is tracked on, and the tool's `api`, which is undefined for the default wiki. */
-  getStatementHistory?: (statement: string, page: string, options?: { api?: string }) => Promise<unknown>;
+  /** Receives the statement, the page it is tracked on, and the read options the tool was given. */
+  getStatementHistory?: (statement: string, page: string, options?: StatementHistoryOptions) => Promise<unknown>;
   /** Receives the `snapshot` tool's arguments; the result is returned as JSON. */
   snapshot?: (args: Record<string, unknown>) => Promise<unknown>;
   /** Receives the `review` tool's arguments; the result is returned as JSON. */
@@ -417,36 +490,14 @@ export async function handleToolCall(
     }
 
     case "get_statement_history": {
-      const statement = params.statement as string;
-      const page = params.page as string;
-      const depth = (params.depth as string) ?? "detailed";
-      const context = params.context as string | undefined;
-
-      if (!options.getStatementHistory) {
+      if (!options.getStatementHistory)
         return { content: [{ type: "text", text: "Error: no get_statement_history handler configured" }] };
-      }
-      const history = await options.getStatementHistory(statement, page, { api: apiUrl });
-
-      const trimmedRevisions =
-        depth === "brief"
-          ? (history as any)?.revisions?.map((r: any) => ({ revisionId: r.revisionId, timestamp: r.timestamp })) || []
-          : depth === "forensic"
-            ? (history as any)?.revisions
-            : (history as any)?.revisions?.map((r: any) => ({
-                revisionId: r.revisionId,
-                timestamp: r.timestamp,
-                section: r.section,
-              })) || [];
-
-      const response = {
-        statement,
-        page,
-        context,
-        revisions: trimmedRevisions,
-        status: (history as any)?.status,
-        history_summary: (history as any)?.historySummary,
-      };
-      return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
+      const history = await options.getStatementHistory(
+        params.statement as string,
+        params.page as string,
+        statementHistoryOptions(params),
+      );
+      return { content: [{ type: "text", text: JSON.stringify(statementHistoryResponse(params, history), null, 2) }] };
     }
 
     case "snapshot":

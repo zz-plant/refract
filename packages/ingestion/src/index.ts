@@ -121,12 +121,24 @@ export { SnapshotDirectorySource, type SnapshotItem } from "./snapshot-source.js
 export type { StreamClientOptions, StreamEvent } from "./stream-client.js";
 export { WikimediaStreamClient } from "./stream-client.js";
 export { WaybackRevisionSource, type WaybackSourceOptions } from "./wayback-source.js";
-export type { PageToEntityMap, WikidataClaim, WikidataEntity, WikidataValue } from "./wikidata-mapper.js";
+export type {
+  PageToEntityMap,
+  WikidataClaim,
+  WikidataEntity,
+  WikidataStatementChange,
+  WikidataStatementHistory,
+  WikidataStatementRecord,
+  WikidataStatementTransition,
+  WikidataValue,
+} from "./wikidata-mapper.js";
 export {
+  diffWikidataStatements,
   fetchWikidataEntity,
   fetchWikidataId,
   mapPagesToEntities,
   mapPageToEntity,
+  parseWikidataEntity,
   wikidataEntityToEvents,
+  wikidataStatementHistory,
 } from "./wikidata-mapper.js";
 export { XmlDumpRevisionSource } from "./xml-dump-source.js";

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runClaim, runClaimHistory } from "../commands/claim.js";
+import { nearestPassage, runClaim, runClaimHistory } from "../commands/claim.js";
 
 const API = "https://wiki.example/w/api.php";
 const CLAIM = "The bridge opened to traffic in 2031.";
@@ -228,5 +228,88 @@ describe("claim history reads the latest revisions", () => {
     // Reading the page's first two revisions, the claim was reported absent.
     expect(result.status).not.toBe("absent");
     expect(result.revisions.map((r) => r.revisionId)).toContain(4);
+  });
+});
+
+describe("claim history transitions", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  // Added in 2, kept in 3, rewritten past the matcher in 4, put back by an
+  // undo in 5, and removed in 7, whose parent 6 was not read.
+  const REWRITE = "The bridge carried its first cars in 2031.";
+  const revisions = [
+    revision(1, "Stub."),
+    revision(2, CLAIM),
+    revision(3, CLAIM),
+    { ...revision(4, REWRITE), comment: "copyedit" },
+    { ...revision(5, CLAIM), comment: "Undid revision 4 by Example" },
+    revision(7, "Stub, expanded."),
+  ];
+  const read = async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response(JSON.stringify({ query: { pages: [{ pageid: 1, title: "Bridge", revisions }] } })),
+      ),
+    );
+    return runClaimHistory("Bridge", CLAIM, false, API, undefined, undefined, undefined, { from: 1, to: 7 });
+  };
+
+  it("places each change between the revisions it lies between and says how long it held", async () => {
+    const { transitions } = await read();
+    expect(transitions.map((t) => [t.kind, t.previousRevisionId, t.revisionId, t.adjacent, t.heldRevisions])).toEqual([
+      ["first_seen", 1, 2, true, 2],
+      ["removed", 3, 4, true, 1],
+      ["reintroduced", 4, 5, true, 1],
+      ["removed", 5, 7, false, 1],
+    ]);
+    expect(transitions.map((t) => t.endedByRevisionId)).toEqual([4, 5, 7, undefined]);
+    expect(transitions[0]).toMatchObject({ before: "", after: CLAIM, endedAt: "2030-04-01T00:00:00Z" });
+    expect(transitions[3].endedAt).toBeUndefined();
+  });
+
+  it("records revert evidence: the summary and the revision whose text was restored", async () => {
+    const { transitions } = await read();
+    expect(transitions[2]).toMatchObject({
+      kind: "reintroduced",
+      editSummary: "Undid revision 4 by Example",
+      revertSummary: true,
+      restoresRevisionId: 3,
+    });
+    expect(transitions[1]).toMatchObject({ revertSummary: false, editSummary: "copyedit" });
+    expect(transitions[1].restoresRevisionId).toBeUndefined();
+  });
+
+  it("shows the nearest remaining sentence on a removal that may be a rewrite, and none when nothing is close", async () => {
+    const { transitions } = await read();
+    expect(transitions[1].nearest).toEqual({ text: REWRITE, wordOverlap: 0.5 });
+    expect(transitions[3].nearest).toBeUndefined();
+  });
+
+  it("prints one line per transition", async () => {
+    await read();
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await runClaim("Bridge", CLAIM, false, API, undefined, undefined, undefined, { from: 1, to: 7 });
+    const output = log.mock.calls.flat().join("\n");
+    expect(output).toContain(
+      "[2030-02-01T00:00:00Z] first seen, rev 1 → 2; held 2 revision(s) until 2030-04-01T00:00:00Z",
+    );
+    expect(output).toContain("rev 5 → 7 (not adjacent); held 1 revision(s) through the latest read");
+    expect(output).toContain("revert summary, restores rev 3");
+    expect(output).toContain(`nearest remaining sentence (50% of words): "${REWRITE}"`);
+  });
+});
+
+describe("nearestPassage", () => {
+  it("keeps the sentence with the largest share of the passage's words, from half up", () => {
+    expect(nearestPassage("Alpha bravo charlie delta", "Alpha only. Alpha bravo here. Nothing.")).toEqual({
+      text: "Alpha bravo here.",
+      wordOverlap: 0.5,
+    });
+    expect(nearestPassage("Alpha bravo charlie delta", "Alpha only. Nothing.")).toBeUndefined();
+    expect(nearestPassage("a an the", "a an the")).toBeUndefined();
   });
 });

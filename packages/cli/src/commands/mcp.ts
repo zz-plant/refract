@@ -2,8 +2,12 @@ import { isAbsolute, join } from "node:path";
 import { stripWikitext } from "@refract-org/analyzers";
 import type { AnalyzerConfig, EvidenceEvent, InferenceBoundary } from "@refract-org/evidence-graph";
 import { buildInferencePrompt, DEFAULT_ANALYZER_CONFIG, parseInferenceResponse } from "@refract-org/evidence-graph";
-import type { AuthConfig } from "@refract-org/ingestion";
-import { createMcpServer, type McpServerOptions } from "@refract-org/mcp";
+import {
+  type McpServerOptions,
+  type StatementHistoryOptions,
+  statementHistoryOptions,
+  statementHistoryResponse,
+} from "@refract-org/mcp";
 import { OpenAICompatibleProvider } from "../inference-provider.js";
 import { REFRACT_VERSION } from "../version.js";
 import { runAnalyze } from "./analyze.js";
@@ -317,39 +321,12 @@ export async function handleToolCall(
     }
 
     case "get_statement_history": {
-      const statement = params.statement as string;
-      const page = params.page as string;
-      const depth = (params.depth as string) ?? "detailed";
-      const context = params.context as string | undefined;
-
-      const history = await runClaimHistory(page, statement, false, apiUrl, undefined, undefined);
-
-      // depth influences how many revisions are loaded and how much text is retained
-      const trimmedRevisions =
-        depth === "brief"
-          ? history.revisions.map((r: any) => ({ revisionId: r.revisionId, timestamp: r.timestamp }))
-          : depth === "forensic"
-            ? history.revisions
-            : history.revisions.map((r: any) => ({
-                revisionId: r.revisionId,
-                timestamp: r.timestamp,
-                section: r.section,
-                text: r.text,
-                match: r.match,
-              }));
-
-      const response = {
-        statement: history.statement,
-        page: history.page,
-        context,
-        revisions: trimmedRevisions,
-        status: history.status,
-        history_summary: history.historySummary,
-        latest_revision_id: history.latestRevisionId,
-        latest_match: history.latestMatch,
-        caveats: history.caveats,
-      };
-      return { content: [{ type: "text", text: JSON.stringify(response, null, 2) }] };
+      const history = await statementHistory(
+        params.statement as string,
+        params.page as string,
+        statementHistoryOptions(params),
+      );
+      return { content: [{ type: "text", text: JSON.stringify(statementHistoryResponse(params, history), null, 2) }] };
     }
 
     case "snapshot":
@@ -361,6 +338,16 @@ export async function handleToolCall(
     default:
       return { content: [{ type: "text", text: `Unknown tool: ${name}` }] };
   }
+}
+
+/** A passage's claim history on `page`, read from the wiki `options.api` names over the revisions the options select. */
+function statementHistory(statement: string, page: string, options: StatementHistoryOptions = {}) {
+  if (typeof statement !== "string" || !statement.trim()) throw new Error("get_statement_history needs a statement.");
+  if (typeof page !== "string" || !page.trim()) throw new Error("get_statement_history needs a page title.");
+  return runClaimHistory(page, statement, false, options.api, undefined, undefined, options.limit, {
+    from: options.from,
+    to: options.to,
+  });
 }
 
 /** The `snapshot` tool: the revision live at a date, as data rather than console output. */
@@ -666,6 +653,8 @@ export async function runMcpServer(): Promise<void> {
         return { error: String(error) };
       }
     },
+
+    getStatementHistory: statementHistory,
 
     snapshot: snapshotTool,
     review: reviewTool,

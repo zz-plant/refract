@@ -30,22 +30,40 @@ describe("mcp stdio transport", () => {
 });
 
 describe("get_statement_history", () => {
-  it("passes the page and API URL to the consumer's callback", async () => {
-    const getStatementHistory = vi.fn(async () => ({
-      revisions: [{ revisionId: 12, timestamp: "2024-01-02T00:00:00Z", section: "History" }],
+  it("passes the page and read options to the handler", async () => {
+    const getStatementHistory = vi.fn().mockResolvedValue({
+      revisions: [
+        { revisionId: 5, timestamp: "2025-01-01T00:00:00Z", text: "A passage.", section: "", match: "exact" },
+      ],
+      transitions: [{ kind: "first_seen", revisionId: 5, timestamp: "2025-01-01T00:00:00Z", adjacent: false }],
       status: "present",
-      historySummary: "Tracked.",
-    }));
+      historySummary: "Present.",
+      latestRevisionId: 5,
+      latestMatch: "exact",
+      caveats: ["Coverage is the fetched revisions."],
+    });
     const result = await handleToolCall(
       "get_statement_history",
-      { statement: "Pluto is a dwarf planet.", page: "Pluto", api: "https://de.wikipedia.org/w/api.php" },
+      { statement: "A passage", page: "Page", api: "https://wiki.example/w/api.php", limit: 200, from: 3 },
       { ...options, getStatementHistory },
     );
 
-    expect(getStatementHistory).toHaveBeenCalledExactlyOnceWith("Pluto is a dwarf planet.", "Pluto", {
-      api: "https://de.wikipedia.org/w/api.php",
+    expect(getStatementHistory).toHaveBeenCalledWith("A passage", "Page", {
+      api: "https://wiki.example/w/api.php",
+      limit: 200,
+      from: 3,
     });
-    expect(JSON.parse(result.content[0].text)).toMatchObject({ page: "Pluto", status: "present" });
+    const response = JSON.parse(result.content[0].text);
+    expect(response).toMatchObject({
+      statement: "A passage",
+      page: "Page",
+      status: "present",
+      latest_revision_id: 5,
+      latest_match: "exact",
+      caveats: ["Coverage is the fetched revisions."],
+    });
+    expect(response.transitions).toHaveLength(1);
+    expect(response.revisions[0]).toMatchObject({ text: "A passage.", match: "exact" });
   });
 
   it("reports a missing callback instead of throwing", async () => {

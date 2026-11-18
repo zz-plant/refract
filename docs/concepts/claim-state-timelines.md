@@ -73,6 +73,58 @@ A `contested` label alone does not establish an editorial dispute, and
 Consumers should inspect the underlying events, revision coverage, and matching
 rules before assigning meaning to a state.
 
+## Transitions
+
+`runClaimHistory`, `refract claim --json` and the MCP `get_statement_history`
+tool return `transitions`, oldest first: one per change in whether, or how, the
+tracked passage appears in the revisions read. Each is an observation with its
+evidence; none is a judgment about the passage.
+
+- **`kind`**: `first_seen`, `text_changed`, `removed` or `reintroduced`.
+- **Where it lies.** The change happened after `previousRevisionId` and at or
+  before `revisionId`. `adjacent` is true when the first is the second's
+  parent; when it is false, revisions that were not read lie between them, and
+  the change is in one of them. A `first_seen` with no `previousRevisionId` is
+  on the first revision read, so the passage may be older than the range.
+- **`before` / `after`**: the matched text either side, empty when absent.
+- **Revert evidence**: `editSummary`; `revertSummary`, true when the summary
+  matches a default revert pattern; and `restoresRevisionId`, when the
+  revision's text is byte-identical to an earlier revision read other than its
+  predecessor (the same rule as `identity_revert`).
+- **How long it held**: `heldRevisions` counts the revisions read, with text,
+  in which the resulting state lasted, this one included; `endedByRevisionId`
+  and `endedAt` name the next transition. Both are absent when the state held
+  through the latest revision read.
+- **`nearest`**, on a removal: the sentence left in the revision that carries
+  the largest share, at least half, of the passage's words longer than three
+  characters, and that share. It is below the matching threshold by
+  construction. It exists so that a rewrite such as "is" becoming "was" is not
+  read as a deletion without a look; it does not establish that the two say the
+  same thing.
+
+Revisions whose text was withheld are skipped, so they neither start nor end a
+transition and make the pair around them non-adjacent.
+
+## Structured statements
+
+`@refract-org/ingestion` reads Wikidata statements with their identity and
+qualifiers: `parseWikidataEntity` gives each statement's ID (Wikidata's GUID,
+stable across edits to the statement), property, rank, value, qualifiers and
+reference count; time values keep their precision. `fetchWikidataEntity(qid,
+{ revisionId })` reads an entity as it stood at a revision.
+
+`wikidataStatementHistory(qid, revisions)` takes revisions of the entity's page,
+as `MediaWikiClient` fetches them from `https://www.wikidata.org/w/api.php` with
+the QID as the title, and reports the statements at the earliest revision and
+each statement added, removed or changed after it (`value`, `rank`,
+`qualifiers`, `references`), placed between the revisions it lies between as
+sentence transitions are. `diffWikidataStatements` compares any two states.
+
+A qualifier such as start time (P580) or end time (P582) is a date the entity
+records; the revision that added it is when it was recorded. Refract reports
+both and compares neither: what the interval between them means is a
+downstream question. See [repository boundary](../repository-boundary.md).
+
 ## Reproduction and verification
 
 The same captured revision inputs, supporting metadata, analyzer versions, and

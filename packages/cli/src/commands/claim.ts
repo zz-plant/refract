@@ -1,4 +1,4 @@
-import { findSectionForText, stripWikitext } from "@refract-org/analyzers";
+import { findIdentityReverts, findSectionForText, revertDetector, stripWikitext } from "@refract-org/analyzers";
 import type { ClaimState, Revision } from "@refract-org/evidence-graph";
 import { createClaimIdentity } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
@@ -15,10 +15,50 @@ export interface ClaimHistoryVariant {
   match: "exact" | "partial";
 }
 
+/**
+ * One change in whether, or how, the passage appears, between two fetched
+ * revisions. The change happened after `previousRevisionId` and at or before
+ * `revisionId`; when `adjacent` is false, revisions that were not fetched lie
+ * between them and the change could be in any of those.
+ */
+export interface ClaimTransition {
+  kind: "first_seen" | "text_changed" | "removed" | "reintroduced";
+  revisionId: number;
+  timestamp: string;
+  /** The fetched revision before this one with readable text. Absent on the first revision read: a passage first seen there may be older than the range. */
+  previousRevisionId?: number;
+  previousTimestamp?: string;
+  /** True when `previousRevisionId` is this revision's parent, so no revision lies between them. */
+  adjacent: boolean;
+  /** Matched text before the change; empty when the passage was absent. */
+  before: string;
+  /** Matched text after the change; empty when the passage was removed. */
+  after: string;
+  editSummary: string;
+  /** The edit summary matches a default revert pattern. */
+  revertSummary: boolean;
+  /** This revision's text is identical to an earlier fetched revision other than its predecessor: the one it restores. */
+  restoresRevisionId?: number;
+  /** Fetched revisions with readable text in which the state this transition produced held, counting this one. */
+  heldRevisions: number;
+  /** The next transition, which ended this state. Both are absent when the state held through the latest fetched revision. */
+  endedByRevisionId?: number;
+  endedAt?: string;
+  /**
+   * On a removal: the sentence left in the revision that carries the largest
+   * share (at least half) of the passage's words, and that share. Word overlap
+   * below the matching threshold, recorded so a rewrite is not read as a
+   * deletion without a look; it does not establish that the two say the same.
+   */
+  nearest?: { text: string; wordOverlap: number };
+}
+
 export interface ClaimHistoryResult {
   statement: string;
   page: string;
   revisions: ClaimHistoryVariant[];
+  /** Changes in the passage's presence or wording, oldest first. */
+  transitions: ClaimTransition[];
   status: "present" | "absent" | "modified" | "contested" | "unknown";
   pageId?: number;
   historySummary: string;
@@ -94,6 +134,7 @@ export async function runClaimHistory(
       statement: claimText,
       page: pageTitle,
       revisions: [],
+      transitions: [],
       status: "absent",
       historySummary: `No revisions found for "${pageTitle}".`,
     };
@@ -104,6 +145,9 @@ export async function runClaimHistory(
   const revs = withTs.map((x) => x.r);
 
   const variants: ClaimHistoryVariant[] = [];
+  const trajectory: ClaimTransition[] = [];
+  const restores = findIdentityReverts(revs);
+  let previous: Revision | undefined;
   let lastKnownText = "";
   let currentState: ClaimState = "absent";
   const transitions: string[] = [];
@@ -115,7 +159,37 @@ export async function runClaimHistory(
     `Matching covers ${revs.length} fetched revisions, not the page's entire history.`,
     "Partial matches use sentence word overlap; they do not establish that two passages express the same statement.",
     "The legacy contested label records repeated wording changes or disappearance and return, not an observed discussion dispute.",
+    "Each transition lies between two fetched revisions; where they are not adjacent, the change could be in any revision between them.",
   ];
+
+  const record = (
+    rev: Revision,
+    kind: ClaimTransition["kind"],
+    before: string,
+    after: string,
+    nearest?: ClaimTransition["nearest"],
+  ) => {
+    const prior = trajectory.at(-1);
+    if (prior) {
+      prior.endedByRevisionId = rev.revId;
+      prior.endedAt = rev.timestamp;
+    }
+    const restored = restores.get(rev.revId);
+    trajectory.push({
+      kind,
+      revisionId: rev.revId,
+      timestamp: rev.timestamp,
+      ...(previous ? { previousRevisionId: previous.revId, previousTimestamp: previous.timestamp } : {}),
+      adjacent: previous !== undefined && rev.parentId === previous.revId,
+      before,
+      after,
+      editSummary: rev.comment,
+      revertSummary: revertDetector.isRevert(rev.comment),
+      ...(restored !== undefined ? { restoresRevisionId: restored } : {}),
+      heldRevisions: 0,
+      ...(nearest ? { nearest } : {}),
+    });
+  };
 
   for (const rev of revs) {
     if (rev.contentAvailable === false) {
@@ -132,14 +206,17 @@ export async function runClaimHistory(
         if (currentState !== "absent") {
           reintroductions++;
           transitions.push(`reintroduced at ${rev.timestamp}`);
+          record(rev, "reintroduced", "", foundText);
         } else {
           transitions.push(`first seen at ${rev.timestamp}`);
+          record(rev, "first_seen", "", foundText);
         }
         currentState = "emerging";
       } else if (foundText !== lastKnownText && lastKnownText !== "") {
         currentState = "contested";
         textChanges++;
         transitions.push(`matched text changed at ${rev.timestamp}`);
+        record(rev, "text_changed", lastKnownText, foundText);
       }
 
       lastKnownText = foundText;
@@ -156,9 +233,13 @@ export async function runClaimHistory(
         currentState = "receding";
         removals++;
         transitions.push(`removed at ${rev.timestamp}`);
+        record(rev, "removed", lastKnownText, "", nearestPassage(claimText, plainText));
         lastKnownText = "";
       }
     }
+    const current = trajectory.at(-1);
+    if (current) current.heldRevisions++;
+    previous = rev;
   }
 
   const isPresentInLatest = latestMatch !== "none";
@@ -168,6 +249,7 @@ export async function runClaimHistory(
       statement: claimText,
       page: pageTitle,
       revisions: [],
+      transitions: [],
       status: latestMatch === "unavailable" ? "unknown" : "absent",
       pageId: revs[0].pageId,
       latestRevisionId: revs.at(-1)?.revId,
@@ -215,6 +297,7 @@ export async function runClaimHistory(
     statement: claimText,
     page: pageTitle,
     revisions: variants,
+    transitions: trajectory,
     status,
     pageId: revs[0].pageId,
     historySummary: parts.join(" "),
@@ -255,7 +338,29 @@ export async function runClaim(
   console.log(`Latest revision: ${result.latestRevisionId ?? "none"}`);
   console.log(`Latest match:    ${result.latestMatch ?? "none"}`);
   console.log(result.historySummary);
+  if (result.transitions.length > 0) console.log("\nTransitions:");
+  for (const t of result.transitions) console.log(`  ${formatTransition(t)}`);
   for (const caveat of result.caveats ?? []) console.log(`Note: ${caveat}`);
+}
+
+/** One line for a transition: what changed, where it lies, and how long the result held. */
+export function formatTransition(t: ClaimTransition): string {
+  const between =
+    t.previousRevisionId === undefined
+      ? `at rev ${t.revisionId}, the first read`
+      : `rev ${t.previousRevisionId} → ${t.revisionId}${t.adjacent ? "" : " (not adjacent)"}`;
+  const held =
+    t.endedByRevisionId === undefined
+      ? `held ${t.heldRevisions} revision(s) through the latest read`
+      : `held ${t.heldRevisions} revision(s) until ${t.endedAt}`;
+  const revert = [
+    t.revertSummary ? "revert summary" : "",
+    t.restoresRevisionId !== undefined ? `restores rev ${t.restoresRevisionId}` : "",
+  ].filter(Boolean);
+  const nearest = t.nearest
+    ? `; nearest remaining sentence (${Math.round(t.nearest.wordOverlap * 100)}% of words): "${t.nearest.text}"`
+    : "";
+  return `[${t.timestamp}] ${t.kind.replace("_", " ")}, ${between}; ${held}${revert.length ? `; ${revert.join(", ")}` : ""}${nearest}`;
 }
 
 export function findPassageMatch(
@@ -287,6 +392,35 @@ export function findPassageMatch(
   return words.length >= 3 && overlap >= words.length * 0.7
     ? { kind: "partial", text: best }
     : { kind: "none", text: "" };
+}
+
+/**
+ * The sentence of `plainText` that carries the largest share of the passage's
+ * words longer than three characters, when that share is at least half;
+ * otherwise undefined. Used on a removal to show where a rewrite may have
+ * gone. Ties keep the earlier sentence.
+ */
+export function nearestPassage(
+  claimText: string,
+  plainText: string,
+): { text: string; wordOverlap: number } | undefined {
+  const normalize = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim();
+  const words = [
+    ...new Set(
+      normalize(claimText)
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter((word) => word.length > 3),
+    ),
+  ];
+  if (words.length === 0) return undefined;
+  let best: { text: string; wordOverlap: number } | undefined;
+  for (const candidate of plainText.split(/(?<=[.!?])\s+|\n+/).filter(Boolean)) {
+    const tokens = new Set(normalize(candidate).split(/[^\p{L}\p{N}]+/u));
+    const share = words.filter((word) => tokens.has(word)).length / words.length;
+    if (share >= 0.5 && (!best || share > best.wordOverlap))
+      best = { text: candidate.trim(), wordOverlap: Math.round(share * 1000) / 1000 };
+  }
+  return best;
 }
 
 export function fuzzyFindText(claimText: string, plainText: string, preNormalized?: string): string {

@@ -102,7 +102,16 @@ describe("mcp server", () => {
       page: "Mars",
     });
 
-    expect(runClaimHistory).toHaveBeenCalledWith("Mars", "Mars is a planet", false, undefined, undefined, undefined);
+    expect(runClaimHistory).toHaveBeenCalledWith(
+      "Mars",
+      "Mars is a planet",
+      false,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { from: undefined, to: undefined },
+    );
   });
 
   it("get_statement_history passes api url to claim history", async () => {
@@ -127,7 +136,87 @@ describe("mcp server", () => {
       "https://wiki.example.com/api.php",
       undefined,
       undefined,
+      undefined,
+      { from: undefined, to: undefined },
     );
+  });
+
+  it("get_statement_history passes the revision limit and range to claim history", async () => {
+    vi.mocked(runClaimHistory).mockResolvedValue({
+      statement: "Venus is a planet",
+      page: "Venus",
+      revisions: [],
+      transitions: [],
+      status: "absent",
+      historySummary: "Not found.",
+    });
+
+    await handleToolCall("get_statement_history", {
+      statement: "Venus is a planet",
+      page: "Venus",
+      limit: 500,
+      from: 10,
+      to: 90,
+    });
+
+    expect(runClaimHistory).toHaveBeenLastCalledWith(
+      "Venus",
+      "Venus is a planet",
+      false,
+      undefined,
+      undefined,
+      undefined,
+      500,
+      { from: 10, to: 90 },
+    );
+    await expect(
+      handleToolCall("get_statement_history", { statement: "Venus is a planet", page: "Venus", limit: 0 }),
+    ).rejects.toThrow("limit must be a positive integer");
+  });
+
+  it("get_statement_history returns transitions, cut to IDs and holding at brief depth", async () => {
+    const transition = {
+      kind: "removed",
+      revisionId: 9,
+      timestamp: "2025-02-01T00:00:00Z",
+      previousRevisionId: 8,
+      previousTimestamp: "2025-01-01T00:00:00Z",
+      adjacent: true,
+      before: "A passage.",
+      after: "",
+      editSummary: "trim",
+      revertSummary: false,
+      heldRevisions: 3,
+      nearest: { text: "A rewritten passage.", wordOverlap: 0.5 },
+    };
+    vi.mocked(runClaimHistory).mockResolvedValue({
+      statement: "A passage",
+      page: "Page",
+      revisions: [],
+      transitions: [transition as never],
+      status: "absent",
+      historySummary: "Removed.",
+    });
+
+    const detailed = JSON.parse(
+      (await handleToolCall("get_statement_history", { statement: "A passage", page: "Page" })).content[0].text,
+    );
+    expect(detailed.transitions).toEqual([transition]);
+
+    const brief = JSON.parse(
+      (await handleToolCall("get_statement_history", { statement: "A passage", page: "Page", depth: "brief" }))
+        .content[0].text,
+    );
+    expect(brief.transitions).toEqual([
+      {
+        kind: "removed",
+        revisionId: 9,
+        timestamp: "2025-02-01T00:00:00Z",
+        previousRevisionId: 8,
+        adjacent: true,
+        heldRevisions: 3,
+      },
+    ]);
   });
 });
 
