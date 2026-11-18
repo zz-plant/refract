@@ -134,9 +134,10 @@ refract verify bitcoin-proof.json --html bitcoin-receipt.html
 ```
 
 `verify` works offline and exits 1 when a check fails. A pass shows that the
-bundle agrees with itself. Nothing in it is signed, and anyone who edits it can
-recompute every hash, so compare its Merkle root with one you received separately
-or re-run the same Refract version over the same range. Use 0.6.1 or later:
+bundle agrees with itself. Unless it is signed, anyone who edits it can recompute
+every hash, so compare its Merkle root with one you received separately, re-run
+the same Refract version over the same range, or sign it with `--sign-key` and
+check it with `verify --public-key`. Use 0.6.1 or later:
 `verify` in 0.5.17 and earlier does not rehash the events.
 [What `verify` checks](https://zz-plant.github.io/refract/bundle-manifest/#checking-a-bundle)
 lists the fields a pass does not cover.

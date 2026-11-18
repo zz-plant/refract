@@ -1,15 +1,19 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import type { AnalyzerConfig, EvidenceEvent, PolicySignal, Report, Revision } from "@refract-org/evidence-graph";
 import {
   createEventIdentity,
   createReplayManifest,
   createVerificationBundle,
   EVENT_SCHEMA_VERSION,
+  signVerificationBundle,
 } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
 import { renderHtmlReport } from "../html-renderer.js";
 import { REFRACT_VERSION } from "../version.js";
 import { runAnalyze } from "./analyze.js";
+import { forEachPage } from "./batch.js";
+import type { RevisionSourceSpec } from "./revision-source.js";
 
 interface EvidenceBundle {
   format: "refract-evidence-bundle/v1";
@@ -19,6 +23,76 @@ interface EvidenceBundle {
   inputRevisions: Revision[];
   outputEvents: EvidenceEvent[];
   bundleHash: string;
+}
+
+export interface BatchExportOptions {
+  apiUrl?: string;
+  auth?: AuthConfig;
+  config?: AnalyzerConfig;
+  since?: string;
+  concurrency?: number;
+  /** Read revisions from a dump or the Wayback Machine instead of the API. */
+  source?: RevisionSourceSpec;
+  /** Where each NDJSON line goes; stdout by default. */
+  write?: (line: string) => void;
+}
+
+/**
+ * Analyze each page in `titles` and write its events as NDJSON, one event per
+ * line with `pageTitle` and `pageId` added, in the order the titles were
+ * given. Each event's `eventId` is the one a single-page export gives it.
+ * A page that fails is reported on stderr and skipped; resolves with how many
+ * failed.
+ */
+export async function runBatchExport(
+  titles: readonly string[],
+  options: BatchExportOptions = {},
+): Promise<{ failed: number; events: number }> {
+  const write = options.write ?? ((line: string) => console.log(line));
+  let total = 0;
+  const { failed } = await forEachPage(
+    titles,
+    options.concurrency ?? 4,
+    (title) =>
+      runAnalyze(
+        title,
+        "detailed",
+        undefined,
+        undefined,
+        options.since,
+        false,
+        options.apiUrl,
+        undefined,
+        undefined,
+        options.auth,
+        options.config,
+        { source: options.source },
+      ),
+    (outcome, index) => {
+      const position = `[${index + 1}/${titles.length}]`;
+      if (outcome.error !== undefined || !outcome.result) {
+        console.error(`${position} ${outcome.title}: failed: ${outcome.error}`);
+        return;
+      }
+      const { events, revisions } = outcome.result;
+      const pageTitle = revisions[0]?.pageTitle ?? outcome.title;
+      const pageId = revisions[0]?.pageId;
+      for (const event of events) {
+        write(
+          JSON.stringify({
+            pageTitle,
+            ...(pageId !== undefined ? { pageId } : {}),
+            ...event,
+            eventId: event.eventId ?? createEventIdentity(event),
+          }),
+        );
+      }
+      total += events.length;
+      console.error(`${position} ${outcome.title}: ${events.length} events from ${revisions.length} revisions`);
+    },
+  );
+  console.error(`Exported ${total} events from ${titles.length - failed} of ${titles.length} pages.`);
+  return { failed, events: total };
 }
 
 export async function runExport(
@@ -34,7 +108,12 @@ export async function runExport(
   fromRev?: number,
   toRev?: number,
   since?: string,
+  source?: RevisionSourceSpec,
+  signKeyPath?: string,
 ): Promise<void> {
+  if (signKeyPath && !proof) throw new Error("--sign-key signs a verification bundle; use it with --proof.");
+  // Read the key before analyzing, so a missing or wrong key fails fast.
+  const signKey = signKeyPath ? readFileSync(signKeyPath, "utf-8") : undefined;
   if (proof) {
     const { events, revisions } = await runAnalyze(
       pageTitle,
@@ -48,13 +127,15 @@ export async function runExport(
       undefined,
       auth,
       config,
+      { source },
     );
-    const proofBundle = createVerificationBundle({
+    const unsigned = createVerificationBundle({
       pageTitle,
       analyzerVersions: { refract: REFRACT_VERSION },
       revisions,
       events,
     });
+    const proofBundle = signKey ? signVerificationBundle(unsigned, signKey) : unsigned;
     console.log(JSON.stringify(proofBundle, null, 2));
     return;
   }
@@ -72,6 +153,7 @@ export async function runExport(
       undefined,
       auth,
       config,
+      { source },
     );
     const bundleData = buildBundle(pageTitle, events, revisions);
     console.log(JSON.stringify(bundleData, null, 2));
@@ -91,6 +173,7 @@ export async function runExport(
       undefined,
       auth,
       config,
+      { source },
     );
     const manifestData = createReplayManifest({
       pageTitle,
@@ -114,6 +197,7 @@ export async function runExport(
     undefined,
     auth,
     config,
+    { source },
   );
 
   if (format === "html") {

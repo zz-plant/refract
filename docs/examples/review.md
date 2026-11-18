@@ -1,6 +1,6 @@
 # Source change review
 
-Report: 79a802e0e02cf61d4741ef311eb3d174a42103d8c585070047ff8e7ceaf33041
+Report: 2ac661b7d84b8cd6a70626585126e8b2771c0854eed5c087de3000ad87e9554b
 Analyzer: 0.6.2; scope: article revisions only.
 
 ## Rivergate Library (fictional)
@@ -11,7 +11,7 @@ Coverage: complete; 5 revisions (1 → 5).
 
 Fictional sample: dates, revision IDs, and URLs are illustrative. Inspect inputRevisions in the saved JSON report.
 
-9 shown; 0 hidden by filters. Acknowledgment covers all revisions and events in the unfiltered saved report.
+10 shown; 0 hidden by filters. Acknowledgment covers all revisions and events in the unfiltered saved report.
 
 ### section_reorganized — (lead)
 
@@ -169,6 +169,22 @@ The library provides free printing for all registered members.
 The reading room has space for thirty seated visitors.
 ```
 
+### revert_detected — Lead
+
+2025-01-05T12:00:00Z · fictional revisions 4 → 5
+
+Before:
+
+```text
+(empty)
+```
+
+After:
+
+```text
+Fictional onboarding revision
+```
+
 ### sentence_reintroduced — (lead)
 
 2025-01-05T12:00:00Z · fictional revisions 4 → 5
@@ -185,4 +201,4 @@ After:
 The library provides free printing for all registered members
 ```
 
-After inspecting the saved report: refract review --state-dir './review-state' --ack 79a802e0e02cf61d4741ef311eb3d174a42103d8c585070047ff8e7ceaf33041
+After inspecting the saved report: refract review --state-dir './review-state' --ack 2ac661b7d84b8cd6a70626585126e8b2771c0854eed5c087de3000ad87e9554b

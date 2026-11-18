@@ -23,8 +23,10 @@ refract init
 | `analyze <page>` | Full edit history analysis with configurable depth |
 | `review [page]` | Inspect source changes since the last acknowledged review |
 | `claim <page> --text "<text>"` | Track a specific claim across revisions |
+| `field <page> --param <name>` | Track a template parameter, such as an infobox field, across revisions |
+| `linksearch <domain>` | List pages that link to a domain, one title per line, for `--pages-file` |
 | `snapshot <page> --at <date>` | Show page state at or before a date |
-| `export <page> --format <format>` | Export analysis as json, csv, ndjson, parquet, or html |
+| `export <page> --format <format>` | Export analysis as json, csv, ndjson, parquet, or html; `--pages-file` exports many pages as NDJSON |
 | `verify <bundle>` | Check a verification bundle's events, manifest hash, Merkle root, and proofs |
 | `delegation <page>` | Write STD-07 discrepancy records for another system to read |
 | `visualize <page>` | Print the evidence graph as a Mermaid or DOT diagram |
@@ -45,7 +47,7 @@ refract init
 - `--pages-file <path>` — batch analyze multiple pages
 - `--bundle` — export as evidence bundle with a SHA-256 hash of its contents (not signed)
 - `--manifest` — export as replay manifest with Merkle tree of event hashes
-- `--proof` — export as verification bundle with Merkle inclusion proofs (not signed); check it with `refract verify`
+- `--proof` — export as verification bundle with Merkle inclusion proofs; add `--sign-key <ed25519.pem>` to sign it, and check it with `refract verify` (`--public-key` to require your key)
 - `--api <url>` — override MediaWiki API endpoint
 - `--api-key <token>` — API key for private wiki auth
 - `--interval <ms>` — poll interval for watch (default: 60000)

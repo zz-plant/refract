@@ -9,6 +9,7 @@ import type { HistoryCoverage } from "../coverage.js";
 import { describeCoverage, formatCoverage } from "../coverage.js";
 import { spinner } from "../render.js";
 import { loadCachedRevisions, saveRevisions } from "./cache.js";
+import { type RevisionSourceSpec, readRevisionsFromSource } from "./revision-source.js";
 
 export interface FetchResult {
   client: MediaWikiClient;
@@ -28,6 +29,7 @@ export async function fetchRevisionsWithCache(
   cacheDir: string | undefined,
   auth: AuthConfig | undefined,
   briefRevisionLimit?: number,
+  source?: RevisionSourceSpec,
 ): Promise<FetchResult> {
   for (const id of [fromRevId, toRevId]) {
     if (id !== undefined && (!Number.isSafeInteger(id) || id < 1))
@@ -56,13 +58,27 @@ export async function fetchRevisionsWithCache(
   const request = { fromRevisionId: fromRevId, toRevisionId: toRevId, since: fromTimestamp, limit: options.limit };
   try {
     // A fixed, continuous range can be reused. Open ranges always check the source.
-    if (useCache && !apiUrl && fromRevId && toRevId && !fromTimestamp) {
+    // A dump or an archive is read directly; the cache holds only API revisions.
+    if (!source && useCache && !apiUrl && fromRevId && toRevId && !fromTimestamp) {
       const cached = (await loadCachedRevisions(pageTitle, 500, cacheDir))
         .filter((r) => r.revId >= fromRevId && r.revId <= toRevId)
         .sort((a, b) => a.revId - b.revId);
       if (describeCoverage(cached, request).status === "complete") revisions = cached;
     }
-    if (!revisions.length) {
+    if (source) {
+      revisions = await readRevisionsFromSource(
+        source,
+        pageTitle,
+        {
+          fromRevId,
+          toRevId,
+          since: fromTimestamp,
+          limit: options.limit,
+          newest: options.direction === "older",
+        },
+        apiUrl,
+      );
+    } else if (!revisions.length) {
       revisions = await client.fetchRevisions(pageTitle, options);
       if (useCache && !apiUrl && revisions.length) await saveRevisions(revisions, cacheDir);
     }

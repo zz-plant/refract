@@ -68,6 +68,42 @@ describeLive("Integration: MediaWiki response contract", () => {
       }
     }
   });
+
+  // `refract linksearch` reads list=exturlusage and follows its continuation,
+  // whose key has changed between MediaWiki versions. A domain linked from far
+  // more than one 500-link batch makes the second request happen.
+  it("lists pages linking to a domain across a continuation", { timeout: 60000 }, async () => {
+    const client = new MediaWikiClient({ minDelayMs: 100 });
+    const links = await client.fetchExternalLinkUsage("nytimes.com", { maxLinks: 600 });
+
+    expect(links).toHaveLength(600);
+    for (const link of links) {
+      expect(typeof link.pageId).toBe("number");
+      expect(link.pageId).toBeGreaterThan(0);
+      expect(link.namespace).toBe(0);
+      expect(typeof link.title).toBe("string");
+      expect(link.url).toMatch(/^https?:\/\/([^/]*\.)?nytimes\.com/i);
+    }
+    // The second batch is new links, not the first one again.
+    const firstBatch = new Set(links.slice(0, 500).map((l) => `${l.pageId} ${l.url}`));
+    expect(links.slice(500).some((l) => !firstBatch.has(`${l.pageId} ${l.url}`))).toBe(true);
+  });
+
+  // `refract diff --resolve-titles` reads prop=langlinks on one wiki and
+  // meta=siteinfo on another to find a page's title in another language.
+  it("reads interlanguage links and another wiki's language", { timeout: 60000 }, async () => {
+    const english = new MediaWikiClient({ minDelayMs: 100 });
+    const links = await english.fetchLanguageLinks("Estonia");
+    expect(links.length).toBeGreaterThan(50);
+    for (const link of links) {
+      expect(typeof link.lang).toBe("string");
+      expect(typeof link.title).toBe("string");
+    }
+    expect(links.find((l) => l.lang === "et")?.title).toBe("Eesti");
+
+    const russian = new MediaWikiClient({ apiUrl: "https://ru.wikipedia.org/w/api.php", minDelayMs: 100 });
+    expect(await russian.fetchSiteInfo()).toMatchObject({ lang: "ru", wikiId: "ruwiki" });
+  });
 });
 
 describe("Integration: analyzers over revision content", () => {

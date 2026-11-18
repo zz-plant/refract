@@ -7,9 +7,53 @@ import {
   extractAnchorSnippet,
   extractHeadingMap,
   findSectionForText,
+  removeTemplates,
   sanitizeWikitext,
   stripWikitext,
 } from "../wikitext-parser.js";
+
+describe("nested templates", () => {
+  // Real infoboxes hold other templates. A single pass that removed only
+  // templates with none inside left the infobox's own braces and parameters in
+  // the prose, so "| result = …" lines were read as sentences.
+  const infobox = [
+    "{{Infobox military conflict",
+    "| conflict = Example war",
+    "| date = {{start date|2026|2|28}} – {{end date|2026|6|17}}",
+    "| result = Example victory{{efn|disputed}}",
+    "}}",
+    "The war began in February.",
+  ].join("\n");
+
+  it("removes an infobox that contains other templates", () => {
+    expect(stripWikitext(infobox)).toBe("The war began in February.");
+  });
+
+  it("removes nested templates from sanitized text", () => {
+    expect(sanitizeWikitext(infobox)).toBe("The war began in February.");
+    expect(sanitizeWikitext("A{{outer|{{inner}}}}B")).toBe("A B");
+  });
+
+  it("keeps an opener that never closes, with balanced templates inside it removed", () => {
+    expect(removeTemplates("before {{unclosed {{cn}} after", "")).toBe("before {{unclosed  after");
+  });
+
+  it("keeps a closer with no opener", () => {
+    expect(removeTemplates("text }} more {{cn}} end", "")).toBe("text }} more  end");
+  });
+
+  it("returns text without templates unchanged", () => {
+    expect(removeTemplates("plain prose", "")).toBe("plain prose");
+  });
+
+  it("stays linear on deep nesting", () => {
+    const depth = 50_000;
+    const text = `start ${"{{a|".repeat(depth)}${"}}".repeat(depth)} end`;
+    const t0 = performance.now();
+    expect(removeTemplates(text, "")).toBe("start  end");
+    expect(performance.now() - t0).toBeLessThan(1000);
+  });
+});
 
 describe("stripWikitext", () => {
   it("drops category tags so they cannot join the next sentence", () => {
@@ -174,6 +218,97 @@ describe("sanitizeWikitext", () => {
   it("collapses all whitespace sequences to single spaces", () => {
     const result = sanitizeWikitext("a\n\n\n\nb");
     expect(result).toBe("a b");
+  });
+});
+
+describe("sanitizeWikitext without regex backtracking", () => {
+  // The regex version this replaced, kept here as the reference for its output.
+  function regexSanitize(value: string): string {
+    const withoutRefs = value
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<ref[^>/]*?>[\s\S]*?<\/ref>/gi, " ")
+      .replace(/<ref[^>]*\/>/gi, " ");
+    return removeTemplates(withoutRefs, " ")
+      .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
+      .replace(/\[https?:\/\/[^\s\]]+\s*([^\]]*)\]/g, "$1")
+      .replace(/'''/g, "")
+      .replace(/''/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  const cases = [
+    "plain",
+    "a <!-- c --> b <!-- unclosed",
+    "<!-->x-->y",
+    'x<ref name="a">c</ref>y<REF>d</Ref>z<ref name="b" />w<ref name=c/>v',
+    "x<ref>unclosed y<ref>z</ref>",
+    "x<ref a/b>c</ref>d",
+    "<references />and<references>x</references>",
+    "[[a]] [[a|b]] [[a|b|c]] [[a|]] [[|b]] [[]] [[a]b]] [[[a]] [[a]",
+    "[[x [[y]] z]]",
+    "[https://e.org label here] [http://e.org] [https:// x] [https://e.org  spaced  ] [http:/e.org x] [ftp://x y]",
+    "[https://e.org [[inner]] x] [[a|[https://e.org b]]]",
+    "'''bold''' ''it'' '''''both''''' ''''",
+    "{{a|{{b}}}} [[c|{{d}}e]] <ref>{{cite|url=x}}</ref>",
+  ];
+
+  it("gives the regex version's output on edge cases", () => {
+    for (const input of cases) expect([input, sanitizeWikitext(input)]).toEqual([input, regexSanitize(input)]);
+  });
+
+  it("gives the regex version's output on random markup", () => {
+    const pieces = [
+      "[[",
+      "]]",
+      "[",
+      "]",
+      "|",
+      "<!--",
+      "-->",
+      "<ref>",
+      "</ref>",
+      "<ref name=a/>",
+      "<ref a/b>",
+      "{{",
+      "}}",
+      "[https://e.org",
+      "[http://",
+      "'''",
+      "''",
+      " ",
+      "\n",
+      "a",
+      "b",
+      "<",
+      ">",
+      "/",
+    ];
+    let seed = 7;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed;
+    };
+    for (let n = 0; n < 5000; n++) {
+      let input = "";
+      const length = next() % 14;
+      for (let k = 0; k < length; k++) input += pieces[next() % pieces.length];
+      expect([input, sanitizeWikitext(input)]).toEqual([input, regexSanitize(input)]);
+    }
+  });
+
+  it("stays linear on many unclosed openers", () => {
+    const inputs = [
+      ...["<!--", "<ref>", "<ref", "[[", "[https://x", "[https:// ", "[[a]"].map((opener) => opener.repeat(20_000)),
+      `${"<ref".repeat(20_000)}>`,
+      `${"[https:// ".repeat(20_000)}]`,
+    ];
+    for (const opener of inputs) {
+      const input = opener;
+      const t0 = performance.now();
+      sanitizeWikitext(input);
+      expect([opener.slice(0, 12), performance.now() - t0 < 500]).toEqual([opener.slice(0, 12), true]);
+    }
   });
 });
 

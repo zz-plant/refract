@@ -35,7 +35,15 @@ export interface RevertDetector {
 export interface RevertChain {
   startRevisionId: number;
   endRevisionId: number;
-  revertedToRevisionId: number;
+  /**
+   * The revision whose text the chain's first revert put back: found by
+   * identical text, or named by a "restored revision N" summary. Absent when
+   * neither says, as when a rollback summary names only an editor.
+   */
+  revertedToRevisionId?: number;
+  /** The revision an "Undid revision N" summary names as taken away. */
+  undoneRevisionId?: number;
+  /** How many reverting revisions the chain holds. */
   participants: number;
 }
 
@@ -64,8 +72,13 @@ export {
   analyzeCitationNetwork,
   buildSourceId,
   buildSourceLineage,
+  type CitationAnchors,
   type CitationNetworkAnalysis,
+  citationDomain,
+  citationKey,
   citationTracker,
+  extractCitationAnchors,
+  normalizeAnchor,
 } from "./citation-tracker.js";
 export type { EditClusterOptions } from "./edit-cluster-detector.js";
 export { detectEditClusters } from "./edit-cluster-detector.js";
@@ -82,7 +95,7 @@ export type {
 export { detectTextPropagation } from "./propagation-detector.js";
 export type { ProtectionChange, ProtectionLogRecord, ProtectionTracker } from "./protection-tracker.js";
 export { protectionTracker } from "./protection-tracker.js";
-export { revertDetector } from "./revert-detector.js";
+export { findIdentityReverts, revertDetector } from "./revert-detector.js";
 export type { ParsedContent, RevisionEventDepth, RevisionEventOptions } from "./revision-events.js";
 export {
   annotateEvents,

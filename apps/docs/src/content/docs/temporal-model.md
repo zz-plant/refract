@@ -32,7 +32,7 @@ Refract emits structured events that capture how claims change over time:
 | `sentence_removed` | Claim removed from the source |
 | `citation_added` | New supporting citation attached |
 | `citation_removed` | Citation removed or superseded |
-| `revert_detected` | Edit summary matches a revert pattern |
+| `revert_detected` | Edit summary matches a revert pattern, or the text restores an earlier revision's |
 
 Each event carries deterministic enrichment fields:
 - `editMagnitude` — minor / moderate / major

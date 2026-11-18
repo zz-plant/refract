@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { FAKE_API, installFakeMediaWiki } from "../../../../tests/support/fake-mediawiki.js";
 
 vi.mock("../commands/cache.js", () => ({
@@ -6,7 +6,7 @@ vi.mock("../commands/cache.js", () => ({
   saveRevisions: vi.fn(),
 }));
 
-import { runDiff } from "../commands/diff.js";
+import { buildCitedDomains, resolveDiffTitles, runDiff } from "../commands/diff.js";
 
 /**
  * Every test here is a self-diff: the same wiki compared against itself, two or
@@ -86,5 +86,104 @@ describe("diff command", () => {
     expect(result.pairwiseBorrowing?.[0].sourceWikiLabel).toBe("A");
     expect(result.pairwiseBorrowing?.[0].targetWikiLabel).toBe("B");
     expect(result.pairwiseBorrowing?.[0].propagation.jaccardSimilarity).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("diff titles across languages", () => {
+  const EN = "https://en.wikipedia.example/w/api.php";
+  const RU = "https://ru.wikipedia.example/w/api.php";
+  const NB = "https://no.wikipedia.example/w/api.php";
+
+  function json(body: unknown): Response {
+    return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+  }
+
+  function stubWikis() {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = new URL(String(input));
+      if (url.searchParams.get("prop") === "langlinks") {
+        return json({
+          query: {
+            pages: [
+              {
+                title: "Kaja Kallas",
+                langlinks: [
+                  { lang: "ru", title: "Каллас, Кая" },
+                  { lang: "no", title: "Kaja Kallas (politiker)" },
+                ],
+              },
+            ],
+          },
+        });
+      }
+      if (url.searchParams.get("meta") === "siteinfo") {
+        const lang = url.hostname.startsWith("no.") ? "nb" : url.hostname.split(".")[0];
+        return json({ query: { general: { lang, wikiid: `${lang}wiki`, sitename: "Wikipedia" } } });
+      }
+      throw new Error(`unexpected request ${url.href}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reads the topic everywhere unless asked otherwise", async () => {
+    expect(await resolveDiffTitles("Kaja Kallas", [EN, RU])).toEqual(["Kaja Kallas", "Kaja Kallas"]);
+  });
+
+  it("uses a title given for a wiki", async () => {
+    expect(await resolveDiffTitles("Kaja Kallas", [EN, RU], { titles: [undefined, "Каллас, Кая"] })).toEqual([
+      "Kaja Kallas",
+      "Каллас, Кая",
+    ]);
+  });
+
+  it("follows the first wiki's interlanguage links", async () => {
+    stubWikis();
+    expect(await resolveDiffTitles("Kaja Kallas", [EN, RU], { resolveTitles: true })).toEqual([
+      "Kaja Kallas",
+      "Каллас, Кая",
+    ]);
+  });
+
+  it("matches a wiki by its host prefix when its content language differs", async () => {
+    stubWikis();
+    expect(await resolveDiffTitles("Kaja Kallas", [EN, NB], { resolveTitles: true })).toEqual([
+      "Kaja Kallas",
+      "Kaja Kallas (politiker)",
+    ]);
+  });
+
+  it("names the --title to give when there is no link", async () => {
+    stubWikis();
+    const DE = "https://de.wikipedia.example/w/api.php";
+    await expect(resolveDiffTitles("Kaja Kallas", [EN, RU, DE], { resolveTitles: true })).rejects.toThrow(
+      /--title c=<title>/,
+    );
+  });
+});
+
+describe("buildCitedDomains", () => {
+  it("lists every domain with each wiki's count, most cited first", () => {
+    const network = (domainDistribution: Record<string, number>) => ({
+      citationNetwork: {
+        uniqueSourceCount: 0,
+        domainDistribution,
+        topSources: [],
+        sourceConcentrationIndex: 0,
+        isHighConcentration: false,
+      },
+    });
+    expect(
+      buildCitedDomains([
+        network({ "a.example": 3, "b.example": 1, unknown: 9 }),
+        network({ "b.example": 4, "c.example": 1 }),
+      ]),
+    ).toEqual([
+      { domain: "b.example", counts: [1, 4] },
+      { domain: "a.example", counts: [3, 0] },
+      { domain: "c.example", counts: [0, 1] },
+    ]);
   });
 });

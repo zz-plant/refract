@@ -3,17 +3,21 @@ import type { InferenceBoundary } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
 import { Argument, Command } from "commander";
 import { buildConfig, buildObservationReport, runAnalyze } from "./commands/analyze.js";
-import { runClaim } from "./commands/claim.js";
+import { readPagesFile } from "./commands/batch.js";
+import { runClaim, runClaimBatch } from "./commands/claim.js";
 import { runCron } from "./commands/cron.js";
 import { DelegationInputError, runDelegation, WHEN_RULES } from "./commands/delegation.js";
 import type { DiffResult } from "./commands/diff.js";
 import { runDiff } from "./commands/diff.js";
 import { runEval } from "./commands/eval.js";
 import { runExplore } from "./commands/explore.js";
-import { runExport } from "./commands/export.js";
+import { runBatchExport, runExport } from "./commands/export.js";
+import { runField, runFieldBatch } from "./commands/field.js";
 import { runInit } from "./commands/init.js";
+import { runLinkSearch } from "./commands/linksearch.js";
 import { runMcpServer } from "./commands/mcp.js";
 import { acknowledgeReview, filterReviewEntries, observeReview, renderReview } from "./commands/review.js";
+import { type RevisionSourceSpec, revisionSourceFromOptions } from "./commands/revision-source.js";
 import { runSnapshot } from "./commands/snapshot.js";
 import { runStream } from "./commands/stream.js";
 import { runVerify } from "./commands/verify.js";
@@ -130,9 +134,11 @@ const analyzeCmd = program
   .option("-j, --json", "force JSON output to stdout (disable interactive web UI)");
 withGlobal(analyzeCmd);
 withAnalyzerConfig(analyzeCmd);
+withRevisionSource(analyzeCmd);
 analyzeCmd.action(async (page, opts) => {
   const pagesFile = opts.pagesFile as string | undefined;
   const auth = extractAuth(opts);
+  const source = sourceOrExit(opts);
 
   const config = buildConfig(opts);
 
@@ -149,6 +155,7 @@ analyzeCmd.action(async (page, opts) => {
       opts.cacheDir as string | undefined,
       auth,
       config,
+      { source },
     );
     console.log(`\n${success(`Batch complete. ${result.events.length} events total.`)}`);
     return;
@@ -172,6 +179,7 @@ analyzeCmd.action(async (page, opts) => {
     opts.cacheDir as string | undefined,
     auth,
     config,
+    { source },
   );
 
   const { events, revisions, coverage } = analysis;
@@ -301,22 +309,94 @@ reviewCmd.action(async (page, opts) => {
   if (report.pages.some((p) => p.status === "error" || p.status === "incomplete")) process.exitCode = 2;
 });
 
+function withRevisionSource(cmd: Command): Command {
+  return cmd
+    .option("--dump <path>", "read revisions from a MediaWiki XML export file instead of the API")
+    .option("--wayback", "read the page's Internet Archive snapshots instead of the API (page title or URL)");
+}
+
+/** The source --dump or --wayback names, exiting when both are given. */
+function sourceOrExit(opts: Record<string, unknown>): RevisionSourceSpec | undefined {
+  try {
+    return revisionSourceFromOptions(opts);
+  } catch (error) {
+    console.error(red(`Error: ${error instanceof Error ? error.message : String(error)}`));
+    process.exit(1);
+  }
+}
+
+/**
+ * The titles a batch run reads, or undefined for a single page. Exits on a
+ * page title given with --pages-file, on neither being given, and on --from or
+ * --to with --pages-file: revision IDs belong to one page.
+ */
+function batchTitles(command: string, page: string | undefined, opts: Record<string, unknown>): string[] | undefined {
+  const pagesFile = opts.pagesFile as string | undefined;
+  if (!pagesFile) {
+    if (page) return undefined;
+    console.error(red(`Error: give a page title or --pages-file`));
+    console.error(gray(`  refract ${command} <page> [options]`));
+    process.exit(1);
+  }
+  if (page) {
+    console.error(red("Error: give a page title or --pages-file, not both"));
+    process.exit(1);
+  }
+  if (opts.from !== undefined || opts.to !== undefined) {
+    console.error(red("Error: --from and --to name one page's revisions; they cannot be used with --pages-file"));
+    process.exit(1);
+  }
+  const titles = readPagesFile(pagesFile);
+  if (titles.length === 0) {
+    console.error(red(`Error: no page titles in ${pagesFile}`));
+    process.exit(1);
+  }
+  return titles;
+}
+
+/** Exit 2 when some pages of a batch failed, as `review` does for a page it could not read. */
+function exitOnFailedPages(failed: number): void {
+  if (failed > 0) {
+    console.error(red(`${failed} page(s) failed.`));
+    process.exitCode = 2;
+  }
+}
+
 // ── claim ──
 const claimCmd = program
-  .command("claim <page>")
+  .command("claim [page]")
   .description("track a specific claim across revisions")
   .option("-t, --text <text>", "claim text to track (required)")
   .option("--limit <n>", "max revisions to fetch (default: 50, or the whole range with --from and --to)", parseInt)
   .option("--from <revId>", "start revision ID", parseInt)
   .option("--to <revId>", "end revision ID", parseInt)
+  .option("--pages-file <path>", "track the passage on each page in this file (one title per line)")
+  .option("--batch-concurrency <n>", "max pages read at once with --pages-file (default: 4)", parseInt)
   .option("-j, --json", "print the result as JSON instead of text")
   .option("-c, --cache", "cache revisions in SQLite; needs Bun and a source checkout");
 withGlobal(claimCmd);
+withRevisionSource(claimCmd);
 claimCmd.action(async (page, opts) => {
   const claimText = opts.text as string | undefined;
   if (!claimText) {
     console.error(red("Error: --text is required"));
     process.exit(1);
+  }
+  const source = sourceOrExit(opts);
+  const titles = batchTitles("claim", page, opts);
+  if (titles) {
+    const { failed } = await runClaimBatch(
+      titles,
+      claimText,
+      opts.api as string | undefined,
+      extractAuth(opts),
+      opts.limit as number | undefined,
+      opts.batchConcurrency as number | undefined,
+      { json: !!opts.json },
+      source,
+    );
+    exitOnFailedPages(failed);
+    return;
   }
   await runClaim(
     page,
@@ -326,7 +406,78 @@ claimCmd.action(async (page, opts) => {
     opts.cacheDir as string | undefined,
     extractAuth(opts),
     opts.limit as number | undefined,
-    { from: opts.from as number | undefined, to: opts.to as number | undefined },
+    { from: opts.from as number | undefined, to: opts.to as number | undefined, source },
+    { json: !!opts.json },
+  );
+});
+
+// ── field ──
+const fieldCmd = program
+  .command("field [page]")
+  .description("track a template parameter, such as an infobox field, across revisions")
+  .option("-p, --param <name>", "parameter to track (required), e.g. result")
+  .option("--template <name>", "read the parameter only from this template, e.g. 'Infobox military conflict'")
+  .option("--limit <n>", "max revisions to fetch (default: 50, or the whole range with --from and --to)", parseInt)
+  .option("--from <revId>", "start revision ID", parseInt)
+  .option("--to <revId>", "end revision ID", parseInt)
+  .option("--pages-file <path>", "track the field on each page in this file (one title per line)")
+  .option("--batch-concurrency <n>", "max pages read at once with --pages-file (default: 4)", parseInt)
+  .option("-j, --json", "print the result as JSON instead of text");
+withGlobal(fieldCmd, false);
+withRevisionSource(fieldCmd);
+fieldCmd.action(async (page, opts) => {
+  const param = opts.param as string | undefined;
+  if (!param?.trim()) {
+    console.error(red("Error: --param is required"));
+    process.exit(1);
+  }
+  const source = sourceOrExit(opts);
+  const query = { param, template: opts.template as string | undefined };
+  const titles = batchTitles("field", page, opts);
+  if (titles) {
+    const { failed } = await runFieldBatch(
+      titles,
+      query,
+      opts.api as string | undefined,
+      extractAuth(opts),
+      opts.limit as number | undefined,
+      opts.batchConcurrency as number | undefined,
+      { json: !!opts.json },
+      source,
+    );
+    exitOnFailedPages(failed);
+    return;
+  }
+  await runField(
+    page,
+    query,
+    opts.api as string | undefined,
+    extractAuth(opts),
+    opts.limit as number | undefined,
+    { from: opts.from as number | undefined, to: opts.to as number | undefined, source },
+    { json: !!opts.json },
+  );
+});
+
+// ── linksearch ──
+const linksearchCmd = program
+  .command("linksearch <domain>")
+  .description("list pages that link to a domain, one title per line, for --pages-file")
+  .option("--subdomains", "also match subdomains (queries *.<domain> too)")
+  .option("--namespace <n>", "namespace to search (default: 0, articles)", parseInt)
+  .option("--limit <n>", "max links read per query (default: 10000)", parseInt)
+  .option("-j, --json", "print pages with their matching URLs as JSON");
+withGlobal(linksearchCmd, false);
+linksearchCmd.action(async (domain, opts) => {
+  await runLinkSearch(
+    domain,
+    {
+      subdomains: !!opts.subdomains,
+      namespace: opts.namespace as number | undefined,
+      maxLinks: opts.limit as number | undefined,
+      apiUrl: opts.api as string | undefined,
+      auth: extractAuth(opts),
+    },
     { json: !!opts.json },
   );
 });
@@ -353,20 +504,44 @@ snapshotCmd.action(async (page, opts) => {
 
 // ── export ──
 const exportCmd = program
-  .command("export <page>")
+  .command("export [page]")
   .description("export analysis as structured data")
   .option("-f, --format <format>", "output format: json, csv, ndjson, html, parquet", "json")
   .option("--bundle", "export as evidence bundle with a SHA-256 hash of its contents")
   .option("--manifest", "export as replay manifest listing all hashes")
   .option("--proof", "export as self-contained verification bundle with Merkle proofs")
+  .option("--sign-key <path>", "sign the --proof bundle's manifest hash with this Ed25519 private key (PEM)")
   .option("--from <revId>", "start revision ID", parseInt)
   .option("--to <revId>", "end revision ID", parseInt)
   .option("--since <timestamp>", "re-observe from ISO timestamp")
-  .option("--flatten", "flatten nested fields into flat columns (for csv format)");
+  .option("--flatten", "flatten nested fields into flat columns (for csv format)")
+  .option("--pages-file <path>", "export each page in this file (one title per line) as NDJSON with pageTitle added")
+  .option("--batch-concurrency <n>", "max pages analyzed at once with --pages-file (default: 4)", parseInt);
 withGlobal(exportCmd);
 withAnalyzerConfig(exportCmd);
+withRevisionSource(exportCmd);
 exportCmd.action(async (page, opts) => {
   const config = buildConfig(opts);
+  const source = sourceOrExit(opts);
+  const titles = batchTitles("export", page, opts);
+  if (titles) {
+    if (opts.format !== "ndjson" || opts.bundle || opts.manifest || opts.proof) {
+      console.error(
+        red("Error: --pages-file writes NDJSON; pass --format ndjson, without --bundle, --manifest or --proof"),
+      );
+      process.exit(1);
+    }
+    const { failed } = await runBatchExport(titles, {
+      apiUrl: opts.api as string | undefined,
+      auth: extractAuth(opts),
+      config,
+      since: opts.since as string | undefined,
+      concurrency: opts.batchConcurrency as number | undefined,
+      source,
+    });
+    exitOnFailedPages(failed);
+    return;
+  }
   await runExport(
     page,
     opts.format as string,
@@ -380,6 +555,8 @@ exportCmd.action(async (page, opts) => {
     opts.from as number | undefined,
     opts.to as number | undefined,
     opts.since as string | undefined,
+    source,
+    opts.signKey as string | undefined,
   );
 });
 
@@ -387,9 +564,10 @@ exportCmd.action(async (page, opts) => {
 const verifyCmd = program
   .command("verify <bundlePath>")
   .description("check a verification bundle's events, manifest hash, Merkle root and inclusion proofs")
-  .option("--html <outPath>", "also write the result as an HTML receipt");
+  .option("--html <outPath>", "also write the result as an HTML receipt")
+  .option("--public-key <path>", "require a signature made with this Ed25519 public key (PEM)");
 verifyCmd.action(async (bundlePath, opts) => {
-  await runVerify(bundlePath, opts.html as string | undefined);
+  await runVerify(bundlePath, opts.html as string | undefined, opts.publicKey as string | undefined);
 });
 
 // ── delegation ──
@@ -535,7 +713,13 @@ const diffCmd = program
   .option("--wiki-e <url>", "fifth wiki API URL (optional)")
   .option("--wiki-f <url>", "sixth wiki API URL (optional)")
   .option("-d, --depth <depth>", "analysis depth: brief, detailed, forensic", "detailed")
-  .option("--detect-borrowing", "detect verbatim text borrowing and n-gram shingle similarity between wikis");
+  .option("--detect-borrowing", "detect verbatim text borrowing and n-gram shingle similarity between wikis")
+  .option(
+    "--title <label=title>",
+    "the page's title on one wiki, e.g. 'b=Каллас, Кая' (repeatable; labels a-f)",
+    (value: string, previous: string[] = []) => [...previous, value],
+  )
+  .option("--resolve-titles", "find each other wiki's title through wiki A's interlanguage links");
 diffCmd.action(async (topic, opts) => {
   const wikiUrls = [
     opts.wikiA as string,
@@ -546,10 +730,28 @@ diffCmd.action(async (topic, opts) => {
     ...(opts.wikiF ? [opts.wikiF as string] : []),
   ];
 
-  const result = await runDiff(topic, wikiUrls, opts.depth as string, {
-    detectBorrowing: !!opts.detectBorrowing,
-  });
-  printUserFacingDiff(result);
+  const titles: (string | undefined)[] = [];
+  for (const entry of (opts.title as string[] | undefined) ?? []) {
+    const match = entry.match(/^\s*([a-f])\s*=(.+)$/i);
+    const index = match ? match[1].toLowerCase().charCodeAt(0) - 97 : -1;
+    if (!match || index >= wikiUrls.length || !match[2].trim()) {
+      console.error(red(`Error: --title takes <label>=<title> for a wiki given with --wiki-<label>, not "${entry}"`));
+      process.exit(1);
+    }
+    titles[index] = match[2].trim();
+  }
+
+  try {
+    const result = await runDiff(topic, wikiUrls, opts.depth as string, {
+      detectBorrowing: !!opts.detectBorrowing,
+      titles,
+      resolveTitles: !!opts.resolveTitles,
+    });
+    printUserFacingDiff(result);
+  } catch (error) {
+    console.error(red(`Error: ${error instanceof Error ? error.message : String(error)}`));
+    process.exit(1);
+  }
 });
 
 function printUserFacingDiff(result: DiffResult): void {
@@ -563,7 +765,8 @@ function printUserFacingDiff(result: DiffResult): void {
     const hhiStr = net
       ? ` (HHI: ${net.sourceConcentrationIndex}${net.isHighConcentration ? " [concentrated]" : ""})`
       : "";
-    console.log(`  ${bold(`Wiki ${labels[i]}:`)} ${dim(wikis[i].url)}${hhiStr}`);
+    const titleStr = wikis[i].title !== result.pageTitle ? ` "${wikis[i].title}"` : "";
+    console.log(`  ${bold(`Wiki ${labels[i]}:`)} ${dim(wikis[i].url)}${titleStr}${hhiStr}`);
   }
   console.log();
 
@@ -587,6 +790,19 @@ function printUserFacingDiff(result: DiffResult): void {
       console.log(
         `  Wikis ${b.sourceWikiLabel} ↔ ${b.targetWikiLabel}: ${cyan(`${pct}%`)} Jaccard similarity (${p.sharedTokenCount} shared tokens, ${p.borrowedSpans.length} spans)${flag}`,
       );
+    }
+  }
+
+  if (comparison.citedDomains.length > 0) {
+    const shown = comparison.citedDomains.slice(0, 15);
+    console.log(bold("\n── Cited Domains (latest revisions) ──"));
+    console.log(`  ${"Domain".padEnd(28)} ${labels.map((l) => l.padStart(5)).join(" ")}`);
+    for (const row of shown) {
+      const values = row.counts.map((c) => (c === 0 ? dim("    0") : String(c).padStart(5)));
+      console.log(`  ${row.domain.slice(0, 28).padEnd(28)} ${values.join(" ")}`);
+    }
+    if (comparison.citedDomains.length > shown.length) {
+      console.log(dim(`  … ${comparison.citedDomains.length - shown.length} more domains`));
     }
   }
 

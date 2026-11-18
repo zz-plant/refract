@@ -22,6 +22,31 @@ Each Refract event describes what changed at a revision boundary. Events are det
 | `citation_removed` | Existing `<ref>` tag removed |
 | `citation_replaced` | One citation swapped for another in the same position |
 
+Citation events carry facts about the source and the passage it supports:
+
+- **`citation_source`**, on all three when the reference names a URL:
+  `domain=<host> url=<url>`. The URL is the `url=` parameter, or else the first
+  bare http(s) URL in the reference.
+- **`citation_anchor`**, on all three except at `brief` depth: a passage the
+  reference follows, from the start of its sentence up to the reference, in the
+  later revision for an added or replaced reference and the earlier one for a
+  removed one. One fact per passage, at most five. A reference inside a
+  template, such as an infobox, follows no passage.
+- **`citation_anchor_status`**, on `citation_removed`:
+  `anchors=<n> kept=<k> unsourced=<u>`. Of the `n` passages the reference
+  followed, `k` are still in the later revision's prose, and `u` of those no
+  other reference follows any more.
+
+`kept` above zero is a passage that outlived its citation; `unsourced` above
+zero is one left with no reference after it. Both compare exact text, so a
+passage reworded in the same edit counts as not kept. Find them with:
+
+```bash
+refract export "Page" --format ndjson |
+  jq -c 'select(.eventType == "citation_removed")
+         | select(any(.deterministicFacts[]; .fact == "citation_anchor_status" and (.detail | test("unsourced=[1-9]"))))'
+```
+
 ## Template changes
 
 | Event type | Trigger |
@@ -52,7 +77,7 @@ Each Refract event describes what changed at a revision boundary. Events are det
 
 | Event type | Trigger |
 |---|---|
-| `revert_detected` | Edit summary matches one of six default patterns: `revert…`, `undid revision`, `rvv`, `rollback`, `restore…`, `[[WP:ROLLBACK]]`. A bare "rv" or "undo" does not match |
+| `revert_detected` | The edit summary matches one of six default patterns (`revert…`, `undid revision`, `rvv`, `rollback`, `restore…`, `[[WP:ROLLBACK]]`; a bare "rv" or "undo" does not match), or the revision's text is identical to an earlier analyzed revision other than the one directly before it. Facts say which: `revert_detected` carries the summary, `identity_revert` names the revision restored (`restores=<revId>`). A revert to a state older than every analyzed revision is found only by its summary |
 | `edit_cluster_detected` | 3+ edits within a configurable time window (default: 1 hour). The fact's `detail` gives `revisions`, `editors` (a count of unique editors; no identities recorded), `window_ms` and `single_editor` |
 
 An `edit_cluster_detected` event spans the cluster: `fromRevisionId` is its first revision and `toRevisionId` its last. `--cluster-window` sets the window in minutes.

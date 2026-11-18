@@ -1,10 +1,17 @@
 import type { DeterministicFact, EvidenceEvent, EvidenceLayer, Revision, Section } from "@refract-org/evidence-graph";
 import { EVENT_SCHEMA_VERSION } from "@refract-org/evidence-graph";
 import { diffCategories, extractCategories } from "./category-tracker.js";
-import { citationTracker } from "./citation-tracker.js";
-import type { CitationRef, Template, TemplateType } from "./index.js";
+import {
+  type CitationAnchors,
+  citationDomain,
+  citationKey,
+  citationTracker,
+  extractCitationAnchors,
+  normalizeAnchor,
+} from "./citation-tracker.js";
+import type { CitationChange, CitationRef, Template, TemplateType } from "./index.js";
 import type { ProtectionLogRecord } from "./protection-tracker.js";
-import { revertDetector } from "./revert-detector.js";
+import { findIdentityReverts, revertDetector } from "./revert-detector.js";
 import { sectionDiffer } from "./section-differ.js";
 import {
   computeCertaintyProfile,
@@ -99,6 +106,60 @@ function sectionContaining(sections: Section[], raw: string | undefined): string
   return holder ? holder.title || "(lead)" : "body";
 }
 
+/** At most this many anchors are listed on one citation event; a much-reused named reference would list dozens. */
+const MAX_ANCHOR_FACTS = 5;
+
+/**
+ * What a citation event says about the source and the prose it supports.
+ *
+ * `citation_source` names the cited URL's domain and the URL. Each
+ * `citation_anchor` is a passage the reference follows: in the later revision
+ * for an added or replaced reference, in the earlier one for a removed one.
+ * On a removed reference, `citation_anchor_status` says how many of those
+ * passages are still in the later revision's prose (`kept`) and how many of
+ * those no other reference follows any more (`unsourced`): a passage that
+ * outlived its citation. Anchor text is left out at brief depth; the counts
+ * are not.
+ */
+function citationFacts(
+  cit: CitationChange,
+  before: Revision,
+  after: Revision,
+  getAnchors: (rev: Revision) => CitationAnchors,
+  isBrief: boolean,
+): DeterministicFact[] {
+  const facts: DeterministicFact[] = [];
+  const ref = cit.type === "removed" ? cit.before : cit.after;
+  if (!ref) return facts;
+  const domain = citationDomain(ref.url);
+  if (ref.url) facts.push({ fact: "citation_source", detail: `domain=${domain ?? "unknown"} url=${ref.url}` });
+
+  const own = getAnchors(cit.type === "removed" ? before : after);
+  const anchors = own.byKey.get(citationKey(ref)) ?? [];
+  if (!isBrief) {
+    for (const anchor of anchors.slice(0, MAX_ANCHOR_FACTS)) facts.push({ fact: "citation_anchor", detail: anchor });
+    if (anchors.length > MAX_ANCHOR_FACTS)
+      facts.push({ fact: "citation_anchors_omitted", detail: String(anchors.length - MAX_ANCHOR_FACTS) });
+  }
+
+  if (cit.type === "removed") {
+    const later = getAnchors(after);
+    let kept = 0;
+    let unsourced = 0;
+    for (const anchor of anchors) {
+      const normalized = normalizeAnchor(anchor);
+      if (!later.normalizedProse.includes(normalized)) continue;
+      kept++;
+      if ((later.citationsPerAnchor.get(normalized) ?? 0) === 0) unsourced++;
+    }
+    facts.push({
+      fact: "citation_anchor_status",
+      detail: `anchors=${anchors.length} kept=${kept} unsourced=${unsourced}`,
+    });
+  }
+  return facts;
+}
+
 /** Diff sections, citations, wikilinks, categories, and lead structure between two revisions. */
 export function computeStructuralDiffs(
   before: Revision,
@@ -108,6 +169,7 @@ export function computeStructuralDiffs(
   isBrief: boolean,
   extraFacts: DeterministicFact[],
   sectionOptions?: { renameDetection?: "exact" | "similarity" | "none"; similarityThreshold?: number },
+  getAnchors: (rev: Revision) => CitationAnchors = (rev) => extractCitationAnchors(rev.content),
 ): EvidenceEvent[] {
   const events: EvidenceEvent[] = [];
 
@@ -133,7 +195,11 @@ export function computeStructuralDiffs(
       section,
       before: isBrief ? "" : (cit.before?.raw ?? ""),
       after: isBrief ? "" : (cit.after?.raw ?? ""),
-      deterministicFacts: [{ fact: "citation_changed", detail: `type=${cit.type}` }, ...extraFacts],
+      deterministicFacts: [
+        { fact: "citation_changed", detail: `type=${cit.type}` },
+        ...citationFacts(cit, before, after, getAnchors, isBrief),
+        ...extraFacts,
+      ],
       layer,
       timestamp: after.timestamp,
     });
@@ -279,6 +345,7 @@ export function detectEditorialSignals(
   extraFacts: DeterministicFact[],
   protectionLogs: readonly ProtectionLogRecord[] = [],
   revertPatterns?: RegExp[],
+  restoredRevisionId?: number,
 ): EvidenceEvent[] {
   const events: EvidenceEvent[] = [];
 
@@ -341,7 +408,10 @@ export function detectEditorialSignals(
   );
   events.push(...paramChangeEvents);
 
-  if (isRevRevert) {
+  // A revert is found by its edit summary, by its text being identical to an
+  // earlier revision's (restoredRevisionId), or both; one event either way,
+  // with a fact for each basis that held.
+  if (isRevRevert || restoredRevisionId !== undefined) {
     events.push({
       eventType: "revert_detected",
       fromRevisionId: before.revId,
@@ -350,7 +420,10 @@ export function detectEditorialSignals(
       before: "",
       after: isBrief ? "" : after.comment,
       deterministicFacts: [
-        { fact: "revert_detected", detail: after.comment },
+        ...(isRevRevert ? [{ fact: "revert_detected", detail: after.comment }] : []),
+        ...(restoredRevisionId !== undefined
+          ? [{ fact: "identity_revert", detail: `restores=${restoredRevisionId}` }]
+          : []),
         { fact: "policy_signal", detail: "dimension=edit_warring signal=revert_detected" },
         ...extraFacts,
       ],
@@ -532,6 +605,15 @@ export function buildRevisionEvents(
   const getStripped = (rev: Revision): string => getStrippedPage(rev).text;
   const getSectionCharMap = (rev: Revision) => getStrippedPage(rev).sections;
 
+  const anchorCache = new Map<number, CitationAnchors>();
+  const getAnchors = (rev: Revision): CitationAnchors => {
+    const cached = anchorCache.get(rev.revId);
+    if (cached) return cached;
+    const result = extractCitationAnchors(rev.content);
+    anchorCache.set(rev.revId, result);
+    return result;
+  };
+
   const getParsed = (rev: Revision): ParsedContent => {
     const cached = parsedCache.get(rev.revId);
     if (cached) return cached;
@@ -539,6 +621,8 @@ export function buildRevisionEvents(
     parsedCache.set(rev.revId, result);
     return result;
   };
+
+  const identityReverts = findIdentityReverts(sortedRevs);
 
   for (let i = 1; i < sortedRevs.length; i++) {
     const before = sortedRevs[i - 1];
@@ -555,10 +639,19 @@ export function buildRevisionEvents(
     const afterParsed = getParsed(after);
 
     events.push(
-      ...computeStructuralDiffs(before, after, beforeParsed, afterParsed, isBrief, pairExtraFacts, {
-        renameDetection: options.sectionRename,
-        similarityThreshold: options.similarityThreshold,
-      }),
+      ...computeStructuralDiffs(
+        before,
+        after,
+        beforeParsed,
+        afterParsed,
+        isBrief,
+        pairExtraFacts,
+        {
+          renameDetection: options.sectionRename,
+          similarityThreshold: options.similarityThreshold,
+        },
+        getAnchors,
+      ),
       ...detectEditorialSignals(
         before,
         after,
@@ -568,6 +661,7 @@ export function buildRevisionEvents(
         pairExtraFacts,
         protectionLogs,
         options.revertPatterns,
+        identityReverts.get(after.revId),
       ),
       ...diffSentences(
         before,

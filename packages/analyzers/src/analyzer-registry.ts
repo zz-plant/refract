@@ -170,7 +170,11 @@ registry.register({
       deterministicFacts: [
         {
           fact: "revert_chain",
-          detail: `reverted_to=${chain.revertedToRevisionId} participants=${chain.participants}`,
+          detail: [
+            ...(chain.revertedToRevisionId !== undefined ? [`reverted_to=${chain.revertedToRevisionId}`] : []),
+            ...(chain.undoneRevisionId !== undefined ? [`undid=${chain.undoneRevisionId}`] : []),
+            `participants=${chain.participants}`,
+          ].join(" "),
         },
       ],
       layer: "observed",

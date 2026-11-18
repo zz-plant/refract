@@ -201,12 +201,42 @@ describe("buildRevisionEvents", () => {
   });
 
   it("uses the caller's revert patterns in place of the defaults", () => {
-    const history = [rev(1, 0, ARTICLE), rev(2, 10, TAGGED, "rv unexplained removal"), rev(3, 20, ARTICLE, "revert")];
+    // Revision 3's text differs from revision 1's, so only its summary can make it a revert.
+    const history = [
+      rev(1, 0, ARTICLE),
+      rev(2, 10, TAGGED, "rv unexplained removal"),
+      rev(3, 20, `${ARTICLE} More.`, "revert"),
+    ];
     const reverts = (events: EvidenceEvent[]) =>
       events.filter((e) => e.eventType === "revert_detected").map((e) => e.toRevisionId);
 
     expect(reverts(buildRevisionEvents(history))).toEqual([3]);
     expect(reverts(buildRevisionEvents(history, { revertPatterns: [/^rv\b/] }))).toEqual([2]);
+  });
+
+  it("finds a revert whose summary says nothing by its restored text", () => {
+    const events = buildRevisionEvents([
+      rev(1, 0, ARTICLE),
+      rev(2, 10, TAGGED, "tag"),
+      rev(3, 20, ARTICLE, "copyedit"),
+    ]);
+    const revert = pair(events, 3).find((e) => e.eventType === "revert_detected");
+    expect(facts(revert)).toEqual([
+      "identity_revert: restores=1",
+      "policy_signal: dimension=edit_warring signal=revert_detected",
+    ]);
+    expect(pair(events, 2).some((e) => e.eventType === "revert_detected")).toBe(false);
+  });
+
+  it("gives a revert found by summary and by text one event with both facts", () => {
+    const events = buildRevisionEvents([rev(1, 0, ARTICLE), rev(2, 10, TAGGED, "tag"), rev(3, 20, ARTICLE, "rvv")]);
+    const reverts = pair(events, 3).filter((e) => e.eventType === "revert_detected");
+    expect(reverts).toHaveLength(1);
+    expect(facts(reverts[0])).toEqual([
+      "revert_detected: rvv",
+      "identity_revert: restores=1",
+      "policy_signal: dimension=edit_warring signal=revert_detected",
+    ]);
   });
 
   it("records citation, template and revert events on the pair that made them", () => {
@@ -233,6 +263,52 @@ describe("buildRevisionEvents", () => {
     ]);
     const revert = pair(events, 3).find((e) => e.eventType === "revert_detected");
     expect(facts(revert)).toContain("policy_signal: dimension=edit_warring signal=revert_detected");
+  });
+
+  describe("citation anchors", () => {
+    const citationEvent = (events: EvidenceEvent[], type: string) => events.find((e) => e.eventType === type);
+    const SOURCED = 'The bridge opened in 2031.<ref name="a">{{cite web|url=https://www.news.example/bridge}}</ref>';
+
+    it("says a removed reference's passage stayed with nothing else citing it", () => {
+      const events = buildRevisionEvents([rev(1, 0, SOURCED), rev(2, 10, "The bridge opened in 2031.")]);
+      expect(facts(citationEvent(events, "citation_removed"))).toEqual([
+        "citation_changed: type=removed",
+        "citation_source: domain=news.example url=https://www.news.example/bridge",
+        "citation_anchor: The bridge opened in 2031.",
+        "citation_anchor_status: anchors=1 kept=1 unsourced=1",
+      ]);
+    });
+
+    it("does not call a passage unsourced while another reference still follows it", () => {
+      const twoSources = `${SOURCED}<ref name="b">second source</ref>`;
+      const events = buildRevisionEvents([
+        rev(1, 0, twoSources),
+        rev(2, 10, 'The bridge opened in 2031.<ref name="b">second source</ref>'),
+      ]);
+      const removed = citationEvent(events, "citation_removed");
+      expect(facts(removed)).toContain("citation_anchor_status: anchors=1 kept=1 unsourced=0");
+    });
+
+    it("reports a passage removed with its reference as not kept", () => {
+      const events = buildRevisionEvents([rev(1, 0, `${SOURCED} Other text.`), rev(2, 10, "Other text.")]);
+      expect(facts(citationEvent(events, "citation_removed"))).toContain(
+        "citation_anchor_status: anchors=1 kept=0 unsourced=0",
+      );
+    });
+
+    it("names the passage an added reference follows", () => {
+      const events = buildRevisionEvents([rev(1, 0, "The bridge opened in 2031."), rev(2, 10, SOURCED)]);
+      expect(facts(citationEvent(events, "citation_added"))).toContain("citation_anchor: The bridge opened in 2031.");
+    });
+
+    it("leaves anchor text out at brief depth but keeps the counts", () => {
+      const events = buildRevisionEvents([rev(1, 0, SOURCED), rev(2, 10, "The bridge opened in 2031.")], {
+        depth: "brief",
+      });
+      const removedFacts = facts(citationEvent(events, "citation_removed"));
+      expect(removedFacts?.some((f) => f.startsWith("citation_anchor:"))).toBe(false);
+      expect(removedFacts).toContain("citation_anchor_status: anchors=1 kept=1 unsourced=1");
+    });
   });
 
   it("puts a protection log entry on the pair whose span contains it", () => {

@@ -1,9 +1,11 @@
 import { findSectionForText, stripWikitext } from "@refract-org/analyzers";
-import type { ClaimState } from "@refract-org/evidence-graph";
+import type { ClaimState, Revision } from "@refract-org/evidence-graph";
 import { createClaimIdentity } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
 import { MediaWikiClient } from "@refract-org/ingestion";
+import { forEachPage } from "./batch.js";
 import { saveRevisions } from "./cache.js";
+import { type RevisionSourceSpec, readRevisionsFromSource } from "./revision-source.js";
 
 export interface ClaimHistoryVariant {
   revisionId: number;
@@ -28,6 +30,49 @@ export interface ClaimHistoryResult {
 export interface ClaimRange {
   from?: number;
   to?: number;
+  /** Read the revisions from a dump or the Wayback Machine instead of the wiki's API. */
+  source?: RevisionSourceSpec;
+}
+
+/**
+ * The revisions `claim` and `field` read: the latest `limit` (50 by default),
+ * forward from `from`, or backward from `to`. A closed range is read whole
+ * unless a limit is given.
+ */
+export async function fetchRevisionRange(
+  pageTitle: string,
+  range: ClaimRange,
+  revisionLimit?: number,
+  apiUrl?: string,
+  auth?: AuthConfig,
+): Promise<Revision[]> {
+  const { from, to } = range;
+  for (const id of [from, to]) {
+    if (id !== undefined && (!Number.isSafeInteger(id) || id < 1))
+      throw new Error("Revision bounds must be positive integer IDs.");
+  }
+  if (from !== undefined && to !== undefined && from > to)
+    throw new Error("The start revision must be before the end revision.");
+  // Only a closed range says how much to read; anything else keeps the default cap.
+  const limit = revisionLimit ?? (from !== undefined && to !== undefined ? undefined : 50);
+  if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1))
+    throw new Error("--limit must be a positive integer.");
+  if (range.source) {
+    return readRevisionsFromSource(
+      range.source,
+      pageTitle,
+      { fromRevId: from, toRevId: to, limit, newest: from === undefined },
+      apiUrl,
+    );
+  }
+  const client = new MediaWikiClient(apiUrl ? { apiUrl, auth } : auth ? { auth } : undefined);
+
+  return client.fetchRevisions(
+    pageTitle,
+    from !== undefined
+      ? { direction: "newer", startRevId: from, endRevId: to, limit }
+      : { direction: "older", startRevId: to, limit },
+  );
 }
 
 export async function runClaimHistory(
@@ -41,26 +86,8 @@ export async function runClaimHistory(
   range: ClaimRange = {},
 ): Promise<ClaimHistoryResult> {
   if (!claimText.trim()) throw new Error("Supply nonempty passage text.");
-  const { from, to } = range;
-  for (const id of [from, to]) {
-    if (id !== undefined && (!Number.isSafeInteger(id) || id < 1))
-      throw new Error("Revision bounds must be positive integer IDs.");
-  }
-  if (from !== undefined && to !== undefined && from > to)
-    throw new Error("The start revision must be before the end revision.");
-  // Only a closed range says how much to read; anything else keeps the default cap.
-  const limit = revisionLimit ?? (from !== undefined && to !== undefined ? undefined : 50);
-  if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1))
-    throw new Error("--limit must be a positive integer.");
-  const client = new MediaWikiClient(apiUrl ? { apiUrl, auth } : auth ? { auth } : undefined);
-
-  const revisions = await client.fetchRevisions(
-    pageTitle,
-    from !== undefined
-      ? { direction: "newer", startRevId: from, endRevId: to, limit }
-      : { direction: "older", startRevId: to, limit },
-  );
-  if (useCache && !apiUrl && revisions.length > 0) await saveRevisions(revisions, cacheDir);
+  const revisions = await fetchRevisionRange(pageTitle, range, revisionLimit, apiUrl, auth);
+  if (useCache && !apiUrl && !range.source && revisions.length > 0) await saveRevisions(revisions, cacheDir);
 
   if (revisions.length === 0) {
     return {
@@ -280,4 +307,52 @@ export function fuzzyFindText(claimText: string, plainText: string, preNormalize
   }
 
   return "";
+}
+
+/**
+ * Track one passage across every page in `titles`, as `runClaimHistory` does
+ * for one, reporting pages in the order given. With `json`, each page is one
+ * line of NDJSON: its result with `claimId`, or `{ page, status: "error",
+ * error }` when it could not be read. Text output is one line per page.
+ * Resolves with how many pages failed.
+ */
+export async function runClaimBatch(
+  titles: readonly string[],
+  claimText: string,
+  apiUrl?: string,
+  auth?: AuthConfig,
+  revisionLimit?: number,
+  concurrency = 4,
+  output: { json?: boolean; write?: (line: string) => void } = {},
+  source?: RevisionSourceSpec,
+): Promise<{ failed: number }> {
+  if (!claimText.trim()) throw new Error("Supply nonempty passage text.");
+  const write = output.write ?? ((line: string) => console.log(line));
+  if (!output.json) write(`Tracking "${claimText}" across ${titles.length} pages\n`);
+  const { failed } = await forEachPage(
+    titles,
+    concurrency,
+    (title) => runClaimHistory(title, claimText, false, apiUrl, undefined, auth, revisionLimit, { source }),
+    ({ title, result, error }) => {
+      if (!result) {
+        if (output.json) write(JSON.stringify({ page: title, status: "error", error }));
+        else write(`${"error".padEnd(9)} ${title}: ${error}`);
+        return;
+      }
+      if (output.json) {
+        const { claimId } = createClaimIdentity({
+          text: claimText,
+          section: "",
+          pageTitle: title,
+          pageId: result.pageId ?? 0,
+        });
+        write(JSON.stringify({ ...result, claimId }));
+        return;
+      }
+      const first = result.revisions[0];
+      const seen = first ? `first matched rev ${first.revisionId} (${first.timestamp})` : "not matched";
+      write(`${result.status.padEnd(9)} ${title}: ${seen}; latest match ${result.latestMatch ?? "none"}`);
+    },
+  );
+  return { failed };
 }

@@ -1,16 +1,185 @@
+/**
+ * A fragment of wikitext as plain text: comments, references and templates
+ * removed, links reduced to their labels, bold and italic markers dropped,
+ * whitespace runs as single spaces.
+ *
+ * Each step is a forward scan. The regexes these replace, such as
+ * /<!--[\s\S]*?-->/ and /\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/, were retried from
+ * every opener in text that never closed one, which took time quadratic in
+ * its length; `refract field` passes values read from wiki revisions here.
+ */
 export function sanitizeWikitext(value: string): string {
-  return value
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<ref[^>/]*?>[\s\S]*?<\/ref>/gi, " ")
-    .replace(/<ref[^>]*/gi, (match) => (match.endsWith("/>") ? " " : match))
-    .replace(/<ref[^>]*\/>/gi, " ")
-    .replace(/\{\{[^}]*\}\}/g, " ")
-    .replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, "$1")
-    .replace(/\[https?:\/\/[^\s\]]+\s*([^\]]*)\]/g, "$1")
-    .replace(/'''/g, "")
-    .replace(/''/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const withoutMarkup = replaceExternalLinks(
+    replaceWikilinks(removeTemplates(removeRefTags(removeComments(value, " "), " "), " ")),
+  );
+  return withoutMarkup.replaceAll("'''", "").replaceAll("''", "").replace(/\s+/g, " ").trim();
+}
+
+/** Remove each `<!-- … -->`, putting `replacement` where it stood; an opener with no `-->` after it stays. */
+function removeComments(text: string, replacement: string): string {
+  let out = "";
+  let at = 0;
+  for (;;) {
+    const open = text.indexOf("<!--", at);
+    if (open < 0) break;
+    const close = text.indexOf("-->", open + 4);
+    if (close < 0) break;
+    out += text.slice(at, open) + replacement;
+    at = close + 3;
+  }
+  return out + text.slice(at);
+}
+
+/** The next index at or after `from` where `needle`, lowercase ASCII, starts in `text` in any case. */
+function indexOfIgnoreCase(text: string, needle: string, from: number): number {
+  const first = needle[0];
+  for (let i = text.indexOf(first, from); i >= 0; i = text.indexOf(first, i + 1)) {
+    if (text.slice(i, i + needle.length).toLowerCase() === needle) return i;
+  }
+  return -1;
+}
+
+/**
+ * Remove each `<ref …>…</ref>` whose opening tag has no "/", and each
+ * self-closing `<ref …/>`, as /<ref[^>/]*?>[\s\S]*?<\/ref>/gi and
+ * /<ref[^>]*\/>/gi did, in any case.
+ */
+function removeRefTags(text: string, replacement: string): string {
+  let out = "";
+  let at = 0;
+  let from = 0;
+  // Cached across openers, so no stretch of text is searched twice: the ">"
+  // ending the current tag, the last "/" before it, and the next "</ref>"
+  // (-1 once none is left).
+  let gt = -1;
+  let lastSlash = -1;
+  let closeRef = -2;
+  for (;;) {
+    const open = indexOfIgnoreCase(text, "<ref", from);
+    if (open < 0) break;
+    if (gt < open + 4) {
+      gt = text.indexOf(">", open + 4);
+      if (gt < 0) break;
+      lastSlash = -1;
+      for (let k = gt - 1; k >= open + 4; k--) {
+        if (text[k] === "/") {
+          lastSlash = k;
+          break;
+        }
+      }
+    }
+    let end = -1;
+    if (gt - 1 >= open + 4 && text[gt - 1] === "/") end = gt + 1;
+    else if (lastSlash < open + 4) {
+      if (closeRef !== -1 && closeRef < gt + 1) closeRef = indexOfIgnoreCase(text, "</ref>", gt + 1);
+      if (closeRef >= 0) end = closeRef + 6;
+    }
+    if (end < 0) {
+      from = open + 4;
+      continue;
+    }
+    out += text.slice(at, open) + replacement;
+    at = from = end;
+  }
+  return out + text.slice(at);
+}
+
+/**
+ * `[[target|label]]` as its label and `[[target]]` as its target, as
+ * /\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g did: the link runs to its first "]",
+ * which must be followed by another, and the label is what follows the first
+ * "|" unless nothing does.
+ */
+function replaceWikilinks(text: string): string {
+  let out = "";
+  let at = 0;
+  let close = -1;
+  for (let open = text.indexOf("[[", 0); open >= 0; open = text.indexOf("[[", open + 1)) {
+    if (open < at) continue;
+    // Every opener before the same "]" shares it, so it is found once for all of them.
+    if (close < open + 2) close = text.indexOf("]", open + 2);
+    if (close < 0) break;
+    if (close === open + 2 || text[close + 1] !== "]") continue;
+    const inner = text.slice(open + 2, close);
+    const pipe = inner.indexOf("|");
+    out += text.slice(at, open) + (pipe >= 0 && pipe < inner.length - 1 ? inner.slice(pipe + 1) : inner);
+    at = close + 2;
+    open = close + 1;
+  }
+  return out + text.slice(at);
+}
+
+/**
+ * `[https://… label]` as its label, as /\[https?:\/\/[^\s\]]+\s*([^\]]*)\]/g
+ * did: the URL runs to the first whitespace and the label from there to the
+ * first "]".
+ */
+function replaceExternalLinks(text: string): string {
+  let out = "";
+  let at = 0;
+  let close = -1;
+  for (let open = text.indexOf("[http", 0); open >= 0; open = text.indexOf("[http", open + 1)) {
+    if (open < at) continue;
+    const scheme = text.startsWith("[https://", open) ? 9 : text.startsWith("[http://", open) ? 8 : 0;
+    if (!scheme) continue;
+    const urlStart = open + scheme;
+    if (close < urlStart) close = text.indexOf("]", urlStart);
+    if (close < 0) break;
+    // Checked before slicing: openers that share a "]" would otherwise copy the same text again and again.
+    if (close === urlStart || /\s/.test(text[urlStart])) continue;
+    const body = text.slice(urlStart, close);
+    let urlEnd = 0;
+    while (urlEnd < body.length && !/\s/.test(body[urlEnd])) urlEnd++;
+    let labelStart = urlEnd;
+    while (labelStart < body.length && /\s/.test(body[labelStart])) labelStart++;
+    out += text.slice(at, open) + body.slice(labelStart);
+    at = close + 1;
+    open = close;
+  }
+  return out + text.slice(at);
+}
+
+/**
+ * Remove every balanced `{{…}}`, nested ones included, putting `replacement`
+ * where each outermost one stood.
+ *
+ * One pass of /\{\{[^{}]*?\}\}/ removed only templates with none inside them,
+ * so a template that held another kept its own braces and parameters: an
+ * infobox with a {{start date}} in it came through whole as prose, and its
+ * "| result = …" lines became sentences. Repeating the regex until nothing
+ * changes would take one pass per level of nesting. This is one scan: each
+ * "{{" marks where the output stood, and its matching "}}" cuts the output
+ * back to that mark. An opener that never closes, and a closer with no opener,
+ * stay as text, with any balanced templates inside them still removed.
+ */
+export function removeTemplates(text: string, replacement: string): string {
+  if (!text.includes("{{")) return text;
+  // Chunks of output; a mark is how many chunks stood before its "{{", so
+  // cutting back is setting the array's length, and each chunk is written once.
+  const parts: string[] = [];
+  const marks: number[] = [];
+  let from = 0;
+  let i = 0;
+  while (i < text.length - 1) {
+    const opens = text[i] === "{" && text[i + 1] === "{";
+    const closes = !opens && marks.length > 0 && text[i] === "}" && text[i + 1] === "}";
+    if (!opens && !closes) {
+      i++;
+      continue;
+    }
+    if (i > from) parts.push(text.slice(from, i));
+    if (opens) {
+      marks.push(parts.length);
+      parts.push("{{");
+    } else {
+      parts.length = marks.pop() as number;
+      if (replacement) parts.push(replacement);
+    }
+    i += 2;
+    from = i;
+  }
+  if (from < text.length) parts.push(text.slice(from));
+  return parts.join("");
 }
 
 /**
@@ -110,7 +279,7 @@ function stripMarkup(wikitext: string): string {
   text = text.replace(/<ref\b[^>]*\/\s*>/gi, "");
   text = text.replace(/<ref\b[^>]*>[\s\S]*?<\/ref\s*>/gi, "");
   text = text.replace(/<[^>]+>/g, "");
-  text = text.replace(/\{\{[^{}]*?\}\}/g, "");
+  text = removeTemplates(text, "");
   text = text.replace(/'''(.+?)'''/g, "$1");
   text = text.replace(/''(.+?)''/g, "$1");
   // A category tag is page metadata, not prose. Left in, its name joined the next
