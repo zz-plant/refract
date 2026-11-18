@@ -235,6 +235,18 @@ refract diff <topic> [options]
 | `--wiki-f <url>` | optional | Sixth wiki API URL |
 | `-d, --depth <d>` | `detailed` | Analysis depth. See [depth levels](depth.md) |
 | `--detect-borrowing` | off | Measure the text each pair of wikis shares. See the [cross-wiki tutorial](tutorials/cross-wiki-diff.md#4-measure-shared-text). |
+| `--title <label=title>` | the topic | The page's title on one wiki, by its `--wiki-` label, e.g. `--title "b=Каллас, Кая"`. Repeatable |
+| `--resolve-titles` | off | Find each other wiki's title through wiki A's interlanguage links, matched by the wiki's host prefix (`ru` in `ru.wikipedia.org`) or its content language. A wiki with no link is an error that names the `--title` to give |
+
+The report lists the domains each wiki's latest revision cites, with counts per
+wiki, most cited first. Cited URLs compare across languages where text does
+not; `--detect-borrowing` measures shared wording, which is near zero between
+two languages.
+
+```bash
+refract diff "Kaja Kallas" --wiki-a https://en.wikipedia.org/w/api.php \
+  --wiki-b https://ru.wikipedia.org/w/api.php --resolve-titles --depth brief
+```
 
 ## `refract eval`
 

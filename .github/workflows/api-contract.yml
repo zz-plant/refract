@@ -1,6 +1,6 @@
 # The MediaWiki API contract tests, run where there is a network.
 #
-# Six tests check that the client still parses what Wikipedia actually
+# Seven tests check that the client still parses what Wikipedia actually
 # returns. They are skipped by default (see tests/support/live.ts), because a
 # 403 from a sandboxed egress proxy is not a fact about this code and a fixture
 # cannot stand in for them: the assertions would confirm only that the fixture

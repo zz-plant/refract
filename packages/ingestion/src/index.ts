@@ -110,9 +110,11 @@ export { GitRevisionSource, type GitRevisionSourceOptions } from "./git-source.j
 export {
   DEFAULT_USER_AGENT,
   type ExternalLinkUsage,
+  type LanguageLink,
   MediaWikiApiError,
   MediaWikiClient,
   retryAfterMs,
+  type SiteInfo,
 } from "./mediawiki-client.js";
 export { RateLimiter } from "./rate-limiter.js";
 export { SnapshotDirectorySource, type SnapshotItem } from "./snapshot-source.js";

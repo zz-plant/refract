@@ -679,7 +679,13 @@ const diffCmd = program
   .option("--wiki-e <url>", "fifth wiki API URL (optional)")
   .option("--wiki-f <url>", "sixth wiki API URL (optional)")
   .option("-d, --depth <depth>", "analysis depth: brief, detailed, forensic", "detailed")
-  .option("--detect-borrowing", "detect verbatim text borrowing and n-gram shingle similarity between wikis");
+  .option("--detect-borrowing", "detect verbatim text borrowing and n-gram shingle similarity between wikis")
+  .option(
+    "--title <label=title>",
+    "the page's title on one wiki, e.g. 'b=Каллас, Кая' (repeatable; labels a-f)",
+    (value: string, previous: string[] = []) => [...previous, value],
+  )
+  .option("--resolve-titles", "find each other wiki's title through wiki A's interlanguage links");
 diffCmd.action(async (topic, opts) => {
   const wikiUrls = [
     opts.wikiA as string,
@@ -690,10 +696,28 @@ diffCmd.action(async (topic, opts) => {
     ...(opts.wikiF ? [opts.wikiF as string] : []),
   ];
 
-  const result = await runDiff(topic, wikiUrls, opts.depth as string, {
-    detectBorrowing: !!opts.detectBorrowing,
-  });
-  printUserFacingDiff(result);
+  const titles: (string | undefined)[] = [];
+  for (const entry of (opts.title as string[] | undefined) ?? []) {
+    const match = entry.match(/^\s*([a-f])\s*=(.+)$/i);
+    const index = match ? match[1].toLowerCase().charCodeAt(0) - 97 : -1;
+    if (!match || index >= wikiUrls.length || !match[2].trim()) {
+      console.error(red(`Error: --title takes <label>=<title> for a wiki given with --wiki-<label>, not "${entry}"`));
+      process.exit(1);
+    }
+    titles[index] = match[2].trim();
+  }
+
+  try {
+    const result = await runDiff(topic, wikiUrls, opts.depth as string, {
+      detectBorrowing: !!opts.detectBorrowing,
+      titles,
+      resolveTitles: !!opts.resolveTitles,
+    });
+    printUserFacingDiff(result);
+  } catch (error) {
+    console.error(red(`Error: ${error instanceof Error ? error.message : String(error)}`));
+    process.exit(1);
+  }
 });
 
 function printUserFacingDiff(result: DiffResult): void {
@@ -707,7 +731,8 @@ function printUserFacingDiff(result: DiffResult): void {
     const hhiStr = net
       ? ` (HHI: ${net.sourceConcentrationIndex}${net.isHighConcentration ? " [concentrated]" : ""})`
       : "";
-    console.log(`  ${bold(`Wiki ${labels[i]}:`)} ${dim(wikis[i].url)}${hhiStr}`);
+    const titleStr = wikis[i].title !== result.pageTitle ? ` "${wikis[i].title}"` : "";
+    console.log(`  ${bold(`Wiki ${labels[i]}:`)} ${dim(wikis[i].url)}${titleStr}${hhiStr}`);
   }
   console.log();
 
@@ -731,6 +756,19 @@ function printUserFacingDiff(result: DiffResult): void {
       console.log(
         `  Wikis ${b.sourceWikiLabel} ↔ ${b.targetWikiLabel}: ${cyan(`${pct}%`)} Jaccard similarity (${p.sharedTokenCount} shared tokens, ${p.borrowedSpans.length} spans)${flag}`,
       );
+    }
+  }
+
+  if (comparison.citedDomains.length > 0) {
+    const shown = comparison.citedDomains.slice(0, 15);
+    console.log(bold("\n── Cited Domains (latest revisions) ──"));
+    console.log(`  ${"Domain".padEnd(28)} ${labels.map((l) => l.padStart(5)).join(" ")}`);
+    for (const row of shown) {
+      const values = row.counts.map((c) => (c === 0 ? dim("    0") : String(c).padStart(5)));
+      console.log(`  ${row.domain.slice(0, 28).padEnd(28)} ${values.join(" ")}`);
+    }
+    if (comparison.citedDomains.length > shown.length) {
+      console.log(dim(`  … ${comparison.citedDomains.length - shown.length} more domains`));
     }
   }
 

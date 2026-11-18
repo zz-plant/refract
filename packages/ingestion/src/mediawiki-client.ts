@@ -135,6 +135,29 @@ interface ExternalLinkUsageResponse {
   query?: { exturlusage?: Array<{ pageid: number; ns: number; title: string; url: string }> };
 }
 
+/** One interlanguage link: the other edition's interwiki prefix, such as "ru", and the page's title there. */
+export interface LanguageLink {
+  lang: string;
+  title: string;
+}
+
+export interface SiteInfo {
+  /** Content language code, such as "ru". */
+  lang: string;
+  /** Database name, such as "ruwiki". */
+  wikiId: string;
+  siteName: string;
+}
+
+interface LanguageLinkResponse {
+  continue?: Record<string, string | number>;
+  query?: { pages?: Array<{ title: string; langlinks?: Array<{ lang: string; title: string }> }> };
+}
+
+interface SiteInfoResponse {
+  query?: { general?: { lang: string; wikiid: string; sitename: string } };
+}
+
 interface CompareResponse {
   compare?: {
     fromrevid: number;
@@ -399,6 +422,51 @@ export class MediaWikiClient implements RevisionFetcher, RevisionSource, DiffFet
       next = Object.fromEntries(Object.entries(data.continue).map(([key, value]) => [key, String(value)]));
     }
     return links;
+  }
+
+  /**
+   * The page's interlanguage links: for each other-language edition that has
+   * the topic, its interwiki prefix and the page's title there, from
+   * `prop=langlinks`. Follows a redirect from `pageTitle` first. Empty when
+   * the page has none or does not exist.
+   */
+  async fetchLanguageLinks(pageTitle: string): Promise<LanguageLink[]> {
+    const links: LanguageLink[] = [];
+    let next: Record<string, string> = {};
+    for (;;) {
+      const params = new URLSearchParams({
+        action: "query",
+        prop: "langlinks",
+        titles: pageTitle,
+        redirects: "1",
+        lllimit: "max",
+        format: "json",
+        formatversion: "2",
+        ...next,
+      });
+      const data = await this.getJson<LanguageLinkResponse>(`${this.apiUrl}?${params.toString()}`);
+      for (const page of data.query?.pages ?? []) {
+        for (const link of page.langlinks ?? []) links.push({ lang: link.lang, title: link.title });
+      }
+      if (!data.continue) break;
+      next = Object.fromEntries(Object.entries(data.continue).map(([key, value]) => [key, String(value)]));
+    }
+    return links;
+  }
+
+  /** The wiki's content language and database name, from `meta=siteinfo`. */
+  async fetchSiteInfo(): Promise<SiteInfo> {
+    const params = new URLSearchParams({
+      action: "query",
+      meta: "siteinfo",
+      siprop: "general",
+      format: "json",
+      formatversion: "2",
+    });
+    const data = await this.getJson<SiteInfoResponse>(`${this.apiUrl}?${params.toString()}`);
+    const general = data.query?.general;
+    if (!general) throw new Error(`No site information from ${this.apiUrl}`);
+    return { lang: general.lang, wikiId: general.wikiid, siteName: general.sitename };
   }
 
   async fetchEntities(query: SourceQuery): Promise<SourceEntity[]> {

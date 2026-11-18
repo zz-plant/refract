@@ -8,10 +8,13 @@ import {
   type TextPropagationResult,
 } from "@refract-org/analyzers";
 import type { EvidenceEvent } from "@refract-org/evidence-graph";
+import { type LanguageLink, MediaWikiClient } from "@refract-org/ingestion";
 import { runAnalyze } from "./analyze.js";
 
 interface WikiSummary {
   url: string;
+  /** The title read on this wiki: the topic, one given with --title, or one found by --resolve-titles. */
+  title: string;
   sections: string[];
   eventCounts: Record<string, number>;
   summary: {
@@ -48,6 +51,12 @@ export interface PairwiseTextBorrowing {
   propagation: TextPropagationResult;
 }
 
+/** How many of each wiki's current references cite a domain. */
+export interface CitedDomainRow {
+  domain: string;
+  counts: number[];
+}
+
 export interface DiffResult {
   pageTitle: string;
   wikis: WikiSummary[];
@@ -55,17 +64,84 @@ export interface DiffResult {
     eventTypeDiffs: EventTypeDiff[];
     totalEvents: number[];
     totalSections: number[];
+    /**
+     * Every domain the latest revisions cite, with each wiki's count, most
+     * cited first. Comparable across languages where text is not.
+     */
+    citedDomains: CitedDomainRow[];
   };
   outliers: OutlierEntry[];
   pairwiseBorrowing?: PairwiseTextBorrowing[];
   generatedAt: string;
 }
 
+export interface DiffOptions {
+  detectBorrowing?: boolean;
+  /** A title per wiki, by position; an absent one is the topic, or is resolved with `resolveTitles`. */
+  titles?: (string | undefined)[];
+  /** Find each other wiki's title through the first wiki's interlanguage links. */
+  resolveTitles?: boolean;
+}
+
+/** The interwiki prefixes a wiki may go by: its host's first label (such as "ru" in ru.wikipedia.org) and its content language. */
+function languagePrefixes(apiUrl: string, contentLanguage: string | undefined): string[] {
+  const prefixes: string[] = [];
+  try {
+    const label = new URL(apiUrl).hostname.split(".")[0]?.toLowerCase();
+    if (label) prefixes.push(label);
+  } catch {
+    // An unparseable URL leaves only the content language to go on.
+  }
+  if (contentLanguage) prefixes.push(contentLanguage.toLowerCase());
+  return prefixes;
+}
+
+/**
+ * The title to read on each wiki. The first wiki reads its given title or
+ * the topic. Each other wiki reads its given title; else, with
+ * `resolveTitles`, the title the first wiki's page links to in that wiki's
+ * language; else the topic. A wiki the first page has no interlanguage link
+ * to is an error naming the --title to give.
+ */
+export async function resolveDiffTitles(
+  topic: string,
+  wikiUrls: readonly string[],
+  options: Pick<DiffOptions, "titles" | "resolveTitles"> = {},
+): Promise<string[]> {
+  const given = options.titles ?? [];
+  const first = given[0] ?? topic;
+  let links: LanguageLink[] | undefined;
+  const titles: string[] = [first];
+  for (let i = 1; i < wikiUrls.length; i++) {
+    const explicit = given[i];
+    if (explicit !== undefined) {
+      titles.push(explicit);
+      continue;
+    }
+    if (!options.resolveTitles || wikiUrls[i] === wikiUrls[0]) {
+      titles.push(options.resolveTitles ? first : topic);
+      continue;
+    }
+    links ??= await new MediaWikiClient({ apiUrl: wikiUrls[0] }).fetchLanguageLinks(first);
+    const site = await new MediaWikiClient({ apiUrl: wikiUrls[i] }).fetchSiteInfo().catch(() => undefined);
+    const prefixes = languagePrefixes(wikiUrls[i], site?.lang);
+    const link = prefixes.map((prefix) => links?.find((l) => l.lang.toLowerCase() === prefix)).find(Boolean);
+    if (!link) {
+      const label = String.fromCharCode(97 + i);
+      throw new Error(
+        `"${first}" on ${wikiUrls[0]} has no interlanguage link to ${wikiUrls[i]} (tried ${prefixes.join(", ") || "no prefix"}); give its title with --title ${label}=<title>`,
+      );
+    }
+    titles.push(link.title);
+  }
+  return titles;
+}
+
 export async function runDiff(
   topic: string,
   wikiUrls: string[],
   depth?: string,
-  options?: { detectBorrowing?: boolean },
+  options?: DiffOptions,
 ): Promise<DiffResult> {
   console.log(`Diffing "${topic}" across ${wikiUrls.length} wikis...\n`);
 
@@ -74,11 +150,13 @@ export async function runDiff(
   const labels =
     wikiUrls.length <= 26 ? wikiUrls.map((_, i) => String.fromCharCode(65 + i)) : wikiUrls.map((_, i) => `W${i + 1}`);
 
+  const titles = await resolveDiffTitles(topic, wikiUrls, options);
   for (let i = 0; i < wikiUrls.length; i++) {
-    console.log(`Analyzing wiki ${labels[i]}: ${wikiUrls[i]}`);
+    const titleNote = titles[i] === topic ? "" : ` as "${titles[i]}"`;
+    console.log(`Analyzing wiki ${labels[i]}: ${wikiUrls[i]}${titleNote}`);
   }
 
-  const results = await Promise.all(wikiUrls.map((url) => buildSummary(topic, url, resolvedDepth)));
+  const results = await Promise.all(wikiUrls.map((url, i) => buildSummary(titles[i], url, resolvedDepth)));
   const summaries = results.map((r) => r.summary);
   const allEvents = results.map((r) => r.events);
   const latestContents = results.map((r) => r.latestContent);
@@ -107,6 +185,7 @@ export async function runDiff(
       eventTypeDiffs: buildEventTypeDiffsMatrix(summaries.map((s) => s.eventCounts)),
       totalEvents: allEvents.map((e) => e.length),
       totalSections: summaries.map((s) => s.sections.length),
+      citedDomains: buildCitedDomains(summaries),
     },
     outliers: detectOutliers(summaries, labels),
     pairwiseBorrowing,
@@ -148,6 +227,7 @@ async function buildSummary(
   return {
     summary: {
       url: apiUrl,
+      title: topic,
       sections: [...sections],
       eventCounts,
       summary: {
@@ -162,6 +242,22 @@ async function buildSummary(
     events,
     latestContent,
   };
+}
+
+/** Each domain cited on any wiki, with every wiki's count; references without a URL are left out. */
+export function buildCitedDomains(summaries: readonly Pick<WikiSummary, "citationNetwork">[]): CitedDomainRow[] {
+  const domains = new Set<string>();
+  for (const s of summaries) {
+    for (const domain of Object.keys(s.citationNetwork?.domainDistribution ?? {})) {
+      if (domain !== "unknown") domains.add(domain);
+    }
+  }
+  const rows = [...domains].map((domain) => ({
+    domain,
+    counts: summaries.map((s) => s.citationNetwork?.domainDistribution[domain] ?? 0),
+  }));
+  const total = (row: CitedDomainRow) => row.counts.reduce((a, b) => a + b, 0);
+  return rows.sort((a, b) => total(b) - total(a) || (a.domain < b.domain ? -1 : a.domain > b.domain ? 1 : 0));
 }
 
 function buildEventTypeDiffsMatrix(allCounts: Record<string, number>[]): EventTypeDiff[] {
