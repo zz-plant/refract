@@ -510,6 +510,7 @@ const exportCmd = program
   .option("--bundle", "export as evidence bundle with a SHA-256 hash of its contents")
   .option("--manifest", "export as replay manifest listing all hashes")
   .option("--proof", "export as self-contained verification bundle with Merkle proofs")
+  .option("--sign-key <path>", "sign the --proof bundle's manifest hash with this Ed25519 private key (PEM)")
   .option("--from <revId>", "start revision ID", parseInt)
   .option("--to <revId>", "end revision ID", parseInt)
   .option("--since <timestamp>", "re-observe from ISO timestamp")
@@ -555,6 +556,7 @@ exportCmd.action(async (page, opts) => {
     opts.to as number | undefined,
     opts.since as string | undefined,
     source,
+    opts.signKey as string | undefined,
   );
 });
 
@@ -562,9 +564,10 @@ exportCmd.action(async (page, opts) => {
 const verifyCmd = program
   .command("verify <bundlePath>")
   .description("check a verification bundle's events, manifest hash, Merkle root and inclusion proofs")
-  .option("--html <outPath>", "also write the result as an HTML receipt");
+  .option("--html <outPath>", "also write the result as an HTML receipt")
+  .option("--public-key <path>", "require a signature made with this Ed25519 public key (PEM)");
 verifyCmd.action(async (bundlePath, opts) => {
-  await runVerify(bundlePath, opts.html as string | undefined);
+  await runVerify(bundlePath, opts.html as string | undefined, opts.publicKey as string | undefined);
 });
 
 // ── delegation ──

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, type KeyObject, sign, verify } from "node:crypto";
 import { createEventIdentity } from "./hash-identity.js";
 import type { EvidenceEvent } from "./schemas/evidence.js";
 import type { Revision } from "./schemas/revision.js";
@@ -119,12 +119,33 @@ export function singleEventProof(manifest: ReplayManifest, eventIndex: number): 
   return getMerkleProof(levels, eventIndex);
 }
 
+/**
+ * An Ed25519 signature over the bundle's `manifestHash`. The manifest hash
+ * covers the event hashes, their Merkle root, the input revision hashes and
+ * the analyzer versions, so a valid signature on a bundle that also verifies
+ * says the key's holder vouched for exactly these events. The embedded public
+ * key says which key signed, not whose it is: trust comes from checking it
+ * against a key obtained some other way.
+ */
+export interface BundleSignature {
+  algorithm: "ed25519";
+  signs: "manifestHash";
+  /** First 16 hex characters of SHA-256 over the public key's SPKI DER encoding. */
+  keyId: string;
+  /** The signing key's public half, SPKI DER in base64. */
+  publicKey: string;
+  /** The signature over the UTF-8 bytes of `manifest.manifestHash`, base64. */
+  value: string;
+}
+
 export interface VerificationBundle {
   format: "refract-verification-bundle/v1";
   exportedAt: string;
   manifest: ReplayManifest;
   events: EvidenceEvent[];
   proofs: MerkleProof[];
+  /** Present when the bundle was signed; older readers ignore it. */
+  signature?: BundleSignature;
 }
 
 export function createVerificationBundle(params: {
@@ -242,4 +263,111 @@ export function verifyVerificationBundle(bundle: VerificationBundle): Verificati
       proof: i >= proofPasses.length ? "missing" : proofPasses[i] ? "pass" : "fail",
     })),
   };
+}
+
+function publicKeyDer(key: KeyObject): Buffer {
+  return key.export({ type: "spki", format: "der" }) as Buffer;
+}
+
+/** The key ID BundleSignature uses: SHA-256 over the public key's SPKI DER, first 16 hex characters. */
+export function bundleKeyId(publicKeyPem: string): string {
+  const der = publicKeyDer(createPublicKey(publicKeyPem));
+  return createHash("sha256").update(der).digest("hex").slice(0, 16);
+}
+
+/**
+ * The bundle with an Ed25519 signature over its manifest hash added. Takes a
+ * PEM private key, such as one from `openssl genpkey -algorithm ed25519`.
+ * Signing changes nothing the other checks read, so a signed bundle verifies
+ * as it did unsigned.
+ */
+export function signVerificationBundle(bundle: VerificationBundle, privateKeyPem: string): VerificationBundle {
+  const privateKey = createPrivateKey(privateKeyPem);
+  if (privateKey.asymmetricKeyType !== "ed25519") {
+    throw new Error(
+      `The signing key is ${privateKey.asymmetricKeyType ?? "not an asymmetric key"}; use an Ed25519 key.`,
+    );
+  }
+  const der = publicKeyDer(createPublicKey(privateKey));
+  const value = sign(null, Buffer.from(bundle.manifest.manifestHash, "utf8"), privateKey).toString("base64");
+  return {
+    ...bundle,
+    signature: {
+      algorithm: "ed25519",
+      signs: "manifestHash",
+      keyId: createHash("sha256").update(der).digest("hex").slice(0, 16),
+      publicKey: der.toString("base64"),
+      value,
+    },
+  };
+}
+
+export interface BundleSignatureResult {
+  /** `unsigned`: no signature. `valid`: it verifies with its key. `invalid`: it does not, or is malformed. */
+  status: "unsigned" | "valid" | "invalid";
+  keyId?: string;
+  /** A trusted key was given and the signature verifies with it. */
+  trusted: boolean;
+  error?: string;
+}
+
+/**
+ * Check the bundle's signature over its manifest hash. With
+ * `trustedPublicKeyPem`, the signature must have been made with that key: a
+ * bundle signed by any other key, or not signed, is not trusted. Without
+ * one, the signature is checked against the key it carries, which shows the
+ * manifest was not changed after signing but not who signed it. Does not
+ * check the rest of the bundle; use verifyVerificationBundle for that.
+ */
+export function verifyBundleSignature(bundle: VerificationBundle, trustedPublicKeyPem?: string): BundleSignatureResult {
+  const sig = bundle.signature;
+  if (!sig) {
+    return trustedPublicKeyPem
+      ? { status: "unsigned", trusted: false, error: "The bundle is not signed" }
+      : { status: "unsigned", trusted: false };
+  }
+  try {
+    if (sig.algorithm !== "ed25519" || sig.signs !== "manifestHash") {
+      return {
+        status: "invalid",
+        keyId: sig.keyId,
+        trusted: false,
+        error: `Unsupported signature: ${sig.algorithm} over ${sig.signs}`,
+      };
+    }
+    const embedded = createPublicKey({ key: Buffer.from(sig.publicKey, "base64"), format: "der", type: "spki" });
+    const embeddedDer = publicKeyDer(embedded);
+    const keyId = createHash("sha256").update(embeddedDer).digest("hex").slice(0, 16);
+    if (keyId !== sig.keyId) {
+      return {
+        status: "invalid",
+        keyId: sig.keyId,
+        trusted: false,
+        error: `The key ID ${sig.keyId} is not the embedded key's (${keyId})`,
+      };
+    }
+    const message = Buffer.from(bundle.manifest?.manifestHash ?? "", "utf8");
+    const valid = verify(null, message, embedded, Buffer.from(sig.value, "base64"));
+    if (!valid) {
+      return { status: "invalid", keyId, trusted: false, error: "The signature does not match the manifest hash" };
+    }
+    if (!trustedPublicKeyPem) return { status: "valid", keyId, trusted: false };
+    const trustedDer = publicKeyDer(createPublicKey(trustedPublicKeyPem));
+    if (!trustedDer.equals(embeddedDer)) {
+      return {
+        status: "valid",
+        keyId,
+        trusted: false,
+        error: `Signed by key ${keyId}, not the trusted key ${createHash("sha256").update(trustedDer).digest("hex").slice(0, 16)}`,
+      };
+    }
+    return { status: "valid", keyId, trusted: true };
+  } catch (error) {
+    return {
+      status: "invalid",
+      keyId: sig.keyId,
+      trusted: false,
+      error: `The signature could not be checked: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
 }

@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import type { AnalyzerConfig, EvidenceEvent, PolicySignal, Report, Revision } from "@refract-org/evidence-graph";
 import {
   createEventIdentity,
   createReplayManifest,
   createVerificationBundle,
   EVENT_SCHEMA_VERSION,
+  signVerificationBundle,
 } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
 import { renderHtmlReport } from "../html-renderer.js";
@@ -107,7 +109,11 @@ export async function runExport(
   toRev?: number,
   since?: string,
   source?: RevisionSourceSpec,
+  signKeyPath?: string,
 ): Promise<void> {
+  if (signKeyPath && !proof) throw new Error("--sign-key signs a verification bundle; use it with --proof.");
+  // Read the key before analyzing, so a missing or wrong key fails fast.
+  const signKey = signKeyPath ? readFileSync(signKeyPath, "utf-8") : undefined;
   if (proof) {
     const { events, revisions } = await runAnalyze(
       pageTitle,
@@ -123,12 +129,13 @@ export async function runExport(
       config,
       { source },
     );
-    const proofBundle = createVerificationBundle({
+    const unsigned = createVerificationBundle({
       pageTitle,
       analyzerVersions: { refract: REFRACT_VERSION },
       revisions,
       events,
     });
+    const proofBundle = signKey ? signVerificationBundle(unsigned, signKey) : unsigned;
     console.log(JSON.stringify(proofBundle, null, 2));
     return;
   }

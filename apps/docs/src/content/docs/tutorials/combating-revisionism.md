@@ -140,8 +140,10 @@ refract export "Battle of X" --manifest --from 1270000000 --to 1280110100 > batt
 The manifest lists a SHA-256 hash of each input revision, a hash of each event,
 the Merkle root over the event hashes, and the Refract version. A skeptic who
 runs the same version over the same revision range gets the same Merkle root; a
-different root means the events differ. Nothing is signed, so the root shows the
-analysis is reproducible, not who ran it or when.
+different root means the events differ. The root shows the analysis is
+reproducible, not who ran it; to vouch for a bundle, sign it with
+`--sign-key` and publish the public key readers check it with
+([signed bundles](../bundle-manifest.md#signed-bundles)).
 
 ## What Refract deliberately does NOT tell you
 

@@ -352,6 +352,7 @@ refract export <page> [options]
 | `--bundle` | off | Export as evidence bundle with a SHA-256 hash of its contents (not signed). See [bundle format](bundle-manifest.md). |
 | `--manifest` | off | Export as replay manifest with all hashes. See [manifest format](bundle-manifest.md). |
 | `--proof` | off | Export as self-contained verification bundle with Merkle inclusion proofs. |
+| `--sign-key <path>` | — | Sign the `--proof` bundle's manifest hash with this Ed25519 private key (PEM), as from `openssl genpkey -algorithm ed25519`. See [signed bundles](bundle-manifest.md#signed-bundles) |
 | `--from <revId>` | — | Start revision ID |
 | `--to <revId>` | — | End revision ID |
 | `--since <ts>` | — | Analyze revisions from this ISO timestamp |
@@ -380,7 +381,7 @@ refract export --pages-file pages.txt --format ndjson --since 2026-06-01 > event
 
 ## `refract verify`
 
-Check a verification bundle's events, manifest hash, Merkle root and inclusion proofs, and optionally write the result as an HTML file. It rehashes each event and checks each proof against the manifest's root, which 0.5.17 and earlier did not. Nothing in a bundle is signed; see [what it checks](bundle-manifest.md#checking-a-bundle).
+Check a verification bundle's events, manifest hash, Merkle root and inclusion proofs, and its signature if it has one, and optionally write the result as an HTML file. It rehashes each event and checks each proof against the manifest's root, which 0.5.17 and earlier did not. See [what it checks](bundle-manifest.md#checking-a-bundle) and [signed bundles](bundle-manifest.md#signed-bundles).
 
 ```bash
 refract verify <bundle.json> [options]
@@ -390,6 +391,7 @@ refract verify <bundle.json> [options]
 |---|---|---|
 | `bundlePath` | required (positional) | Path to verification bundle JSON file |
 | `--html <outPath>` | — | Also write the result as an HTML file |
+| `--public-key <path>` | — | Require a signature made with this Ed25519 public key (PEM). Fails a bundle that is unsigned, signed with another key, or changed after signing. Without it, a signature is checked against the key the bundle carries |
 
 ```bash
 refract verify earth-proof.json

@@ -106,4 +106,42 @@ What it does not check:
 
 - Event fields outside the event hash: `layer`, `claimId`, `schemaVersion`, the semantic enrichment fields (`editMagnitude`, `contentChange`, `keyTerms`, `certaintyProfile`, `directionSignal`, `quantitativeFindings`), each fact's `provenance` and `sourceSpan`, and `modelInterpretation`. Edits to them pass.
 - That the events are what Refract derives from the page's revisions. The bundle holds only the revisions' hashes.
-- Who made the bundle. Nothing in it is signed, and anyone who edits it can recompute every hash. A pass shows the bundle is internally consistent. To detect edits, compare its Merkle root with one you received separately, or re-run the same Refract version over the same revision range and compare roots.
+- Who made the bundle, unless it is signed and you pass `--public-key`. Without a signature, anyone who edits the bundle can recompute every hash, and a pass shows only that it is internally consistent. To detect edits, check a signature, compare its Merkle root with one you received separately, or re-run the same Refract version over the same revision range and compare roots.
+
+### Signed bundles
+
+`--sign-key` adds an Ed25519 signature over the bundle's `manifestHash`. The
+manifest hash covers the input revision hashes, the analyzer versions, the
+event hashes and their Merkle root, so a bundle that verifies and carries a
+signature made with your key shows that whoever holds the key published
+exactly these events.
+
+```bash
+openssl genpkey -algorithm ed25519 -out refract-key.pem
+openssl pkey -in refract-key.pem -pubout -out refract-key.pub.pem
+
+refract export "Earth" --proof --sign-key refract-key.pem > earth-proof.json
+refract verify earth-proof.json --public-key refract-key.pub.pem
+```
+
+```json
+"signature": {
+  "algorithm": "ed25519",
+  "signs": "manifestHash",
+  "keyId": "f4eb478111e3f75c",
+  "publicKey": "MCowBQYDK2VwAyEA…",
+  "value": "…"
+}
+```
+
+`keyId` is the first 16 hex characters of SHA-256 over the public key's SPKI
+DER encoding. The bundle carries its public key, which says which key signed it
+and nothing about whose key that is. Publish the public key somewhere readers
+already trust, and verify with `--public-key`: `verify` then fails a bundle that
+is unsigned, signed with another key, or changed after signing. Without
+`--public-key`, a signature is checked against the key the bundle carries,
+which catches a manifest changed after signing but not a bundle re-signed with
+someone else's key. The signature covers what the manifest covers and nothing
+more: the fields listed above as outside the event hash are not signed either.
+`signVerificationBundle` and `verifyBundleSignature` are exported from
+`@refract-org/evidence-graph`.

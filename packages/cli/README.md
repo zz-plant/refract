@@ -47,7 +47,7 @@ refract init
 - `--pages-file <path>` — batch analyze multiple pages
 - `--bundle` — export as evidence bundle with a SHA-256 hash of its contents (not signed)
 - `--manifest` — export as replay manifest with Merkle tree of event hashes
-- `--proof` — export as verification bundle with Merkle inclusion proofs (not signed); check it with `refract verify`
+- `--proof` — export as verification bundle with Merkle inclusion proofs; add `--sign-key <ed25519.pem>` to sign it, and check it with `refract verify` (`--public-key` to require your key)
 - `--api <url>` — override MediaWiki API endpoint
 - `--api-key <token>` — API key for private wiki auth
 - `--interval <ms>` — poll interval for watch (default: 60000)

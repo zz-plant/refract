@@ -1,7 +1,12 @@
+import { generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createVerificationBundle, verifyVerificationBundle } from "@refract-org/evidence-graph";
+import {
+  createVerificationBundle,
+  signVerificationBundle,
+  verifyVerificationBundle,
+} from "@refract-org/evidence-graph";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runVerify } from "../commands/verify.js";
 import { renderVerificationHtmlReceipt } from "../html-renderer.js";
@@ -119,5 +124,52 @@ describe("runVerify", () => {
     expect(html).toContain("Checks failed:");
     expect(html).toContain("Event index 0 hashes to");
     expect(hashAndProofCells(html)).toEqual([fail, pass]);
+  });
+});
+
+describe("runVerify with a trusted key", () => {
+  let dir: string;
+  const signed = () => {
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+    const bundle = signVerificationBundle(
+      createVerificationBundle({
+        pageTitle: "Signed",
+        analyzerVersions: { refract: "test" },
+        revisions: [],
+        events: [],
+      }),
+      privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    );
+    return { bundle, publicPem: publicKey.export({ type: "spki", format: "pem" }).toString() };
+  };
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "refract-verify-sig-"));
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+    vi.restoreAllMocks();
+  });
+
+  it("passes a bundle signed with the trusted key", async () => {
+    const { bundle, publicPem } = signed();
+    writeFileSync(join(dir, "b.json"), JSON.stringify(bundle));
+    writeFileSync(join(dir, "k.pem"), publicPem);
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    await runVerify(join(dir, "b.json"), undefined, join(dir, "k.pem"));
+    expect(exit).not.toHaveBeenCalled();
+  });
+
+  it("fails a bundle signed with another key", async () => {
+    const { bundle } = signed();
+    const { publicPem: otherKey } = signed();
+    writeFileSync(join(dir, "b.json"), JSON.stringify(bundle));
+    writeFileSync(join(dir, "k.pem"), otherKey);
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    await runVerify(join(dir, "b.json"), undefined, join(dir, "k.pem"));
+    expect(exit).toHaveBeenCalledWith(1);
   });
 });
