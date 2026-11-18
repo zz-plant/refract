@@ -27,13 +27,14 @@ bun run test         # Builds once, then Vitest checks the built site
 
 ```bash
 bun run lint     # Biome check
-bun run test     # Build, then links, titles, descriptions, JSON-LD and sitemap
+bun run test     # Build, then links, titles, descriptions, JSON-LD, sitemap and llms.txt
 bun run build    # Production build
 ```
 
 `tests/seo.test.ts` requires each page's `description` to quote the page's
 own text. `tests/links.test.ts` checks every source link and every link in the
-built pages, anchors included.
+built pages, anchors included, and requires every link in `llms.txt` and
+`llms-full.txt` to be an absolute URL the built site answers.
 
 ## Repository structure
 
@@ -41,6 +42,7 @@ built pages, anchors included.
 astro.config.mjs              # Starlight config: sidebar, head tags, theme CSS
 site.mjs                      # Site URL, name, description, core guides and assets
 links.mjs                     # .md links → page URLs; core guide titles from their H1
+llms.mjs                      # llms.txt sections and the llms-full.txt text
 social-card.mjs               # Renders the Open Graph card PNG
 viewer.mjs                    # Builds apps/ui into dist/viewer/ after the site build
 src/content/docs/             # One Markdown page per URL (title + description frontmatter)
@@ -48,7 +50,8 @@ src/content/docs/             # One Markdown page per URL (title + description f
   tutorials/                  # Tutorials
 src/content.config.ts         # docs collection, plus the core guides from ../../docs
 src/pages/[guide].astro       # /review/ and /usage/, from docs/review.md and docs/usage.md
-src/pages/*.ts                # social-card.png, core-onboarding.svg, sitemap.xml
+src/pages/*.ts                # social-card.png, core-onboarding.svg, sitemap.xml, llms.txt, llms-full.txt
+src/llms.ts                   # Every page's title and Markdown, links made absolute
 src/route-data.ts             # JSON-LD, og:type, escaped titles
 src/styles/custom.css         # Theme tokens and home page cards
 public/                       # Diagrams, screenshots, icons, notebook (served as-is)
@@ -77,3 +80,5 @@ tests/                        # Vitest; tests/build.ts builds the site once firs
 Create `src/content/docs/<slug>.md` with `title` and `description` frontmatter,
 then add it to the `sidebar` in `astro.config.mjs`. Link other pages by their
 `.md` file and core guides by their file in the repository's `docs/`.
+`llms-full.txt` picks the page up on its own; if an agent needs it to use
+Refract, also list it in `LLMS_SECTIONS` in `llms.mjs`, which builds `llms.txt`.
