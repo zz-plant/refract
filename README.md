@@ -59,7 +59,7 @@ Refract reads Wikipedia and any other MediaWiki wiki. It does not fetch arbitrar
 
 | Your question | Command | What you receive | Start here |
 |---------------|---------|------------------|------------|
-| “What changed in my pages since my last review?” | `refract review` | Pending changes with full text, source links, coverage, and explicit acknowledgment | [Review a watchlist](./docs/review.md) |
+| “What changed in my pages since my last review?” | `refract review` | Pending changes with full text, source links, coverage, and explicit acknowledgment | [Review changes to wiki pages you rely on](./docs/review.md) |
 | “When did this text appear, change, or disappear?” | `refract claim` | Candidate text, match kind, latest revision, and status within the fetched revisions | [Inspect changes to a passage](./docs/recipes.md#inspect-changes-to-a-passage) |
 | “What did the page say at an earlier date?” | `refract snapshot` | A text preview and revision ID at or before the requested date | [Inspect an earlier record](./docs/recipes.md#inspect-an-earlier-record) |
 | “My application needs changes as data.” | `refract export` | NDJSON events to filter, store, or pass to your review process | [Build a review feed](./docs/recipes.md#build-a-review-feed) |
@@ -91,7 +91,7 @@ npx @refract-org/cli init
 npx @refract-org/cli review --sample --from 1 --state-dir ./review-state
 ```
 
-[Complete review workflow](./docs/review.md) · [Captured review](./docs/examples/review.md) · [Offline recipe](./docs/recipes.md#try-the-offline-walkthrough)
+[Review changes to wiki pages you rely on](./docs/review.md) · [Captured review](./docs/examples/review.md) · [Offline recipe](./docs/recipes.md#try-the-offline-walkthrough)
 
 ## What Refract captures
 

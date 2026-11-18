@@ -1,4 +1,4 @@
-# Review the sources you rely on
+# Review changes to wiki pages you rely on
 
 **What changed since I last reviewed these pages, and where can I inspect it?**
 

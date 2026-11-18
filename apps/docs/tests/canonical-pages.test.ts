@@ -7,14 +7,14 @@ import { DIST_DIR, REPO_DIR } from "./site";
 describe("canonical core guides", () => {
 	it("publishes the review contract and its coverage limits from core", () => {
 		const html = readFileSync(join(DIST_DIR, "review/index.html"), "utf8");
-		expect(html).toContain("Review the sources you rely on");
+		expect(html).toContain("Review changes to wiki pages you rely on");
 		expect(html).toContain("Understand coverage and recovery");
 		expect(html).toContain("An incomplete report cannot be acknowledged.");
 		expect(html).toContain(
 			"https://github.com/zz-plant/refract/blob/main/docs/examples/review.json",
 		);
 		expect(html).toContain(
-			"<title>Review the sources you rely on — Refract</title>",
+			"<title>Review changes to wiki pages you rely on — Refract</title>",
 		);
 		expect(html).toContain(
 			'href="https://github.com/zz-plant/refract/edit/main/docs/review.md"',

@@ -56,6 +56,6 @@ This searches the latest 50 fetched revisions. A first match is relative to that
 
 ## Continue
 
-- [Review sources you revisit](../../../../../docs/review.md)
+- [Review changes to wiki pages you rely on](../../../../../docs/review.md)
 - [CLI reference](cli.md) — flags and output formats
 - [Data integrations](integrations.md) — use observations in your own process

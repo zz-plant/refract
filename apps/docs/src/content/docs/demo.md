@@ -24,4 +24,4 @@ The engine records these transitions. Your review criteria determine whether the
 
 ## Try it yourself
 
-[Review your sources](../../../../../docs/review.md) explains how to build the current CLI, run this sample without wiki access, acknowledge its report, and check again. [Quick start](quickstart.md) compares a pinned real revision pair with the published CLI.
+[Review changes to wiki pages you rely on](../../../../../docs/review.md) explains how to install the CLI, run this sample without wiki access, acknowledge its report, and check again. [Quick start](quickstart.md) compares a pinned real revision pair with the published CLI.
