@@ -47,6 +47,11 @@ To follow the sentence through the whole range on Wikipedia:
 refract claim "Pluto" --text "ninth and smallest" --from 71593043 --to 71601937
 ```
 
+Three of these edits are reported as a `sentence_removed` beside a
+`sentence_first_seen`. [Example 06](../examples/README.md#06-a-model-in-the-loop)
+replays the day, asks a model at each of those splits whether the two sentences
+are the same claim, and checks every answer against these events before showing it.
+
 To fetch one of these transitions as events:
 
 ```bash
