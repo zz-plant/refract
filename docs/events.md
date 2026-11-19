@@ -129,15 +129,16 @@ edit or the exact revision where each change originated.
 
 ## Semantic Enrichment Fields (v0.5.0+)
 
-Every event now carries 6 deterministic enrichment fields computed from the `before`/`after` text.
+Every event now carries deterministic enrichment fields computed from the `before`/`after` text (including English and Arabic certainty/hedging markers and Unicode key terms) and optional run-scoped actor cohort pseudonyms when input revisions include editor attributes.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `editMagnitude` | `"minor" \| "moderate" \| "major"` | Character count thresholds |
 | `contentChange` | `"introduction" \| "removal" \| "expansion" \| "compression" \| "refinement" \| "rewrite"` | Nature of the text change |
-| `keyTerms` | `string[]` | Extracted significant terms (6+ chars, filtered for noise) |
-| `certaintyProfile` | `{ high: number, medium: number, low: number, hedging: number }` | Counts of certainty/hedging markers |
+| `keyTerms` | `string[]` | Extracted significant terms (6+ ASCII chars or 4+ Arabic script chars, filtered for noise) |
+| `certaintyProfile` | `{ high: number, medium: number, low: number, hedging: number }` | Counts of certainty/hedging markers (English and Arabic) |
 | `directionSignal` | `"strengthening" \| "weakening" \| "neutral"` | Computed from certainty shift between before/after |
 | `quantitativeFindings` | `QuantitativeFinding[]` | Extracted numbers (p-values, hazard ratios, n-values, CIs) |
+| `actorCohort` | `ActorCohortSummary` | Ephemeral run-scoped pseudonymous actor labels (`Actor_1`, `Actor_2`) and distinct actor counts |
 
 All fields are optional (`?`). Existing consumers ignore them. All computed deterministically — no model, no API, byte-reproducible.

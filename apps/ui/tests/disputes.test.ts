@@ -50,6 +50,16 @@ describe("EditVelocityChart", () => {
 		chart.setData(events);
 		expect(container.querySelectorAll(".bar-group").length).toBe(1);
 		expect(container.querySelectorAll(".bar").length).toBe(2);
+
+		chart.setMarkers([
+			{
+				timestamp: "2026-05-10T08:00:00Z",
+				label: "External report published",
+				category: "report",
+			},
+		]);
+		expect(container.querySelectorAll(".has-external-marker").length).toBe(1);
+		expect(container.textContent).toContain("External report published");
 	});
 });
 
@@ -67,7 +77,7 @@ describe("RevertClusterDisplay", () => {
 		expect(container.textContent).toContain("No revert events detected");
 	});
 
-	it("renders revert cluster cards with count badge", () => {
+	it("renders revert cluster cards with count badge and actorCohort pseudonyms", () => {
 		const display = new RevertClusterDisplay(container);
 		const events: EvidenceEvent[] = [
 			{
@@ -84,6 +94,12 @@ describe("RevertClusterDisplay", () => {
 						fact: "Reverted 1 edit by user A",
 					},
 				],
+				actorCohort: {
+					actorPseudonym: "Actor_1",
+					revertedActorPseudonym: "Actor_2",
+					distinctActors: 2,
+					singleActor: false,
+				},
 				layer: "observed",
 			},
 		];
@@ -92,6 +108,7 @@ describe("RevertClusterDisplay", () => {
 		const cards = container.querySelectorAll(".card");
 		expect(cards.length).toBe(1);
 		expect(cards[0].textContent).toContain("r101");
+		expect(cards[0].textContent).toContain("Actor_1 ↺ Actor_2");
 		expect(cards[0].textContent).toContain("Safety");
 		expect(cards[0].textContent).toContain("Reverted 1 edit by user A");
 	});

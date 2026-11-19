@@ -57,6 +57,20 @@ export interface CitedDomainRow {
   counts: number[];
 }
 
+/** A canonical identifier (DOI or ISBN) cited on one or more wikis, comparable across scripts/languages. */
+export interface SharedIdentifierRow {
+  kind: "doi" | "isbn";
+  identifier: string;
+  presentOnWikis: boolean[];
+  sharedCount: number;
+}
+
+/** How many citations of each structural source type (academic, intergovernmental, ngo, news, government) each wiki cites. */
+export interface SourceTypeComparisonRow {
+  sourceType: string;
+  counts: number[];
+}
+
 export interface DiffResult {
   pageTitle: string;
   wikis: WikiSummary[];
@@ -69,6 +83,15 @@ export interface DiffResult {
      * cited first. Comparable across languages where text is not.
      */
     citedDomains: CitedDomainRow[];
+    /**
+     * Canonical academic/book identifiers (DOI, ISBN) across wikis, showing
+     * cross-language citation overlap even when article text is in different scripts.
+     */
+    sharedIdentifiers?: SharedIdentifierRow[];
+    /**
+     * Distribution of structural source categories (academic, intergovernmental, ngo, news, government) across wikis.
+     */
+    sourceTypes?: SourceTypeComparisonRow[];
   };
   outliers: OutlierEntry[];
   pairwiseBorrowing?: PairwiseTextBorrowing[];
@@ -186,6 +209,8 @@ export async function runDiff(
       totalEvents: allEvents.map((e) => e.length),
       totalSections: summaries.map((s) => s.sections.length),
       citedDomains: buildCitedDomains(summaries),
+      sharedIdentifiers: buildSharedIdentifiers(summaries),
+      sourceTypes: buildSourceTypeComparison(summaries),
     },
     outliers: detectOutliers(summaries, labels),
     pairwiseBorrowing,
@@ -258,6 +283,62 @@ export function buildCitedDomains(summaries: readonly Pick<WikiSummary, "citatio
   }));
   const total = (row: CitedDomainRow) => row.counts.reduce((a, b) => a + b, 0);
   return rows.sort((a, b) => total(b) - total(a) || (a.domain < b.domain ? -1 : a.domain > b.domain ? 1 : 0));
+}
+
+/** Compare DOIs and ISBNs cited across wikis (e.g., Arabic vs. English Wikipedia). */
+export function buildSharedIdentifiers(
+  summaries: readonly Pick<WikiSummary, "citationNetwork">[],
+): SharedIdentifierRow[] {
+  const allDois = new Set<string>();
+  const allIsbns = new Set<string>();
+  for (const s of summaries) {
+    for (const doi of s.citationNetwork?.sharedIdentifiers?.dois ?? []) allDois.add(doi);
+    for (const isbn of s.citationNetwork?.sharedIdentifiers?.isbns ?? []) allIsbns.add(isbn);
+  }
+  const rows: SharedIdentifierRow[] = [];
+  for (const doi of allDois) {
+    const presentOnWikis = summaries.map((s) => (s.citationNetwork?.sharedIdentifiers?.dois ?? []).includes(doi));
+    rows.push({
+      kind: "doi",
+      identifier: doi,
+      presentOnWikis,
+      sharedCount: presentOnWikis.filter(Boolean).length,
+    });
+  }
+  for (const isbn of allIsbns) {
+    const presentOnWikis = summaries.map((s) => (s.citationNetwork?.sharedIdentifiers?.isbns ?? []).includes(isbn));
+    rows.push({
+      kind: "isbn",
+      identifier: isbn,
+      presentOnWikis,
+      sharedCount: presentOnWikis.filter(Boolean).length,
+    });
+  }
+  return rows.sort((a, b) => b.sharedCount - a.sharedCount || a.identifier.localeCompare(b.identifier));
+}
+
+/** Compare structural source type counts across wikis. */
+export function buildSourceTypeComparison(
+  summaries: readonly Pick<WikiSummary, "citationNetwork">[],
+): SourceTypeComparisonRow[] {
+  const types = new Set<string>();
+  for (const s of summaries) {
+    for (const t of Object.keys(s.citationNetwork?.sourceTypeDistribution ?? {})) {
+      types.add(t);
+    }
+  }
+  return [...types]
+    .map((sourceType) => ({
+      sourceType,
+      counts: summaries.map(
+        (s) => (s.citationNetwork?.sourceTypeDistribution as Record<string, number> | undefined)?.[sourceType] ?? 0,
+      ),
+    }))
+    .sort((a, b) => {
+      const sumA = a.counts.reduce((x, y) => x + y, 0);
+      const sumB = b.counts.reduce((x, y) => x + y, 0);
+      return sumB - sumA || a.sourceType.localeCompare(b.sourceType);
+    });
 }
 
 function buildEventTypeDiffsMatrix(allCounts: Record<string, number>[]): EventTypeDiff[] {

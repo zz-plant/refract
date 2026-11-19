@@ -7,11 +7,12 @@ belongs in downstream applications.
 
 ## In Scope
 
-- Fetching and replaying MediaWiki revision histories.
-- Deterministic extraction of what changed between revisions.
-- Provenance records for claims, sources, page structure, links, categories,
-  templates, talk-page references, and page moves.
-- Claim-state timelines under deterministic identity and text-matching rules.
+- Fetching and replaying MediaWiki revision histories across any language edition.
+- Deterministic extraction of what changed between revisions, including multilingual text and certainty/hedging markers (e.g., English and Arabic).
+- Provenance records for claims, sources (including structural source categories such as academic DOIs, intergovernmental/UN, NGO/civil-society reports, and news media), page structure, links, categories, templates, talk-page references, and page moves.
+- Privacy-preserving actor cohort and session pseudonym observations (run-scoped pseudonymous actor labels and unique actor counts on revert loops and edit clusters, without exposing raw editor identities).
+- Cross-wiki and cross-language citation and identifier comparison (comparing shared URLs, DOIs, ISBNs, and domains across language editions).
+- Claim-state timelines under deterministic identity and text-matching rules, with support for user-supplied external timeline context markers in downstream viewers.
 - Replay manifests and verification bundles for checking hash and proof consistency.
 - Generic benchmarks that check whether Refract detected publicly observable
   revision-history events.
@@ -22,7 +23,7 @@ belongs in downstream applications.
 - Healthcare-specific logic: claim supportability thresholds, jurisdiction
   routing, authority-weighting, clinical source ranking, bitemporal gap
   detection, claim-context mapping, and review workflow triggers.
-- Claims that Refract determines truth, predicts external events, or ranks people.
+- Claims that Refract determines truth, predicts external events, or doxxes/tracks individual editors across wikis.
 - Model-assisted interpretation, recommendations, and domain-specific judgments.
 - Guarantees of complete history, source authenticity, or semantic identity through
   arbitrary rewrites based only on revision diffs and bundle hashes.

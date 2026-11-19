@@ -110,6 +110,35 @@ export interface QuantitativeFinding {
   sourceSpan?: string;
 }
 
+/**
+ * Privacy-preserving actor cohort summary for an analysis run or revision cluster.
+ * Uses ephemeral run-scoped pseudonymous actor labels (e.g., Actor_1, Actor_2)
+ * without exposing raw usernames or enabling cross-wiki tracking.
+ */
+export interface ActorCohortSummary {
+  /** Ephemeral run-scoped pseudonymous actor label for the target revision (e.g., "Actor_1") */
+  actorPseudonym?: string;
+  /** Distinct pseudonymous actors observed in the event or cluster */
+  distinctActors?: number;
+  /** Whether all edits in the cluster or revert pair were made by a single actor */
+  singleActor?: boolean;
+  /** Ephemeral pseudonymous actor label of the prior revision in a revert pair */
+  revertedActorPseudonym?: string;
+}
+
+/**
+ * User-supplied external context marker (e.g., report publication, policy change,
+ * arbitration milestone) for overlaying temporal context on revision timelines
+ * without claiming algorithmic causation.
+ */
+export interface ExternalTimelineMarker {
+  id?: string;
+  timestamp: string; // ISO 8601
+  label: string;
+  category?: "report" | "policy" | "arbitration" | "media" | "external";
+  url?: string;
+}
+
 export interface EvidenceEvent {
   schemaVersion?: string; // EVENT_SCHEMA_VERSION at time of generation
   eventId?: string; // deterministic content hash (see below)
@@ -129,6 +158,7 @@ export interface EvidenceEvent {
   certaintyProfile?: CertaintyProfile;
   directionSignal?: DirectionSignal;
   quantitativeFindings?: QuantitativeFinding[];
+  actorCohort?: ActorCohortSummary;
   layer: EvidenceLayer; // provenance layer
   timestamp: string; // ISO 8601
 }

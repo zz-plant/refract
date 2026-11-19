@@ -6,7 +6,13 @@ vi.mock("../commands/cache.js", () => ({
   saveRevisions: vi.fn(),
 }));
 
-import { buildCitedDomains, resolveDiffTitles, runDiff } from "../commands/diff.js";
+import {
+  buildCitedDomains,
+  buildSharedIdentifiers,
+  buildSourceTypeComparison,
+  resolveDiffTitles,
+  runDiff,
+} from "../commands/diff.js";
 
 /**
  * Every test here is a self-diff: the same wiki compared against itself, two or
@@ -184,6 +190,60 @@ describe("buildCitedDomains", () => {
       { domain: "b.example", counts: [1, 4] },
       { domain: "a.example", counts: [3, 0] },
       { domain: "c.example", counts: [0, 1] },
+    ]);
+  });
+
+  it("compares shared DOIs/ISBNs and structural source types across wikis", () => {
+    const wikiA = {
+      citationNetwork: {
+        uniqueSourceCount: 3,
+        domainDistribution: { "doi.org": 2, "ohchr.org": 1 },
+        sourceTypeDistribution: { academic: 2, intergovernmental: 1 },
+        sharedIdentifiers: { dois: ["10.1080/14623528.2024.111", "10.1000/only-en"], isbns: ["9780199535569"] },
+        topSources: [],
+        sourceConcentrationIndex: 0.5,
+        isHighConcentration: true,
+      },
+    };
+    const wikiB = {
+      citationNetwork: {
+        uniqueSourceCount: 2,
+        domainDistribution: { "doi.org": 1, "amnesty.org": 1 },
+        sourceTypeDistribution: { academic: 1, ngo: 1 },
+        sharedIdentifiers: { dois: ["10.1080/14623528.2024.111"], isbns: ["9780199535569"] },
+        topSources: [],
+        sourceConcentrationIndex: 0.5,
+        isHighConcentration: false,
+      },
+    };
+
+    const shared = buildSharedIdentifiers([wikiA, wikiB]);
+    expect(shared).toEqual([
+      {
+        kind: "doi",
+        identifier: "10.1080/14623528.2024.111",
+        presentOnWikis: [true, true],
+        sharedCount: 2,
+      },
+      {
+        kind: "isbn",
+        identifier: "9780199535569",
+        presentOnWikis: [true, true],
+        sharedCount: 2,
+      },
+      {
+        kind: "doi",
+        identifier: "10.1000/only-en",
+        presentOnWikis: [true, false],
+        sharedCount: 1,
+      },
+    ]);
+
+    const sourceTypes = buildSourceTypeComparison([wikiA, wikiB]);
+    expect(sourceTypes).toEqual([
+      { sourceType: "academic", counts: [2, 1] },
+      { sourceType: "intergovernmental", counts: [1, 0] },
+      { sourceType: "ngo", counts: [0, 1] },
     ]);
   });
 });

@@ -133,7 +133,7 @@ export function readPriorJson<T>(file: string, failure: string): T | undefined {
 export function finalizeEvents(
   pageTitle: string,
   events: EvidenceEvent[],
-  _sortedRevs: Revision[],
+  sortedRevs: Revision[],
   fromTimestamp: string | undefined,
   cacheDir: string | undefined,
   recordObservation = true,
@@ -158,5 +158,5 @@ export function finalizeEvents(
     writeFileSync(obsFile, JSON.stringify(events, null, 2), "utf-8");
   }
 
-  return annotateEvents(events);
+  return annotateEvents(events, sortedRevs);
 }

@@ -73,6 +73,7 @@ export type {
   RuleChangeEvent,
 } from "./schemas/drift.js";
 export type {
+  ActorCohortSummary,
   CertaintyProfile,
   ContentChange,
   DeterministicFact,
@@ -81,6 +82,7 @@ export type {
   EventType,
   EvidenceEvent,
   EvidenceLayer,
+  ExternalTimelineMarker,
   FactProvenance,
   ModelInterpretation,
   PolicyDimension,

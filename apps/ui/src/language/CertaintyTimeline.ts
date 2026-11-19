@@ -119,12 +119,31 @@ export class CertaintyTimeline {
 			(e) => e.modelInterpretation && e.layer === "model_interpretation",
 		);
 
-		return modelEvents.map((e) => ({
-			revisionId: e.toRevisionId,
-			timestamp: e.timestamp,
-			confidence: e.modelInterpretation?.confidence ?? 0,
-			label: e.modelInterpretation?.semanticChange ?? "",
-		}));
+		if (modelEvents.length > 0) {
+			return modelEvents.map((e) => ({
+				revisionId: e.toRevisionId,
+				timestamp: e.timestamp,
+				confidence: e.modelInterpretation?.confidence ?? 0,
+				label: e.modelInterpretation?.semanticChange ?? "",
+			}));
+		}
+
+		const points: CertaintyPoint[] = [];
+		for (const e of this.events) {
+			const cp = e.certaintyProfile;
+			if (!cp) continue;
+			const total = cp.high + cp.medium + cp.low + cp.hedging;
+			if (total === 0) continue;
+			const score = (cp.high + 0.6 * cp.medium + 0.2 * cp.low) / total;
+			const dir = e.directionSignal ?? "neutral";
+			points.push({
+				revisionId: e.toRevisionId,
+				timestamp: e.timestamp,
+				confidence: Number(Math.min(1, Math.max(0, score)).toFixed(2)),
+				label: `direction=${dir} (high=${cp.high} med=${cp.medium} low=${cp.low} hedge=${cp.hedging})`,
+			});
+		}
+		return points;
 	}
 }
 
