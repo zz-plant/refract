@@ -26,6 +26,7 @@ refract init
 | `field <page> --param <name>` | Track a template parameter, such as an infobox field, across revisions |
 | `linksearch <domain>` | List pages that link to a domain, one title per line, for `--pages-file` |
 | `snapshot <page> --at <date>` | Show page state at or before a date |
+| `drift <page>` | Emit constitutional-drift signals over a page's revision history |
 | `export <page> --format <format>` | Export analysis as json, csv, ndjson, parquet, or html; `--pages-file` exports many pages as NDJSON |
 | `verify <bundle>` | Check a verification bundle's events, manifest hash, Merkle root, and proofs |
 | `delegation <page>` | Write STD-07 discrepancy records for another system to read |
