@@ -98,6 +98,20 @@ export {
   extractCitationAnchors,
   normalizeAnchor,
 } from "./citation-tracker.js";
+export type {
+  ConstitutionalDriftInput,
+  ConstitutionalDriftResult,
+  RevisionMetadata,
+} from "./constitutional-drift.js";
+export {
+  computeBotShare,
+  computeConstitutionalDriftWindow,
+  computeProtectedEditShare,
+  computeRevertAsymmetry,
+  isBot,
+  isBotByHeuristic,
+  rightsLevel,
+} from "./constitutional-drift.js";
 export type { EditClusterOptions } from "./edit-cluster-detector.js";
 export { detectEditClusters } from "./edit-cluster-detector.js";
 export type { HeuristicKind, HeuristicOptions, UserMetadata } from "./heuristic-classifier.js";
