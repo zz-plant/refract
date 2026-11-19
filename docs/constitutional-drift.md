@@ -2,6 +2,7 @@
 
 **Status:** Draft spec — milestone M-CDME-1 (combined #14 + #5)
 **Scope:** Domain-neutral. Observes public MediaWiki and other revision histories.
+**Pairs with:** `docs/categorization-drift.md` (milestone M-CD-1, idea #12).
 **Owner surface:** `refract` (observation engine) + downstream applications for interpretation.
 
 ---
