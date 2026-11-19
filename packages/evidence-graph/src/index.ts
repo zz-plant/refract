@@ -64,6 +64,15 @@ export type {
 export type { AnalyzerConfig } from "./schemas/config.js";
 export { DEFAULT_ANALYZER_CONFIG } from "./schemas/config.js";
 export type {
+  ConstitutionalDriftWindow,
+  DriftRecord,
+  DriftWindow,
+  MinorityEvidenceTrace,
+  ObjectionTerminalState,
+  ObjectionTrace,
+  RuleChangeEvent,
+} from "./schemas/drift.js";
+export type {
   CertaintyProfile,
   ContentChange,
   DeterministicFact,
