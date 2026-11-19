@@ -7,6 +7,7 @@ import { TalkPageTimeline } from "./disputes/TalkPageTimeline.js";
 import { ImportUpload } from "./export/ImportUpload.js";
 import { SchemaViewer } from "./export/SchemaViewer.js";
 import { TimelineExport } from "./export/TimelineExport.js";
+import { loadFromQueryParams } from "./export/UrlLoader.js";
 import { CertaintyTimeline } from "./language/CertaintyTimeline.js";
 import { WordingDiffCard } from "./language/WordingDiffCard.js";
 import { DiffView } from "./timeline/DiffView.js";
@@ -75,13 +76,32 @@ new ImportUpload(document.getElementById("import-area")!, (events) => {
 	updateAll(events);
 });
 
-async function loadSampleData(): Promise<void> {
+async function loadInitialData(): Promise<void> {
+	const statusEl = document.getElementById("import-status")!;
+	const hasSrcParam = new URLSearchParams(window.location.search).has("src");
 	const throbber = new Throbber(
-		document.getElementById("import-status")!,
-		"Loading sample events",
+		statusEl,
+		hasSrcParam ? "Loading shared bundle" : "Loading sample events",
 	);
 	throbber.start();
 	try {
+		const remote = await loadFromQueryParams(
+			window.location.search,
+			window.location.href,
+		);
+		if (remote && remote.events.length > 0) {
+			allEvents = remote.events;
+			if (remote.markers.length > 0) {
+				editVelocityChart.setMarkers(remote.markers);
+			}
+			exportCtrl.setData(remote.events);
+			const allTypes = collectEventTypes(remote.events);
+			filter.setTypes(allTypes);
+			timelineView.setData(remote.events);
+			updateAll(remote.events);
+			return;
+		}
+
 		// BASE_URL is /refract/viewer/ on the published site, / under the dev server.
 		const resp = await fetch(`${import.meta.env.BASE_URL}sample-data.jsonl`);
 		const text = await resp.text();
@@ -94,7 +114,7 @@ async function loadSampleData(): Promise<void> {
 		timelineView.setData(events);
 		updateAll(events);
 	} catch (err) {
-		console.warn("Could not load sample data:", err);
+		console.warn("Could not load initial data:", err);
 	} finally {
 		throbber.stop();
 	}
@@ -129,4 +149,4 @@ function applyFilters(activeTypes: Set<EventType>): void {
 	updateAll(filtered);
 }
 
-loadSampleData();
+loadInitialData();

@@ -18,6 +18,7 @@ bun run examples/02-equivalent-to-wikiwho.ts
 | 04 | [from-scratch-to-refract.ts](04-from-scratch-to-refract.ts) | The ~800 lines of brittle Wikipedia analysis code you don't need to write |
 | 05 | [wikidata-editorial-depth.ts](05-wikidata-editorial-depth.ts) | Current claim state vs. full editorial history — sources tried, replaced, removed |
 | 06 | [pluto-in-the-loop.ts](06-pluto-in-the-loop.ts) | A model in the loop: where the sentence matcher splits a history, ask a model if it is one claim, and check each answer against the events before showing it |
+| 07 | [longitudinal-multi-year-audit.ts](07-longitudinal-multi-year-audit.ts) | Multi-year longitudinal audit: scan 100% of revision metadata at 500 revs/request, compute pseudonymous revert pairs, and hydrate stratified checkpoints with SHA-1 deduplication |
 
 ## Audience
 

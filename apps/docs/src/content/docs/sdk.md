@@ -82,7 +82,27 @@ const revisions = await client.fetchRevisions("Earth", { limit: 50 });
 
 `fetchRevisions` returns the newest revisions first. Without `limit` (or a `start`/`end` or revision-ID range) it pages through the page's whole history.
 
-Key exports: `MediaWikiClient` (class), `RevisionFetcher` (interface), `AuthConfig`
+**Multi-year longitudinal ingestion (fast metadata scan + SHA-1 deduplicated hydration)**:
+
+For high-traffic articles with thousands of revisions across multiple years, `fetchLongitudinalHistory` scans 100% of revision metadata at 500 revisions/request (`fetchRevisionMetadata`), computes full-history monthly velocity, summary/SHA-1 reverts, and pseudonymous revert pairs (`computeFullHistoryTelemetry`), selects stratified monthly checkpoints plus the largest structural deltas (`selectLongitudinalRevisions`), and hydrates their wikitext in parallel `revids=` batches with SHA-1 deduplication (`fetchRevisionsByIds`):
+
+```typescript
+import { MediaWikiClient } from "@refract-org/ingestion";
+
+const client = new MediaWikiClient({ apiUrl: "https://en.wikipedia.org/w/api.php" });
+const history = await client.fetchLongitudinalHistory("Climate change", {
+  start: new Date("2023-01-01T00:00:00Z"),
+  maxMetadataRevisions: 10_000,
+  maxContentRevisions: 60,
+  concurrency: 4,
+});
+
+console.log("Total revisions scanned:", history.telemetry.totalRevisions);
+console.log("Summary / SHA-1 reverts:", history.telemetry.summaryReverts, history.telemetry.sha1IdentityReverts);
+console.log("Hydrated checkpoints:", history.revisions.length);
+```
+
+Key exports: `MediaWikiClient` (class), `RevisionFetcher` (interface), `AuthConfig`, `computeFullHistoryTelemetry`, `selectLongitudinalRevisions`, `LongitudinalHistoryOptions`, `LongitudinalHistoryResult`, `FullHistoryTelemetry`, `RevisionMetadata`
 
 **Wayback Machine, Git and snapshot revision sources**:
 
@@ -134,6 +154,8 @@ Deterministic analyzers for section diffs, citation tracking, text propagation, 
 import {
   sectionDiffer,
   citationTracker,
+  classifyCitationSource,
+  extractCitationIdentifiers,
   analyzeCitationNetwork,
   detectTextPropagation,
   revertDetector,
@@ -155,7 +177,7 @@ if (result.isSignificantBorrowing) {
 }
 ```
 
-**Citation concentration**: citation counts per domain and per source, and a Herfindahl-Hirschman index over the domain shares:
+**Citation concentration, source tiers, and cross-language identifiers**: citation counts per domain, structural source-type breakdown (`academic`, `intergovernmental`, `ngo`, `government`, `news`), shared `DOI`/`ISBN` identifiers across language editions, and a Herfindahl-Hirschman index over the domain shares:
 
 ```typescript
 const citations = citationTracker.extractCitations(wikitext);
@@ -163,6 +185,7 @@ const network = analyzeCitationNetwork(citations);
 
 console.log("Unique sources:", network.uniqueSourceCount);
 console.log("Concentration index:", network.sourceConcentrationIndex);
+console.log("Source tiers:", network.sourceTypeDistribution);
 console.log("Domain breakdown:", network.domainDistribution);
 ```
 
@@ -210,7 +233,7 @@ Key exports:
 
 ### `@refract-org/cli`
 
-The `refract` / `wikihistory` CLI tool (19 commands: analyze, claim, classify, cron, delegation, diff, eval, explore, export, field, init, linksearch, mcp, review, snapshot, stream, verify, visualize, watch). See [CLI reference](./cli).
+The `refract` / `wikihistory` CLI tool (20 commands: analyze, claim, classify, cron, delegation, diff, drift, eval, explore, export, field, init, linksearch, mcp, review, snapshot, stream, verify, visualize, watch). See [CLI reference](./cli).
 
 ### `@refract-org/persistence`
 

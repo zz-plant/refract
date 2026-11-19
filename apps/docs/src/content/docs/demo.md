@@ -21,6 +21,7 @@ The engine records these transitions. Your review criteria determine whether the
 - [Input revisions](https://github.com/refract-org/refract/blob/main/packages/cli/src/onboarding-sample.ts) define the fictional history.
 - [Saved review report](https://github.com/refract-org/refract/blob/main/docs/examples/review.md) shows pending changes, coverage, and explicit acknowledgment.
 - [Captured Pluto and Bitcoin changes](https://github.com/refract-org/refract/blob/main/docs/example-output.md) include actual source revision links.
+- [Multi-year longitudinal audit demo](https://github.com/refract-org/refract/blob/main/examples/07-longitudinal-multi-year-audit.ts) scans 100% of revision metadata across multiple years, tracks pseudonymous revert pairs, and extracts structural citation tiers and DOIs/ISBNs.
 
 ## Try it yourself
 
