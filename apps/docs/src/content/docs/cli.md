@@ -231,6 +231,27 @@ refract snapshot <page> [options]
 Displays section list, plain text content, and metadata (revision ID, editor, size,
 edit comment). Content is truncated at 2000 characters.
 
+## `refract drift`
+
+Observe constitutional-drift signals over a page's revision history.
+
+```bash
+refract drift <page> [options]
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `page` | required (positional) | Page title |
+| `--from-revision <revId>` | — | Start revision ID |
+| `--to-revision <revId>` | — | End revision ID |
+| `--revision-limit <n>` | `500` | Max revisions to fetch |
+| `-f, --format <format>` | `ndjson` | Output format: `ndjson`, `json`, or `markdown` |
+
+Emits one `constitutional_drift_window` record with bot share, protected-edit
+share, procedural depth, rule-migration count, and revert asymmetry. Signals
+whose metadata is absent are reported as `null` rather than fabricated. The
+window is descriptive; it does not score the institution.
+
 ## `refract cron`
 
 One-shot re-observation for cron scheduling.

@@ -67,6 +67,24 @@ export interface TemplateChange {
 
 export type { RegisteredAnalyzer } from "./analyzer-registry.js";
 export { AnalyzerRegistry, registry } from "./analyzer-registry.js";
+export type {
+  DriftRateInput,
+  MarkerDetectionResult,
+  ObjectionClassification,
+  TerminalState,
+  TerminalStateInput,
+} from "./categorization-drift.js";
+export {
+  classifyObjection,
+  classifyTerminalState,
+  computeDriftRate,
+  detectMarkers,
+  detectOperationalMarkers,
+  detectStructuralMarkers,
+  isDriftTerminal,
+  OPERATIONAL_MARKERS,
+  STRUCTURAL_MARKERS,
+} from "./categorization-drift.js";
 export { buildCategoryEvents, diffCategories, extractCategories } from "./category-tracker.js";
 export {
   analyzeCitationNetwork,
@@ -83,6 +101,20 @@ export {
   extractCitationIdentifiers,
   normalizeAnchor,
 } from "./citation-tracker.js";
+export type {
+  ConstitutionalDriftInput,
+  ConstitutionalDriftResult,
+  RevisionMetadata,
+} from "./constitutional-drift.js";
+export {
+  computeBotShare,
+  computeConstitutionalDriftWindow,
+  computeProtectedEditShare,
+  computeRevertAsymmetry,
+  isBot,
+  isBotByHeuristic,
+  rightsLevel,
+} from "./constitutional-drift.js";
 export type { EditClusterOptions } from "./edit-cluster-detector.js";
 export { detectEditClusters } from "./edit-cluster-detector.js";
 export type { HeuristicKind, HeuristicOptions, UserMetadata } from "./heuristic-classifier.js";

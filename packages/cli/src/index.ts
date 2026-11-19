@@ -9,6 +9,7 @@ import { runCron } from "./commands/cron.js";
 import { DelegationInputError, runDelegation, WHEN_RULES } from "./commands/delegation.js";
 import type { DiffResult } from "./commands/diff.js";
 import { runDiff } from "./commands/diff.js";
+import { runDrift } from "./commands/drift.js";
 import { runEval } from "./commands/eval.js";
 import { runExplore } from "./commands/explore.js";
 import { runBatchExport, runExport } from "./commands/export.js";
@@ -500,6 +501,26 @@ snapshotCmd.action(async (page, opts) => {
     extractAuth(opts),
     opts.revisionLimit as number | undefined,
   );
+});
+
+// ── drift ──
+const driftCmd = program
+  .command("drift <page>")
+  .description("observe constitutional-drift signals over a page's revision history")
+  .option("--from-revision <revId>", "start revision ID", parseInt)
+  .option("--to-revision <revId>", "end revision ID", parseInt)
+  .option("--revision-limit <n>", "max revisions to fetch (default: 500)", parseInt)
+  .option("-f, --format <format>", "output format: ndjson, json, markdown", "ndjson");
+withGlobal(driftCmd);
+driftCmd.action(async (page, opts) => {
+  await runDrift(page, {
+    apiUrl: opts.api as string | undefined,
+    auth: extractAuth(opts),
+    revisionLimit: opts.revisionLimit as number | undefined,
+    fromRevisionId: opts.fromRevision as number | undefined,
+    toRevisionId: opts.toRevision as number | undefined,
+    format: opts.format as "ndjson" | "json" | "markdown",
+  });
 });
 
 // ── export ──
