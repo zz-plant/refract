@@ -245,7 +245,7 @@ refract drift <page> [options]
 | `--from-revision <revId>` | — | Start revision ID |
 | `--to-revision <revId>` | — | End revision ID |
 | `--revision-limit <n>` | `500` | Max revisions to fetch |
-| `-f, --format <format>` | `ndjson` | Output format: `ndjson` or `json` |
+| `-f, --format <format>` | `ndjson` | Output format: `ndjson`, `json`, or `markdown` |
 
 Emits one `constitutional_drift_window` record with bot share, protected-edit
 share, procedural depth, rule-migration count, and revert asymmetry. Signals

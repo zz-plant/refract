@@ -9,7 +9,7 @@ export interface DriftOptions {
   revisionLimit?: number;
   fromRevisionId?: number;
   toRevisionId?: number;
-  format?: "ndjson" | "json";
+  format?: "ndjson" | "json" | "markdown";
 }
 
 export interface DriftResult {
@@ -71,10 +71,60 @@ export async function computeDrift(pageTitle: string, options: DriftOptions = {}
   return { window, revisions };
 }
 
+function pct(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+/**
+ * Render a drift window as a Markdown report. Descriptive only: it reports the
+ * observed signals and says "not available" where metadata is absent. It does
+ * not score the institution or attribute intent.
+ */
+export function renderDriftMarkdown(window: ConstitutionalDriftWindow): string {
+  const s = window.signals;
+  const revertAsymmetry =
+    s.revertAsymmetry === null
+      ? "not available (no rights-level metadata in this revision range)"
+      : s.revertAsymmetry.toFixed(3);
+  const lines = [
+    `# Constitutional drift — ${window.page}`,
+    "",
+    `**Window:** ${window.windowStart} → ${window.windowEnd}`,
+    `**Revisions:** ${window.revisionStart}–${window.revisionEnd} (${window.sourceRevisions.length} revisions)`,
+    "",
+    "| Signal | Value |",
+    "|---|---|",
+    `| Bot share | ${pct(s.botShareTrend)} |`,
+    `| Protected-edit share | ${pct(s.protectedEditShare)} |`,
+    `| Procedural depth | ${s.proceduralDepth} |`,
+    `| Rule migrations | ${s.ruleMigrationCount} |`,
+    `| Revert asymmetry | ${revertAsymmetry} |`,
+    "",
+    "## What this shows",
+    "",
+    "These are descriptive observations over the captured revision range, not a score.",
+    "Bot share and revert asymmetry fall back to a username heuristic when the source",
+    "does not supply account metadata; a null means the data was absent, not that the",
+    "signal is zero.",
+    "",
+    "## Source",
+    "",
+    `Revision range ${window.revisionStart}–${window.revisionEnd} on "${window.page}".`,
+    "Each value can be recomputed from the same revisions; no model calls are involved.",
+    "",
+  ];
+  return lines.join("\n");
+}
+
 export async function runDrift(pageTitle: string, options: DriftOptions = {}): Promise<void> {
   const { window } = await computeDrift(pageTitle, options);
-  if ((options.format ?? "ndjson") === "json") {
+  const format = options.format ?? "ndjson";
+  if (format === "json") {
     console.log(JSON.stringify(window, null, 2));
+    return;
+  }
+  if (format === "markdown") {
+    console.log(renderDriftMarkdown(window));
     return;
   }
   console.log(JSON.stringify(window));

@@ -510,7 +510,7 @@ const driftCmd = program
   .option("--from-revision <revId>", "start revision ID", parseInt)
   .option("--to-revision <revId>", "end revision ID", parseInt)
   .option("--revision-limit <n>", "max revisions to fetch (default: 500)", parseInt)
-  .option("-f, --format <format>", "output format: ndjson, json", "ndjson");
+  .option("-f, --format <format>", "output format: ndjson, json, markdown", "ndjson");
 withGlobal(driftCmd);
 driftCmd.action(async (page, opts) => {
   await runDrift(page, {
@@ -519,7 +519,7 @@ driftCmd.action(async (page, opts) => {
     revisionLimit: opts.revisionLimit as number | undefined,
     fromRevisionId: opts.fromRevision as number | undefined,
     toRevisionId: opts.toRevision as number | undefined,
-    format: opts.format as "ndjson" | "json",
+    format: opts.format as "ndjson" | "json" | "markdown",
   });
 });
 
