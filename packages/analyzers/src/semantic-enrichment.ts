@@ -14,8 +14,33 @@ import {
 import { buildMerkleRoot, hashLeaf } from "./merkle-tree.js";
 
 const CERTAINTY_PATTERNS = {
-  high: [/demonstrat\w*/i, /prove\w*/i, /confirm\w*/i, /establish\w*/i, /significantly/i, /robust/i, /definitive/i],
-  medium: [/suggest\w*/i, /indicat\w*/i, /appear\w*/i, /likely/i, /consistent with/i, /evidence/i],
+  high: [
+    /demonstrat\w*/i,
+    /prove\w*/i,
+    /confirm\w*/i,
+    /establish\w*/i,
+    /significantly/i,
+    /robust/i,
+    /definitive/i,
+    // Arabic high-certainty / consensus markers
+    /(?:يثبت|تثبت|أثبت)/,
+    /(?:يؤكد|تؤكد|أكدت)/,
+    /(?:إجماع|أجمع)/,
+    /(?:مؤكد|قطعاً|خلصت)/,
+  ],
+  medium: [
+    /suggest\w*/i,
+    /indicat\w*/i,
+    /appear\w*/i,
+    /likely/i,
+    /consistent with/i,
+    /evidence/i,
+    // Arabic medium-certainty markers
+    /(?:يشير|تشير)/,
+    /(?:يرجح|من المرجح)/,
+    /(?:دليل|أدلة)/,
+    /(?:يبدو|تبدو)/,
+  ],
   low: [
     /may /i,
     /might /i,
@@ -26,8 +51,24 @@ const CERTAINTY_PATTERNS = {
     /limited/i,
     /unclear/i,
     /inconclusive/i,
+    // Arabic low-certainty / attribution-hedging markers
+    /ربما/,
+    /(?:يزعم|تزعم|مزاعم|ادعاء)/,
+    /غير واضح/,
+    /محتمل/,
   ],
-  hedging: [/however/i, /although/i, /despite/i, /while/i, /nevertheless/i],
+  hedging: [
+    /however/i,
+    /although/i,
+    /despite/i,
+    /while/i,
+    /nevertheless/i,
+    // Arabic hedging / concessive markers
+    /ومع ذلك/,
+    /(?:على الرغم من|بالرغم من)/,
+    /(?:إلا أن|غير أن)/,
+    /في حين/,
+  ],
 };
 
 const QUANTITATIVE_PATTERNS: Array<{ name: string; regex: RegExp; extract: (m: RegExpMatchArray) => string }> = [
@@ -99,17 +140,18 @@ export function computeContentChange(eventType: string, before: string, after: s
 
 export function extractKeyTerms(text: string): string[] {
   const patterns = [
-    /\b\w{6,}\b/g, // Words 6+ chars (filters noise)
+    /\b\w{6,}\b/g, // ASCII words 6+ chars (filters noise)
+    /[\u0600-\u06FF]{4,}/g, // Arabic script terms 4+ chars (roots/nouns carry denser morphology)
   ];
   const terms = new Set<string>();
+  const englishStop =
+    /^(which|that|this|these|those|their|with|from|have|been|were|about|after|before|during|between|through|because|however|although|therefore|nevertheless|furthermore|additionally|importantly|significantly|typically|generally|usually|commonly|frequently|approximately|estimated|reported|published|described|identified|demonstrated|confirmed|suggested|indicated|appeared|appears|showed|shows|found|finding|findings|noted|noting|observed|observing|concluded|concluding|compared|comparing|included|including|excluded|excluding|received|receiving|treated|treating|followed|following)/;
+  const arabicStop =
+    /^(?:الذي|التي|الذين|اللذين|اللاتي|هناك|كانت|يكون|تكون|بينما|عندما|حيثما|كذلك|أيضا|أيضاً|خلال|حوالي|بسبب|بدون|جميع)$/;
   for (const p of patterns) {
     for (const m of text.matchAll(p)) {
       const term = m[0].toLowerCase();
-      if (
-        !/^(which|that|this|these|those|their|with|from|have|been|were|about|after|before|during|between|through|because|however|although|therefore|nevertheless|furthermore|additionally|importantly|significantly|typically|generally|usually|commonly|frequently|approximately|estimated|reported|published|described|identified|demonstrated|confirmed|suggested|indicated|appeared|appears|showed|shows|found|finding|findings|noted|noting|observed|observing|concluded|concluding|compared|comparing|included|including|excluded|excluding|received|receiving|treated|treating|followed|following)/.test(
-          term,
-        )
-      ) {
+      if (!englishStop.test(term) && !arabicStop.test(term)) {
         terms.add(term);
       }
     }

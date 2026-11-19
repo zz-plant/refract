@@ -416,3 +416,54 @@ describe("parseContent", () => {
     expect(parsed.templates.map((t) => t.name)).toEqual(["NPOV"]);
   });
 });
+
+describe("actorCohort session pseudonyms", () => {
+  it("assigns run-scoped pseudonyms (Actor_1, Actor_2) without leaking raw usernames", () => {
+    const revs: Revision[] = [
+      {
+        revId: 10,
+        pageId: 1,
+        pageTitle: "Test",
+        timestamp: "2026-01-01T10:00:00Z",
+        user: "raw_editor_alpha",
+        comment: "Initial",
+        content: "The initial sentence has enough length to be tracked.",
+        size: 54,
+        minor: false,
+      },
+      {
+        revId: 11,
+        pageId: 1,
+        pageTitle: "Test",
+        timestamp: "2026-01-01T10:05:00Z",
+        user: "raw_editor_beta",
+        comment: "Change wording",
+        content: "The modified sentence has enough length to be tracked.",
+        size: 55,
+        minor: false,
+      },
+      {
+        revId: 12,
+        pageId: 1,
+        pageTitle: "Test",
+        timestamp: "2026-01-01T10:10:00Z",
+        user: "raw_editor_alpha",
+        comment: "Reverted 1 edit",
+        content: "The initial sentence has enough length to be tracked.",
+        size: 54,
+        minor: false,
+      },
+    ];
+
+    const events = annotateEvents(buildRevisionEvents(revs), revs);
+    const revert = events.find((e) => e.eventType === "revert_detected");
+    expect(revert?.actorCohort).toEqual({
+      actorPseudonym: "Actor_1",
+      revertedActorPseudonym: "Actor_2",
+      distinctActors: 2,
+      singleActor: false,
+    });
+    expect(JSON.stringify(events)).not.toContain("raw_editor_alpha");
+    expect(JSON.stringify(events)).not.toContain("raw_editor_beta");
+  });
+});

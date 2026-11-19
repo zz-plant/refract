@@ -5,6 +5,7 @@ interface RevertCluster {
 	timestamp: string;
 	section: string;
 	facts: string[];
+	actorLabel?: string;
 	count: number;
 }
 
@@ -52,7 +53,8 @@ export class RevertClusterDisplay {
 			const label = document.createElement("div");
 			label.className = "card-label";
 			const ts = new Date(cluster.timestamp);
-			label.textContent = `r${cluster.revisionId} · ${ts.toLocaleDateString()}`;
+			const actorSuffix = cluster.actorLabel ? ` · ${cluster.actorLabel}` : "";
+			label.textContent = `r${cluster.revisionId} · ${ts.toLocaleDateString()}${actorSuffix}`;
 			header.appendChild(label);
 
 			const badge = document.createElement("span");
@@ -94,11 +96,18 @@ export class RevertClusterDisplay {
 			const key = `${event.toRevisionId}-${event.section}`;
 			let cluster = grouped.get(key);
 			if (!cluster) {
+				const cohort = event.actorCohort;
+				const actorLabel = cohort?.actorPseudonym
+					? cohort.revertedActorPseudonym
+						? `${cohort.actorPseudonym} ↺ ${cohort.revertedActorPseudonym}`
+						: cohort.actorPseudonym
+					: undefined;
 				cluster = {
 					revisionId: event.toRevisionId,
 					timestamp: event.timestamp,
 					section: event.section,
 					facts: [],
+					actorLabel,
 					count: 0,
 				};
 				grouped.set(key, cluster);

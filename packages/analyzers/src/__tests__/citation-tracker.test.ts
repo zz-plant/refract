@@ -89,7 +89,7 @@ describe("buildSourceLineage", () => {
     expect(result.sources).toHaveLength(1);
     expect(result.lineage).toHaveLength(0);
     const src = result.sources[0];
-    expect(src.sourceType).toBe("secondary");
+    expect(src.sourceType).toBe("academic");
     expect(src.authority).toBe("high");
     expect(src.firstSeenRevisionId).toBe(1);
   });
@@ -115,7 +115,7 @@ describe("buildSourceLineage", () => {
     const comSource = result.sources.find((s) => s.url?.includes("reuters.com"));
     if (!comSource) throw new Error("Expected com source to be found");
 
-    expect(eduSource.sourceType).toBe("secondary");
+    expect(eduSource.sourceType).toBe("academic");
     expect(eduSource.authority).toBe("high");
     expect(comSource.sourceType).toBe("news");
     expect(comSource.authority).toBe("medium");
@@ -136,14 +136,26 @@ describe("buildSourceLineage", () => {
     expect(src.authority).toBe("high");
   });
 
-  it("classifies doi.org as academic/medium", () => {
+  it("classifies doi.org as academic/high", () => {
     const refUrl = "https://doi.org/10.1234/test";
     const content = `<ref name="d">{{cite journal |url=${refUrl} |title=Study}}</ref>`;
     const result = buildSourceLineage([{ revId: 1, timestamp: "2024-01-01T00:00:00Z", content }]);
     const src = result.sources.find((s) => s.url === refUrl);
     if (!src) throw new Error("Expected source to be found");
     expect(src.sourceType).toBe("academic");
-    expect(src.authority).toBe("medium");
+    expect(src.authority).toBe("high");
+  });
+
+  it("classifies UN and human rights NGO domains into intergovernmental and ngo tiers", () => {
+    const content = [
+      `<ref name="un">{{cite web |url=https://www.ohchr.org/en/documents/report |title=UN OHCHR Report}}</ref>`,
+      `<ref name="ngo">{{cite web |url=https://www.amnesty.org/en/documents/mde15/001/2025/en/ |title=Amnesty Report}}</ref>`,
+      `<ref name="ar_journal">{{استشهاد بدورية محكمة |معرف الوثيقة الرقمي=10.1080/14623528.2024.123456 |عنوان=دراسة}}</ref>`,
+    ].join(" ");
+    const result = buildSourceLineage([{ revId: 1, timestamp: "2024-01-01T00:00:00Z", content }]);
+    expect(result.sources.find((s) => s.url?.includes("ohchr.org"))?.sourceType).toBe("intergovernmental");
+    expect(result.sources.find((s) => s.url?.includes("amnesty.org"))?.sourceType).toBe("ngo");
+    expect(result.sources.find((s) => !s.url)?.sourceType).toBe("academic");
   });
 
   it("classifies unknown URL as unknown/unrated", () => {

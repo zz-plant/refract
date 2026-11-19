@@ -9,12 +9,14 @@ const DEFAULT_REVERT_PATTERNS = [
   /\brollback\b/i,
   /\brestore/i,
   /\[\[WP:ROLLBACK\]\]/i,
+  // Arabic MediaWiki default revert / rollback / undo summaries
+  /(?:استرجاع|رجوع|إلغاء\s+تعديل|استعادة\s+النسخة)/,
 ];
 
 // "Restored revision 123" and "reverted to revision 123" name the revision
-// put back; "Undid revision 123" names the one taken away.
+// put back; "Undid revision 123" (or Arabic "إلغاء تعديل ... رقم 123") names the one taken away.
 const RESTORED_REVISION = /\b(?:restored?|revert(?:ed)?\s+to)\s+(?:revision|rev\.?|version)\s+(\d+)/i;
-const UNDONE_REVISION = /\bundid\s+revision\s+(\d+)/i;
+const UNDONE_REVISION = /(?:(?:\bundid\s+revision\s+)|(?:إلغاء\s+تعديل.*?رقم\s+))(\d+)/i;
 
 function byTimestamp(revisions: readonly Revision[]): Revision[] {
   return [...revisions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());

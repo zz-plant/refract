@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MediaWikiClient, retryAfterMs } from "../mediawiki-client.js";
+import {
+  computeFullHistoryTelemetry,
+  MediaWikiClient,
+  type RevisionMetadata,
+  retryAfterMs,
+  selectLongitudinalRevisions,
+} from "../mediawiki-client.js";
 
 const MOCK_PROTECT_RESPONSE = {
   query: {
@@ -311,5 +317,129 @@ describe("retryAfterMs", () => {
   it("returns undefined for a missing or unreadable header", () => {
     expect(retryAfterMs(null, now)).toBeUndefined();
     expect(retryAfterMs("soon", now)).toBeUndefined();
+  });
+});
+
+describe("longitudinal history ingestion", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const sampleMetadata: RevisionMetadata[] = [
+    {
+      revId: 1,
+      parentId: 0,
+      pageId: 10,
+      pageTitle: "Sample",
+      timestamp: "2024-01-05T00:00:00Z",
+      user: "Alice",
+      comment: "initial",
+      size: 1000,
+      minor: false,
+      sha1: "aaa",
+    },
+    {
+      revId: 2,
+      parentId: 1,
+      pageId: 10,
+      pageTitle: "Sample",
+      timestamp: "2024-01-10T00:00:00Z",
+      user: "Bob",
+      comment: "major expansion",
+      size: 4500,
+      minor: false,
+      sha1: "bbb",
+    },
+    {
+      revId: 3,
+      parentId: 2,
+      pageId: 10,
+      pageTitle: "Sample",
+      timestamp: "2024-01-11T00:00:00Z",
+      user: "Alice",
+      comment: "Undid revision 2 by Bob",
+      size: 1000,
+      minor: false,
+      sha1: "aaa",
+    },
+    {
+      revId: 4,
+      parentId: 3,
+      pageId: 10,
+      pageTitle: "Sample",
+      timestamp: "2024-02-05T00:00:00Z",
+      user: "Charlie",
+      comment: "added sources",
+      size: 2600,
+      minor: false,
+      sha1: "ccc",
+    },
+  ];
+
+  it("computeFullHistoryTelemetry detects summary reverts, SHA-1 identity reverts, and pseudonymous revert pairs", () => {
+    const telemetry = computeFullHistoryTelemetry(sampleMetadata);
+    expect(telemetry.totalRevisions).toBe(4);
+    expect(telemetry.distinctActors).toBe(3);
+    expect(telemetry.summaryReverts).toBe(1);
+    expect(telemetry.sha1IdentityReverts).toBe(1);
+    expect(telemetry.topRevertPairs).toEqual([["Actor_1 ↺ Actor_2", 1]]);
+    expect(telemetry.monthlyVelocity).toHaveLength(2);
+    expect(telemetry.monthlyVelocity[0].month).toBe("2024-01");
+    expect(telemetry.monthlyVelocity[0].revisions).toBe(3);
+    expect(telemetry.monthlyVelocity[1].month).toBe("2024-02");
+  });
+
+  it("selectLongitudinalRevisions anchors monthly checkpoints and preserves endpoints", () => {
+    const selected = selectLongitudinalRevisions(sampleMetadata, 3);
+    expect(selected.length).toBeLessThanOrEqual(3);
+    expect(selected[0].revId).toBe(1);
+    expect(selected[selected.length - 1].revId).toBe(4);
+  });
+
+  it("fetchRevisionsByIds deduplicates identical SHA-1 revisions across network batches", async () => {
+    const client = new MediaWikiClient({ apiUrl: "https://en.wikipedia.org/w/api.php", minDelayMs: 0 });
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        query: {
+          pages: {
+            "10": {
+              pageid: 10,
+              title: "Sample",
+              revisions: [
+                {
+                  revid: 1,
+                  parentid: 0,
+                  timestamp: "2024-01-05T00:00:00Z",
+                  user: "Alice",
+                  comment: "initial",
+                  size: 1000,
+                  slots: { main: { content: "shared wikitext" } },
+                },
+                {
+                  revid: 2,
+                  parentid: 1,
+                  timestamp: "2024-01-10T00:00:00Z",
+                  user: "Bob",
+                  comment: "major expansion",
+                  size: 4500,
+                  slots: { main: { content: "expanded wikitext" } },
+                },
+              ],
+            },
+          },
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const metadataByRevId = new Map(sampleMetadata.slice(0, 3).map((m) => [m.revId, m]));
+    const revs = await client.fetchRevisionsByIds([1, 2, 3], { metadataByRevId });
+
+    // Revision 3 shares sha1 "aaa" with Revision 1, so revids= only fetches 1|2
+    const requestedRevIds = new URL(fetchMock.mock.calls[0][0] as string).searchParams.get("revids");
+    expect(requestedRevIds).toBe("1|2");
+    expect(revs).toHaveLength(3);
+    expect(revs[2].revId).toBe(3);
+    expect(revs[2].content).toBe("shared wikitext");
   });
 });

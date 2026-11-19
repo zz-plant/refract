@@ -77,7 +77,10 @@ export {
   citationDomain,
   citationKey,
   citationTracker,
+  classifyCitationAuthority,
+  classifyCitationSource,
   extractCitationAnchors,
+  extractCitationIdentifiers,
   normalizeAnchor,
 } from "./citation-tracker.js";
 export type { EditClusterOptions } from "./edit-cluster-detector.js";
@@ -98,7 +101,9 @@ export { protectionTracker } from "./protection-tracker.js";
 export { findIdentityReverts, revertDetector } from "./revert-detector.js";
 export type { ParsedContent, RevisionEventDepth, RevisionEventOptions } from "./revision-events.js";
 export {
+  annotateActorCohorts,
   annotateEvents,
+  buildActorSessionPseudonyms,
   buildRevisionEvents,
   computeStructuralDiffs,
   detectEditorialSignals,

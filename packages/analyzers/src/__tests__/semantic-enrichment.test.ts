@@ -111,4 +111,18 @@ describe("enrichEvidenceEvent", () => {
     expect(result.provenance.parameterFootprint).toEqual(parameters);
     expect(result.provenance.effectiveAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
+
+  it("computes certainty profiles and extracts key terms on Arabic revision text", () => {
+    const event = makeEvent({
+      before: "يزعم التقرير أنه ربما هناك معلومات غير واضح مصدرها.",
+      after: "أكدت الدراسات الأكاديمية وأجمع الباحثون على ما يثبت هذه النتائج، ومع ذلك بقيت بعض التفاصيل قيد النقاش.",
+    });
+    const result = enrichEvidenceEvent(event);
+
+    expect(result.certaintyProfile.high).toBeGreaterThanOrEqual(2);
+    expect(result.certaintyProfile.hedging).toBeGreaterThanOrEqual(1);
+    expect(result.directionSignal).toBe("strengthening");
+    expect(result.keyTerms).toContain("الدراسات");
+    expect(result.keyTerms).toContain("الأكاديمية");
+  });
 });

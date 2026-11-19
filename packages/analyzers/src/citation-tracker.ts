@@ -446,6 +446,7 @@ const NEWS_DOMAINS = [
   "cnn.com",
   "nytimes.com",
   "bbc.com",
+  "bbc.co.uk",
   "reuters.com",
   "apnews.com",
   "washingtonpost.com",
@@ -464,39 +465,167 @@ const NEWS_DOMAINS = [
   "chicagotribune.com",
   "huffpost.com",
   "buzzfeednews.com",
+  "aljazeera.com",
+  "haaretz.com",
+  "ft.com",
+  "economist.com",
 ];
 
-function classifySourceType(ref: CitationRef): SourceType {
-  const url = ref.url?.toLowerCase() ?? "";
-  if (!url) return "unknown";
+const INTERGOVERNMENTAL_DOMAINS = [
+  "un.org",
+  "ohchr.org",
+  "icj-cij.org",
+  "icc-cpi.int",
+  "who.int",
+  "unicef.org",
+  "unrwa.org",
+  "unesco.org",
+  "unocha.org",
+  "reliefweb.int",
+  "icrc.org",
+  "europa.eu",
+  "worldbank.org",
+];
 
-  if (url.includes("doi.org") || /journal|jstor|springer|sciencedirect/i.test(url)) {
+const NGO_DOMAINS = [
+  "amnesty.org",
+  "hrw.org",
+  "btselem.org",
+  "msf.org",
+  "doctorswithoutborders.org",
+  "oxfam.org",
+  "savechildren.org",
+  "savethechildren.net",
+  "alhaq.org",
+  "pchrgaza.org",
+  "aclu.org",
+  "eff.org",
+  "rsf.org",
+  "cpj.org",
+  "freedomhouse.org",
+  "crisisgroup.org",
+];
+
+const ACADEMIC_DOMAINS = [
+  "doi.org",
+  "jstor.org",
+  "springer.com",
+  "sciencedirect.com",
+  "tandfonline.com",
+  "wiley.com",
+  "oup.com",
+  "cambridge.org",
+  "nature.com",
+  "science.org",
+  "thelancet.com",
+  "bmj.com",
+  "nejm.org",
+  "arxiv.org",
+  "ssrn.com",
+  "harvard.edu",
+  "stanford.edu",
+  "ox.ac.uk",
+  "cam.ac.uk",
+];
+
+/**
+ * Extract canonical cross-language citation identifiers (DOI, ISBN, or normalized URL)
+ * from a reference's raw markup or URL. Identical across language editions (e.g., Arabic and English)
+ * even when surrounding prose or template parameter names differ.
+ */
+export function extractCitationIdentifiers(ref: CitationRef): {
+  doi?: string;
+  isbn?: string;
+  domain?: string;
+} {
+  const raw = ref.raw ?? "";
+  const url = ref.url ?? "";
+
+  const doiParam = raw.match(/\|\s*(?:doi|معرف\s*الوثيقة\s*الرقمي)\s*=\s*(10\.\d{4,9}\/[^\s|}\]<"]+)/i)?.[1];
+  const doiUrl = url.match(/doi\.org\/(10\.\d{4,9}\/[^\s|}\]<"?#]+)/i)?.[1];
+  const doiInline = raw.match(/\b(10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+)\b/)?.[1];
+  const doi = (doiParam ?? doiUrl ?? doiInline)?.toLowerCase().replace(/[.,;]+$/, "");
+
+  const isbnMatch =
+    raw.match(/\|\s*(?:isbn|ردمك)\s*=\s*([0-9Xx -]{10,17})/i)?.[1] ??
+    raw.match(/\bISBN(?:-1[03])?:?\s*([0-9Xx -]{10,17})\b/i)?.[1];
+  const isbnClean = isbnMatch?.replace(/[\s-]/g, "").toUpperCase();
+  const isbn = isbnClean && (isbnClean.length === 10 || isbnClean.length === 13) ? isbnClean : undefined;
+
+  const domain = citationDomain(ref.url);
+  return {
+    ...(doi ? { doi } : {}),
+    ...(isbn ? { isbn } : {}),
+    ...(domain ? { domain } : {}),
+  };
+}
+
+export function classifyCitationSource(ref: CitationRef): SourceType {
+  const url = ref.url?.toLowerCase() ?? "";
+  const raw = ref.raw?.toLowerCase() ?? "";
+  const domain = citationDomain(ref.url) ?? "";
+  const ids = extractCitationIdentifiers(ref);
+
+  if (
+    ids.doi ||
+    ids.isbn ||
+    /\{\{\s*(?:cite\s+journal|cite\s+book|استشهاد\s+بدورية\s+محكمة|استشهاد\s+بكتاب)\b/i.test(raw) ||
+    ACADEMIC_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`)) ||
+    /\.(?:edu|ac\.[a-z]{2})\b/.test(domain) ||
+    /journal|jstor|springer|sciencedirect/i.test(url)
+  ) {
     return "academic";
   }
-  if (url.includes(".gov")) return "government";
-  if (url.includes(".edu")) return "secondary";
-  if (NEWS_DOMAINS.some((d) => url.includes(d))) return "news";
+  if (INTERGOVERNMENTAL_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`)) || /\.int$/.test(domain)) {
+    return "intergovernmental";
+  }
+  if (NGO_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`))) {
+    return "ngo";
+  }
+  if (url.includes(".gov") || /\.gov(?:\.[a-z]{2})?$/.test(domain)) {
+    return "government";
+  }
+  if (
+    NEWS_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`) || url.includes(d)) ||
+    /\{\{\s*(?:cite\s+news|استشهاد\s+بخبر)\b/i.test(raw)
+  ) {
+    return "news";
+  }
 
   return "unknown";
 }
 
-function classifyAuthority(ref: CitationRef): SourceAuthority {
+function classifySourceType(ref: CitationRef): SourceType {
+  return classifyCitationSource(ref);
+}
+
+export function classifyCitationAuthority(ref: CitationRef): SourceAuthority {
+  const sourceType = classifyCitationSource(ref);
+  if (sourceType === "academic" || sourceType === "intergovernmental") return "high";
+  if (sourceType === "government" || sourceType === "ngo") return "high";
+  if (sourceType === "news") return "medium";
+
   const url = ref.url?.toLowerCase() ?? "";
   if (!url) return "unrated";
-
-  if (url.includes("doi.org") || /journal|jstor|springer/i.test(url)) {
-    return "medium";
-  }
   if (/\.(edu|gov|org)\b/.test(url)) return "high";
   if (/\.(com|net)\b/.test(url)) return "medium";
 
   return "unrated";
 }
 
+function classifyAuthority(ref: CitationRef): SourceAuthority {
+  return classifyCitationAuthority(ref);
+}
+
 export interface CitationNetworkAnalysis {
   uniqueSourceCount: number;
   domainDistribution: Record<string, number>;
-  topSources: Array<{ sourceId: string; url?: string; count: number }>;
+  sourceTypeDistribution?: Partial<Record<SourceType, number>>;
+  sharedIdentifiers?: {
+    dois: string[];
+    isbns: string[];
+  };
+  topSources: Array<{ sourceId: string; url?: string; count: number; sourceType?: SourceType }>;
   sourceConcentrationIndex: number;
   isHighConcentration: boolean;
 }
@@ -512,7 +641,8 @@ function extractDomain(url?: string): string {
 }
 
 /**
- * Analyzes the network structure, domain diversity, and concentration of a collection of citations.
+ * Analyzes the network structure, domain diversity, source-type distribution,
+ * and shared academic identifiers (DOI/ISBN) of a collection of citations.
  * High concentration indicates heavy reliance on a narrow set of domains or sources.
  */
 export function analyzeCitationNetwork(citations: CitationRef[]): CitationNetworkAnalysis {
@@ -520,26 +650,37 @@ export function analyzeCitationNetwork(citations: CitationRef[]): CitationNetwor
     return {
       uniqueSourceCount: 0,
       domainDistribution: {},
+      sourceTypeDistribution: {},
+      sharedIdentifiers: { dois: [], isbns: [] },
       topSources: [],
       sourceConcentrationIndex: 0,
       isHighConcentration: false,
     };
   }
 
-  const sourceCounts = new Map<string, { ref: CitationRef; count: number }>();
+  const sourceCounts = new Map<string, { ref: CitationRef; count: number; sourceType: SourceType }>();
   const domainDistribution: Record<string, number> = {};
+  const sourceTypeDistribution: Partial<Record<SourceType, number>> = {};
+  const dois = new Set<string>();
+  const isbns = new Set<string>();
 
   for (const c of citations) {
     const sId = buildSourceId(c);
+    const sType = classifyCitationSource(c);
     const existing = sourceCounts.get(sId);
     if (existing) {
       existing.count++;
     } else {
-      sourceCounts.set(sId, { ref: c, count: 1 });
+      sourceCounts.set(sId, { ref: c, count: 1, sourceType: sType });
     }
 
     const domain = extractDomain(c.url);
     domainDistribution[domain] = (domainDistribution[domain] ?? 0) + 1;
+    sourceTypeDistribution[sType] = (sourceTypeDistribution[sType] ?? 0) + 1;
+
+    const ids = extractCitationIdentifiers(c);
+    if (ids.doi) dois.add(ids.doi);
+    if (ids.isbn) isbns.add(ids.isbn);
   }
 
   const total = citations.length;
@@ -551,7 +692,7 @@ export function analyzeCitationNetwork(citations: CitationRef[]): CitationNetwor
   }
 
   const topSources = Array.from(sourceCounts.entries())
-    .map(([sourceId, { ref, count }]) => ({ sourceId, url: ref.url, count }))
+    .map(([sourceId, { ref, count, sourceType }]) => ({ sourceId, url: ref.url, count, sourceType }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
@@ -559,6 +700,11 @@ export function analyzeCitationNetwork(citations: CitationRef[]): CitationNetwor
   return {
     uniqueSourceCount: sourceCounts.size,
     domainDistribution,
+    sourceTypeDistribution,
+    sharedIdentifiers: {
+      dois: [...dois].sort(),
+      isbns: [...isbns].sort(),
+    },
     topSources,
     sourceConcentrationIndex: roundedHhi,
     isHighConcentration: roundedHhi > 0.4 && total >= 3,

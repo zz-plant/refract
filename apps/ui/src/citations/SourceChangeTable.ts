@@ -86,15 +86,29 @@ export class SourceChangeTable {
 				e.eventType === "citation_replaced",
 		);
 
-		return citationEvents.map((e) => ({
-			revisionId: e.toRevisionId,
-			timestamp: e.timestamp,
-			section: e.section,
-			changeType: e.eventType.replace("citation_", ""),
-			detail:
+		return citationEvents.map((e) => {
+			const sourceFact = e.deterministicFacts.find(
+				(f) => f.fact === "citation_source" && f.detail,
+			);
+			const anchorStatus = e.deterministicFacts.find(
+				(f) => f.fact === "citation_anchor_status" && f.detail,
+			);
+			const baseFact =
 				e.deterministicFacts.length > 0
-					? e.deterministicFacts[0].fact
-					: e.eventType,
-		}));
+					? e.deterministicFacts[0].detail
+						? `${e.deterministicFacts[0].fact} (${e.deterministicFacts[0].detail})`
+						: e.deterministicFacts[0].fact
+					: e.eventType;
+			const parts = [baseFact];
+			if (sourceFact?.detail) parts.push(sourceFact.detail);
+			if (anchorStatus?.detail) parts.push(anchorStatus.detail);
+			return {
+				revisionId: e.toRevisionId,
+				timestamp: e.timestamp,
+				section: e.section,
+				changeType: e.eventType.replace("citation_", ""),
+				detail: parts.join(" · "),
+			};
+		});
 	}
 }

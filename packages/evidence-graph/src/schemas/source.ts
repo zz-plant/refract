@@ -8,6 +8,8 @@ export type SourceType =
   | "news"
   | "academic"
   | "government"
+  | "intergovernmental"
+  | "ngo"
   | "unknown";
 
 export type SourceAuthority = "high" | "medium" | "low" | "disputed" | "unrated";

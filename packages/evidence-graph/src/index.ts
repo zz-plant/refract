@@ -64,6 +64,7 @@ export type {
 export type { AnalyzerConfig } from "./schemas/config.js";
 export { DEFAULT_ANALYZER_CONFIG } from "./schemas/config.js";
 export type {
+  ActorCohortSummary,
   CertaintyProfile,
   ContentChange,
   DeterministicFact,
@@ -72,6 +73,7 @@ export type {
   EventType,
   EvidenceEvent,
   EvidenceLayer,
+  ExternalTimelineMarker,
   FactProvenance,
   ModelInterpretation,
   PolicyDimension,

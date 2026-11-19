@@ -465,6 +465,18 @@ export function detectEditorialSignals(
   return events;
 }
 
+/** Compute word overlap ratio from two precomputed non-empty word sets. */
+function wordSetOverlapRatio(wordsA: Set<string>, wordsB: Set<string>): number {
+  if (wordsA.size === 0 || wordsB.size === 0) return Number.NaN;
+  const [smaller, larger] = wordsA.size <= wordsB.size ? [wordsA, wordsB] : [wordsB, wordsA];
+  let intersection = 0;
+  for (const w of smaller) {
+    if (larger.has(w)) intersection++;
+  }
+  const union = wordsA.size + wordsB.size - intersection;
+  return intersection / union;
+}
+
 /** Compute sentence-level diffs between two revisions (additions, removals, modifications). */
 function diffSentences(
   before: Revision,
@@ -493,29 +505,75 @@ function diffSentences(
 
   const matchedBeforeIndices = new Set<number>();
 
+  // Precompute trimmed strings, normalized strings, word sets, and an O(1) bucket index
+  // for exact word-set matches (where wordOverlapRatio === 1.0, the mathematical maximum).
+  const beforeTrimmedList: string[] = new Array(beforeSentences.length);
+  const beforeNormList: string[] = new Array(beforeSentences.length);
+  const beforeWordsList: Set<string>[] = new Array(beforeSentences.length);
+  const exactWordSetBuckets = new Map<string, number[]>();
+
+  for (let i = 0; i < beforeSentences.length; i++) {
+    const bt = beforeSentences[i].trim();
+    beforeTrimmedList[i] = bt;
+    const norm = bt.toLowerCase().replace(/\s+/g, " ");
+    beforeNormList[i] = norm;
+    const words = new Set(norm.split(" ").filter(Boolean));
+    beforeWordsList[i] = words;
+    if (words.size > 0) {
+      const key = [...words].sort().join(" ");
+      const bucket = exactWordSetBuckets.get(key);
+      if (bucket) bucket.push(i);
+      else exactWordSetBuckets.set(key, [i]);
+    }
+  }
+
   for (const sentence of afterSentences) {
     const trimmed = sentence.trim();
     if (!trimmed) continue;
+
+    const normAfter = trimmed.toLowerCase().replace(/\s+/g, " ");
+    const afterWords = new Set(normAfter.split(" ").filter(Boolean));
 
     let bestMatchIdx = -1;
     let bestRatio = 0;
     let bestBeforeSentence = "";
 
-    for (let i = 0; i < beforeSentences.length; i++) {
-      if (matchedBeforeIndices.has(i)) continue;
-      const beforeTrimmed = beforeSentences[i].trim();
-      if (!beforeTrimmed) continue;
-      const ratio = wordOverlapRatio(beforeTrimmed, trimmed);
-      if (ratio > bestRatio) {
-        bestRatio = ratio;
-        bestMatchIdx = i;
-        bestBeforeSentence = beforeTrimmed;
+    if (afterWords.size > 0) {
+      const key = [...afterWords].sort().join(" ");
+      const bucket = exactWordSetBuckets.get(key);
+      if (bucket) {
+        while (bucket.length > 0) {
+          const candidateIdx = bucket[0];
+          if (matchedBeforeIndices.has(candidateIdx)) {
+            bucket.shift();
+            continue;
+          }
+          bestMatchIdx = candidateIdx;
+          bestRatio = 1;
+          bestBeforeSentence = beforeTrimmedList[candidateIdx];
+          bucket.shift();
+          break;
+        }
+      }
+    }
+
+    if (bestMatchIdx < 0) {
+      for (let i = 0; i < beforeSentences.length; i++) {
+        if (matchedBeforeIndices.has(i)) continue;
+        const beforeTrimmed = beforeTrimmedList[i];
+        if (!beforeTrimmed) continue;
+        const ratio = wordSetOverlapRatio(beforeWordsList[i], afterWords);
+        if (ratio > bestRatio) {
+          bestRatio = ratio;
+          bestMatchIdx = i;
+          bestBeforeSentence = beforeTrimmed;
+        }
       }
     }
 
     if (bestMatchIdx >= 0 && bestRatio >= similarityThreshold) {
       matchedBeforeIndices.add(bestMatchIdx);
-      if (bestBeforeSentence.toLowerCase().replace(/\s+/g, " ") !== trimmed.toLowerCase().replace(/\s+/g, " ")) {
+      if (beforeNormList[bestMatchIdx] !== normAfter) {
         const section = findSectionForText(after.content, trimmed, afterPlain, afterSecMap);
         events.push({
           eventType: "sentence_modified",
@@ -533,8 +591,7 @@ function diffSentences(
         });
       }
     } else {
-      const normalized = trimmed.toLowerCase().replace(/\s+/g, " ");
-      const wasSeenBefore = allSeenSentences.has(normalized);
+      const wasSeenBefore = allSeenSentences.has(normAfter);
       const section = findSectionForText(after.content, trimmed, afterPlain, afterSecMap);
       events.push({
         eventType: wasSeenBefore ? "sentence_reintroduced" : "sentence_first_seen",
@@ -552,7 +609,7 @@ function diffSentences(
 
   for (let i = 0; i < beforeSentences.length; i++) {
     if (matchedBeforeIndices.has(i)) continue;
-    const trimmed = beforeSentences[i].trim();
+    const trimmed = beforeTrimmedList[i];
     if (!trimmed) continue;
     const section = findSectionForText(before.content, trimmed, beforePlain, beforeSecMap);
     events.push({
@@ -680,6 +737,91 @@ export function buildRevisionEvents(
         pairExtraFacts,
       ),
     );
+
+    if (before.revId !== after.revId) {
+      strippedCache.delete(before.revId);
+      parsedCache.delete(before.revId);
+      anchorCache.delete(before.revId);
+    }
+  }
+
+  return events;
+}
+
+/**
+ * Build a deterministic, run-scoped pseudonymous actor map (`Actor_1`, `Actor_2`, ...)
+ * ordered by first chronological appearance in the revision list. Raw usernames
+ * never appear in the output map's values and cannot be correlated across independent runs.
+ */
+export function buildActorSessionPseudonyms(revisions: readonly Revision[]): Map<string, string> {
+  const sorted = [...revisions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const pseudonyms = new Map<string, string>();
+  let nextIndex = 1;
+  for (const rev of sorted) {
+    if (rev.user && !pseudonyms.has(rev.user)) {
+      pseudonyms.set(rev.user, `Actor_${nextIndex++}`);
+    }
+  }
+  return pseudonyms;
+}
+
+/**
+ * Attach privacy-preserving `actorCohort` metadata to events when the input revisions
+ * carry editor identifiers (`Revision.user`). Never modifies `deterministicFacts` or `eventId`.
+ */
+export function annotateActorCohorts(events: EvidenceEvent[], revisions: readonly Revision[]): EvidenceEvent[] {
+  const pseudonyms = buildActorSessionPseudonyms(revisions);
+  if (pseudonyms.size === 0) return events;
+
+  const sorted = [...revisions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const byRevId = new Map<number, Revision>();
+  for (const rev of sorted) byRevId.set(rev.revId, rev);
+
+  for (const event of events) {
+    const toRev = byRevId.get(event.toRevisionId);
+    const fromRev = byRevId.get(event.fromRevisionId);
+    const actorPseudonym = toRev?.user ? pseudonyms.get(toRev.user) : undefined;
+    const fromPseudonym = fromRev?.user ? pseudonyms.get(fromRev.user) : undefined;
+
+    if (event.eventType === "edit_cluster_detected") {
+      const fromTime = fromRev ? new Date(fromRev.timestamp).getTime() : -1;
+      const toTime = toRev ? new Date(toRev.timestamp).getTime() : -1;
+      const clusterActors = new Set<string>();
+      for (const rev of sorted) {
+        const t = new Date(rev.timestamp).getTime();
+        if (t >= fromTime && t <= toTime && rev.user) {
+          const p = pseudonyms.get(rev.user);
+          if (p) clusterActors.add(p);
+        }
+      }
+      if (clusterActors.size > 0) {
+        event.actorCohort = {
+          ...(actorPseudonym ? { actorPseudonym } : {}),
+          distinctActors: clusterActors.size,
+          singleActor: clusterActors.size === 1,
+        };
+      }
+      continue;
+    }
+
+    if (event.eventType === "revert_detected" && (actorPseudonym || fromPseudonym)) {
+      const distinct = new Set([actorPseudonym, fromPseudonym].filter(Boolean));
+      event.actorCohort = {
+        ...(actorPseudonym ? { actorPseudonym } : {}),
+        ...(fromPseudonym ? { revertedActorPseudonym: fromPseudonym } : {}),
+        distinctActors: distinct.size,
+        singleActor: distinct.size === 1 && actorPseudonym !== undefined && actorPseudonym === fromPseudonym,
+      };
+      continue;
+    }
+
+    if (actorPseudonym) {
+      event.actorCohort = {
+        actorPseudonym,
+        distinctActors: 1,
+        singleActor: true,
+      };
+    }
   }
 
   return events;
@@ -689,9 +831,11 @@ export function buildRevisionEvents(
  * Stamp each event with the current event schema version and the semantic
  * fields `refract analyze` adds to its output: editMagnitude, contentChange,
  * keyTerms, certaintyProfile, directionSignal and quantitativeFindings.
+ * When `revisions` with `user` fields are supplied, also attaches run-scoped
+ * privacy-preserving `actorCohort` pseudonyms.
  * Modifies the events in place and returns the same array.
  */
-export function annotateEvents(events: EvidenceEvent[]): EvidenceEvent[] {
+export function annotateEvents(events: EvidenceEvent[], revisions?: readonly Revision[]): EvidenceEvent[] {
   for (const e of events) {
     (e as unknown as Record<string, unknown>).schemaVersion = EVENT_SCHEMA_VERSION;
   }
@@ -707,6 +851,10 @@ export function annotateEvents(events: EvidenceEvent[]): EvidenceEvent[] {
       computeCertaintyProfile(event.after || ""),
     );
     event.quantitativeFindings = extractQuantitativeFindings(text);
+  }
+
+  if (revisions && revisions.length > 0) {
+    annotateActorCohorts(events, revisions);
   }
 
   return events;

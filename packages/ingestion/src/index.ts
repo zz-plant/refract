@@ -108,13 +108,20 @@ export interface RevisionOptions {
 
 export { GitRevisionSource, type GitRevisionSourceOptions } from "./git-source.js";
 export {
+  computeFullHistoryTelemetry,
   DEFAULT_USER_AGENT,
   type ExternalLinkUsage,
+  type FullHistoryTelemetry,
   type LanguageLink,
+  type LongitudinalHistoryOptions,
+  type LongitudinalHistoryResult,
   MediaWikiApiError,
   MediaWikiClient,
+  type MonthlyVelocityBucket,
+  type RevisionMetadata,
   retryAfterMs,
   type SiteInfo,
+  selectLongitudinalRevisions,
 } from "./mediawiki-client.js";
 export { RateLimiter } from "./rate-limiter.js";
 export { SnapshotDirectorySource, type SnapshotItem } from "./snapshot-source.js";

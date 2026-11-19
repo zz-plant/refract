@@ -8,10 +8,12 @@ import type {
 } from "@refract-org/evidence-graph";
 
 export type {
+	ActorCohortSummary,
 	DeterministicFact,
 	EventType,
 	EvidenceEvent,
 	EvidenceLayer,
+	ExternalTimelineMarker,
 	FactProvenance,
 	ModelInterpretation,
 	PolicyDimension,
