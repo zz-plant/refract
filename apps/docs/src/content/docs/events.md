@@ -77,10 +77,10 @@ refract export "Page" --format ndjson |
 
 | Event type | Trigger |
 |---|---|
-| `revert_detected` | The edit summary matches one of six default patterns (`revert…`, `undid revision`, `rvv`, `rollback`, `restore…`, `[[WP:ROLLBACK]]`; a bare "rv" or "undo" does not match), or the revision's text is identical to an earlier analyzed revision other than the one directly before it. Facts say which: `revert_detected` carries the summary, `identity_revert` names the revision restored (`restores=<revId>`). A revert to a state older than every analyzed revision is found only by its summary |
+| `revert_detected` | The edit summary matches a default English or Arabic MediaWiki revert pattern (`revert…`, `undid revision`, `rvv`, `rollback`, `restore…`, `[[WP:ROLLBACK]]`, `استرجاع`, `رجوع`, `إلغاء تعديل`, `استعادة النسخة`; a bare "rv" or "undo" does not match), or the revision's text is identical to an earlier analyzed revision other than the one directly before it. Facts say which: `revert_detected` carries the summary, `identity_revert` names the revision restored (`restores=<revId>`). A revert to a state older than every analyzed revision is found only by its summary |
 | `edit_cluster_detected` | 3+ edits within a configurable time window (default: 1 hour). The fact's `detail` gives `revisions`, `editors` (a count of unique editors; no identities recorded), `window_ms` and `single_editor` |
 
-An `edit_cluster_detected` event spans the cluster: `fromRevisionId` is its first revision and `toRevisionId` its last. `--cluster-window` sets the window in minutes.
+An `edit_cluster_detected` event spans the cluster: `fromRevisionId` is its first revision and `toRevisionId` its last. `--cluster-window` sets the window in minutes. When input revisions include editor usernames, `annotateEvents` attaches run-scoped pseudonymous actor cohorts (`actorCohort`, e.g. `Actor_1`, `revertedActorPseudonym: "Actor_2"`) without emitting raw usernames or changing `eventId` hashes.
 
 ## Talk page activity
 
@@ -113,6 +113,7 @@ interface EvidenceEvent {
   before: string;             // text/state before
   after: string;              // text/state after
   deterministicFacts: DeterministicFact[]; // why this event was produced
+  actorCohort?: ActorCohortSummary;        // optional run-scoped pseudonyms (Actor_1, Actor_2)
   layer: EvidenceLayer;       // observed, policy_coded, model_interpretation, speculative, unknown
   timestamp: string;          // ISO 8601
 }

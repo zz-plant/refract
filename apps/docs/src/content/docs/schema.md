@@ -75,12 +75,13 @@ export interface EvidenceEvent {
   certaintyProfile?: CertaintyProfile;
   directionSignal?: DirectionSignal;
   quantitativeFindings?: QuantitativeFinding[];
+  actorCohort?: ActorCohortSummary;              // run-scoped pseudonymous actor metadata
   layer: EvidenceLayer;                          // provenance layer
   timestamp: string;                             // ISO 8601
 }
 ```
 
-The CLI and `annotateEvents` set `schemaVersion` and the six enrichment fields on every event. The CLI also sets `eventId`. `claimId` is not set on the events `refract analyze` and `refract export` emit.
+The CLI and `annotateEvents` set `schemaVersion` and the six enrichment fields on every event (supporting both English and Arabic certainty/hedging markers and key-term extraction). When revisions include editor identifiers, `annotateEvents` also attaches `actorCohort` with run-scoped pseudonyms (`Actor_1`, `Actor_2`, ...). The CLI also sets `eventId`. `claimId` is not set on the events `refract analyze` and `refract export` emit.
 
 ## Supporting types
 
@@ -131,7 +132,7 @@ export type PolicyDimension =
   | "copyright"
   | "civility";
 
-// Semantic enrichment, computed from the before/after text
+// Semantic enrichment, computed from the before/after text (English & Arabic)
 export type EditMagnitude = "minor" | "moderate" | "major";
 export type ContentChange =
   | "introduction" | "removal" | "expansion" | "compression" | "refinement" | "rewrite";
@@ -149,6 +150,30 @@ export interface QuantitativeFinding {
   value: string;
   raw: string;
 }
+
+export interface ActorCohortSummary {
+  actorPseudonym?: string;          // run-scoped pseudonym (e.g. "Actor_1")
+  revertedActorPseudonym?: string;  // pseudonym of reverted editor on revert events
+  distinctActors: number;           // unique actors observed in event/cluster window
+  singleActor: boolean;             // true when a single actor performed the window's edits
+}
+
+export interface ExternalTimelineMarker {
+  timestamp: string;                // ISO 8601 timestamp for visual context overlay
+  label: string;                    // short display label
+  category?: string;                // optional grouping label
+  url?: string;                     // optional reference link
+}
+
+export type SourceType =
+  | "academic"
+  | "intergovernmental"
+  | "ngo"
+  | "news"
+  | "government"
+  | "web"
+  | "book"
+  | "unknown";
 ```
 
 Refract's own events leave `DeterministicFact.provenance` unset: their facts carry `fact` and `detail`. `FactProvenance` is there for a consumer to record the analyzer, version and parameters when it stores events.
