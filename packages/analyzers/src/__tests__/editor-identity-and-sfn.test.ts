@@ -109,6 +109,26 @@ describe("page moves into the page", () => {
     ]);
   });
 
+  it("reads moves made without leaving a redirect", () => {
+    // How the 2024 Bangalore → Bengaluru move reads in the article's history.
+    const moves = pageMovesFromEditSummaries([
+      {
+        revId: 20,
+        timestamp: "2024-11-27T01:30:00Z",
+        comment: "[editor] moved page [[Bangalore]] to [[Bengaluru]] without leaving a redirect: RM closed as moved",
+      },
+      {
+        revId: 21,
+        timestamp: "2024-11-28T00:00:00Z",
+        comment: "[editor] moved page [[A]] to [[B]] over a redirect without leaving a redirect",
+      },
+    ]);
+    expect(moves.map((m) => [m.oldTitle, m.newTitle, m.comment])).toEqual([
+      ["Bangalore", "Bengaluru", "RM closed as moved"],
+      ["A", "B", ""],
+    ]);
+  });
+
   it("keeps a move found in both the log and a summary once, as the log has it", () => {
     const log = [
       {
