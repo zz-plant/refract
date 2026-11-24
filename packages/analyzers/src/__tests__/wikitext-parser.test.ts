@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { countCitations } from "../citation-tracker.js";
 import {
@@ -9,8 +10,115 @@ import {
   findSectionForText,
   removeTemplates,
   sanitizeWikitext,
+  stripLead,
+  stripSection,
   stripWikitext,
+  stripWikitextSections,
 } from "../wikitext-parser.js";
+
+/** Trimmed Wikipedia revisions (CC BY-SA 4.0), named by edition or page, title and revision ID. */
+const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf-8");
+
+describe("an infobox whose last value holds a literal <", () => {
+  // English Wikipedia's Pluto, revision 1387362520, trimmed to its opening
+  // templates, sixteen of its infobox's parameters, the lead, and the start
+  // of History and Name. The infobox ends "| flattening = <1%<ref … />" and
+  // "}}". /<[^>]+>/ read "<1%" as a tag and deleted everything to the next
+  // ">", a <gallery> in the Name section: the infobox's closing braces and
+  // the lead went with it, and the unclosed infobox came through as prose.
+  const pluto = fixture("pluto-1387362520-lead.wiki");
+
+  it("keeps the lead, starting with the sentence Wikipedia's own extract starts with", () => {
+    const [first] = stripWikitext(pluto).split("\n\n");
+    expect(first).toMatch(/^Pluto \(minor-planet number 134340\) is a dwarf planet in the Kuiper belt, /);
+    expect(stripWikitext(pluto)).not.toContain("{{Infobox planet");
+  });
+
+  it("keeps all four lead paragraphs in the lead and the sections after it", () => {
+    const sections = stripWikitextSections(pluto);
+    expect(sections.map((s) => s.section)).toEqual(["(lead)", "History", "Discovery", "Name"]);
+    expect(sections[0].text.split("\n\n").map((p) => p.slice(0, 20))).toEqual([
+      "Pluto (minor-planet ",
+      "Pluto has a moderate",
+      "Pluto has five known",
+      "Pluto was discovered",
+    ]);
+    expect(stripLead(pluto)).toBe(sections[0].text);
+    expect(findSectionForText(pluto, "In the 1840s, Urbain Le Verrier used Newtonian mechanics")).toBe("Discovery");
+  });
+
+  it("reads a < that opens no tag as text", () => {
+    expect(stripWikitext("{{Infobox|a = <1%}}Lead. a < b and c > d.<br />End.")).toBe("Lead. a < b and c > d.End.");
+    expect(stripWikitext('x<span class="y">z</span><sup>2</sup>')).toBe("xz2");
+  });
+});
+
+describe("embedded files", () => {
+  it("removes a file with a caption holding links, whole", () => {
+    const lead =
+      "[[Datei:Anarchy-symbol.svg|mini|Das ''A'' im Kreis: Ein oft benutztes [[Anarchistische Symbolik|anarchistisches Symbol]]]]\n'''Anarchismus''' ist eine politische Ideenlehre.";
+    expect(stripWikitext(lead)).toBe("Anarchismus ist eine politische Ideenlehre.");
+  });
+
+  it("removes files under each listed namespace name, in any case, and keeps a visible link to one", () => {
+    const text = [
+      "[[File:A.jpg|thumb|One]]",
+      "[[image:B.jpg|Two [[x|y]]]]",
+      "[[Fichier:C.jpg|vignette|Trois]]",
+      "[[Archivo:D.svg|thumb|[[Símbolos anarquistas#A circulada|A circulada]], uno.]]",
+      "Prose, and a link to [[:File:E.jpg]].",
+    ].join("\n");
+    expect(stripWikitext(text)).toBe("Prose, and a link to :File:E.jpg.");
+  });
+
+  it("leaves a file link that never closes as text", () => {
+    expect(stripWikitext("[[File:A.jpg|thumb|caption. Prose.")).toBe("[[File:A.jpg|thumb|caption. Prose.");
+  });
+
+  it("stays linear on many nested file links", () => {
+    const start = performance.now();
+    const deep = `${"[[File:a.jpg|".repeat(20000)}x${"]]".repeat(20000)} after`;
+    expect(stripWikitext(deep)).toBe("after");
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+});
+
+describe("French Wikipedia's apostrophe template", () => {
+  it("reads {{'}} as an apostrophe", () => {
+    expect(stripWikitext("L{{'}}'''anarchisme''' est une idéologie.")).toBe("L'anarchisme est une idéologie.");
+  });
+});
+
+describe("stripSection", () => {
+  const page = [
+    "Lead.",
+    "== ''Planetary'' status ==",
+    "Status prose.",
+    "=== Debate ===",
+    "Debate prose.",
+    "== Orbit ==",
+    "Orbit prose.",
+  ].join("\n");
+
+  it("returns the section with its subsections, found by its heading as a reader sees it", () => {
+    expect(stripSection(page, "planetary_status")).toBe("Status prose.\n\nDebate prose.");
+    expect(stripSection(page, "Debate")).toBe("Debate prose.");
+    expect(stripSection(page, "(lead)")).toBe("Lead.");
+  });
+
+  it("returns null for a heading the page does not have", () => {
+    expect(stripSection(page, "Moons")).toBeNull();
+  });
+
+  it("gives each section its level, the lead 1", () => {
+    expect(stripWikitextSections(page).map((s) => [s.section, s.level])).toEqual([
+      ["(lead)", 1],
+      ["''Planetary'' status", 2],
+      ["Debate", 3],
+      ["Orbit", 2],
+    ]);
+  });
+});
 
 describe("nested templates", () => {
   // Real infoboxes hold other templates. A single pass that removed only

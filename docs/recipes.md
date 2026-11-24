@@ -67,8 +67,10 @@ by sentence word overlap; see [matching rules](./concepts/claim-state-timelines.
 refract snapshot "Bitcoin" --at 2024-01-15
 ```
 
-The result names the closest fetched revision at or before the requested date
-and prints a text preview, limited to 2,000 characters. Inspect the complete
+The result names the latest revision at or before the end of the requested
+date, stepping back past a version a later edit reverted within 48 hours, and
+prints a text preview, limited to 2,000 characters. `--scope lead` or
+`--scope section --section <heading>` narrows the text. Inspect the complete
 revision by inserting its ID in:
 
 ```text

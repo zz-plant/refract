@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { nearestPassage, runClaim, runClaimHistory } from "../commands/claim.js";
+import { runClaim, runClaimHistory } from "../commands/claim.js";
 
 const API = "https://wiki.example/w/api.php";
 const CLAIM = "The bridge opened to traffic in 2031.";
@@ -300,16 +300,5 @@ describe("claim history transitions", () => {
     expect(output).toContain("rev 5 → 7 (not adjacent); held 1 revision(s) through the latest read");
     expect(output).toContain("revert summary, restores rev 3");
     expect(output).toContain(`nearest remaining sentence (50% of words): "${REWRITE}"`);
-  });
-});
-
-describe("nearestPassage", () => {
-  it("keeps the sentence with the largest share of the passage's words, from half up", () => {
-    expect(nearestPassage("Alpha bravo charlie delta", "Alpha only. Alpha bravo here. Nothing.")).toEqual({
-      text: "Alpha bravo here.",
-      wordOverlap: 0.5,
-    });
-    expect(nearestPassage("Alpha bravo charlie delta", "Alpha only. Nothing.")).toBeUndefined();
-    expect(nearestPassage("a an the", "a an the")).toBeUndefined();
   });
 });

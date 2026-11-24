@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { InferenceBoundary } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
-import { Argument, Command } from "commander";
+import { Argument, Command, Option } from "commander";
 import { buildConfig, buildObservationReport, runAnalyze } from "./commands/analyze.js";
 import { readPagesFile } from "./commands/batch.js";
 import { runClaim, runClaimBatch } from "./commands/claim.js";
@@ -374,6 +374,8 @@ const claimCmd = program
   .option("--pages-file <path>", "track the passage on each page in this file (one title per line)")
   .option("--batch-concurrency <n>", "max pages read at once with --pages-file (default: 3)", parseInt)
   .option("-j, --json", "print the result as JSON instead of text")
+  .option("--sample <n>", "read n revisions spread across the history instead of consecutive ones", parseInt)
+  .option("--locate", "narrow each change between non-adjacent revisions to the edit that made it")
   .option("-c, --cache", "cache revisions in SQLite; needs Bun and a source checkout");
 withGlobal(claimCmd);
 withRevisionSource(claimCmd);
@@ -385,6 +387,10 @@ claimCmd.action(async (page, opts) => {
   }
   const source = sourceOrExit(opts);
   const titles = batchTitles("claim", page, opts);
+  if (titles && (opts.locate || opts.sample !== undefined)) {
+    console.error(red("Error: --sample and --locate read one page's history; they cannot be used with --pages-file"));
+    process.exit(1);
+  }
   if (titles) {
     const { failed } = await runClaimBatch(
       titles,
@@ -408,7 +414,7 @@ claimCmd.action(async (page, opts) => {
     extractAuth(opts),
     opts.limit as number | undefined,
     { from: opts.from as number | undefined, to: opts.to as number | undefined, source },
-    { json: !!opts.json },
+    { json: !!opts.json, sample: opts.sample as number | undefined, locate: !!opts.locate },
   );
 });
 
@@ -487,8 +493,23 @@ linksearchCmd.action(async (domain, opts) => {
 const snapshotCmd = program
   .command("snapshot <page>")
   .description("reconstruct page state at a point in time")
-  .option("--at <date>", "target date (ISO 8601, e.g. 2024-01-15)", new Date().toISOString().slice(0, 10))
-  .option("--revision-limit <n>", "max revisions to fetch (default: 500)", parseInt)
+  .option(
+    "--at <date>",
+    "target date, read to its end in UTC, or timestamp (ISO 8601, e.g. 2024-01-15)",
+    new Date().toISOString().slice(0, 10),
+  )
+  .addOption(
+    new Option("--scope <scope>", "text to show: the lead, one --section, or the full page")
+      .choices(["lead", "section", "full"])
+      .default("full"),
+  )
+  .option("--section <heading>", "the section to show with --scope section, by its heading on that date")
+  .option("--keep-reverted", "show the revision live at the date even if a later edit reverted it")
+  .option(
+    "--revision-limit <n>",
+    "revisions read on each side of the date to find reverted states (default: 10)",
+    parseInt,
+  )
   .option("-c, --cache", "cache revisions in SQLite; needs Bun and a source checkout");
 withGlobal(snapshotCmd);
 snapshotCmd.action(async (page, opts) => {
@@ -499,7 +520,12 @@ snapshotCmd.action(async (page, opts) => {
     opts.api as string | undefined,
     opts.cacheDir as string | undefined,
     extractAuth(opts),
-    opts.revisionLimit as number | undefined,
+    {
+      revisionLimit: opts.revisionLimit as number | undefined,
+      scope: opts.scope as "lead" | "section" | "full",
+      section: opts.section as string | undefined,
+      keepReverted: !!opts.keepReverted,
+    },
   );
 });
 

@@ -50,7 +50,10 @@ with different behavior in the observation report and the `claim` command:
 - **The `claim` command.** The ID is derived from the requested text with an empty
   section. The command searches revisions for normalized text or partial word
   matches. Returned variants can include surrounding text or a partial-match
-  marker; they are not guaranteed to be equivalent statements.
+  marker; they are not guaranteed to be equivalent statements. The matching
+  and its state machine are `claimHistory(revisions, text, options)` in
+  `@refract-org/analyzers`, which reads no network and no filesystem, so a
+  Worker can follow a passage through revisions it fetched itself.
 
 The `ClaimIdentity`, `ClaimLineage`, and `ClaimState` schemas describe objects
 consumers can store. Their presence does not guarantee continuous semantic
@@ -59,7 +62,7 @@ identity through arbitrary rewrites, moves, merges, or splits.
 Implementation: [identity derivation](../../packages/evidence-graph/src/hash-identity.ts),
 [sentence matching](../../packages/analyzers/src/revision-events.ts),
 [observation reports](../../packages/cli/src/commands/analyze.ts), and
-[claim matching](../../packages/cli/src/commands/claim.ts).
+[claim matching](../../packages/analyzers/src/claim-history.ts).
 
 ## State labels
 
@@ -75,8 +78,8 @@ rules before assigning meaning to a state.
 
 ## Transitions
 
-`runClaimHistory`, `refract claim --json` and the MCP `get_statement_history`
-tool return `transitions`, oldest first: one per change in whether, or how, the
+`claimHistory` in `@refract-org/analyzers`, `refract claim --json` and the MCP
+`get_statement_history` tool return `transitions`, oldest first: one per change in whether, or how, the
 tracked passage appears in the revisions read. Each is an observation with its
 evidence; none is a judgment about the passage.
 
@@ -104,6 +107,63 @@ evidence; none is a judgment about the passage.
 
 Revisions whose text was withheld are skipped, so they neither start nor end a
 transition and make the pair around them non-adjacent.
+
+## Locating the edit
+
+A sampled history, such as `refract claim --sample 120`, brackets each change
+between two revisions it read, and the change can be in any revision between
+them. `locateChange(candidates, isNew, fetchLeads, { k = 8 })` in
+`@refract-org/analyzers` finds the edit: given the revision IDs between the
+two, oldest first and with reverted states removed (`findRevertedStates` finds
+them from `sha1`), it reads `k` evenly spaced candidates per round through the
+injected batch fetcher, narrows the range (k+1)-fold, and returns the first
+candidate for which `isNew` holds. Three hundred candidates take three reads.
+The fetcher is passed in, so the library makes no request of its own.
+
+It assumes the change happened once inside the bracket. If the wording came
+and went in between, the search lands on an edit that brought it, not
+necessarily the first; a reverted state left among the candidates breaks the
+assumption the same way.
+
+Test for the new version. Dating definitions on ism.wiki, two other tests
+both landed on intermediate drafts whose text matched neither version: "when
+the old wording ended" and "closer to the new wording than the old". Asking
+whether a candidate has the new version's wording finds the edit whose text the
+dated version quotes. `sameWording(a, b)` is a symmetric test for that: each
+phrase shares at least 80% of its content words with the other. A one-sided
+test reads "is a planet" as matching "is a dwarf planet".
+
+`locateTransitions(result, locator)` applies this to a passage history: each
+transition whose revisions are not adjacent gains `located`, the edit that made
+it and the surviving revision before it. A candidate holds the new state when
+the passage matches (`first_seen`, `reintroduced`), does not (`removed`), or
+matches with the transition's `after` text (`text_changed`). `refract claim
+--locate` supplies the reads from the wiki.
+
+## Definitional sentences
+
+`definitionalSentence(wikitext, title, { lang })` returns the sentence of a
+lead that defines its subject: the first sentence of the lead's prose that names
+the subject before its copula, which "Anarchism is a political philosophy …"
+does and "There are many types and traditions of anarchism" does not.
+`definitionHead(sentence, { lang })` returns the dozen words after the copula,
+the phrase to compare across revisions with `sameWording`. Copula lists cover
+English, German, Spanish and French (`DEFINITION_COPULAS`; `copulas` takes a
+list for another edition). The subject may come after an article or opening
+phrase ("L'anarchisme … est", "Unter dem Begriff Konjunktur versteht man"),
+and outside English it may follow the verb by a few words, as German word order
+and naming verbs such as "se denomina" place it. The sentence is read from the
+lead as `stripLead` strips it, the text sentence events see.
+
+## What a page said on a date
+
+`snapshotAt({ revisionsAround, fetchContent }, title, date, options)` reports
+the latest revision at or before the end of a date, stepping back past a state
+a later edit reverted (found from the `sha1` of the revisions around it), with
+the lead, one section or the whole page as prose. It names any revision it
+skipped and the one that restored the text. A section is found by its heading
+in that revision, so a heading renamed later is found under its name then.
+`refract snapshot` is built on it.
 
 ## Structured statements
 

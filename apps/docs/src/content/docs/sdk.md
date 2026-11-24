@@ -278,13 +278,44 @@ const clusters = detectEditClusters(revisions, config.editCluster); // edit_clus
 
 The events do not record which options produced them. Store the options with the events if you need to reproduce a run.
 
+**Passage histories and snapshots without the CLI.** `claimHistory` and `snapshotAt` do what `refract claim` and `refract snapshot` do, with the fetching left to the caller, so they run in a Worker. `snapshotAt` takes two functions: `revisionsAround(title, isoDateTime, { around })`, the revision metadata (with `sha1`) on either side of the moment, which `revisionAt` returns in three parts, and `fetchContent(revId, { section })`. `locateChange` takes a batch fetcher, `(revIds) => Map<revId, text>`.
+
+```typescript
+import { MediaWikiClient } from "@refract-org/ingestion";
+import { claimHistory, snapshotAt } from "@refract-org/analyzers";
+
+const client = new MediaWikiClient();
+const history = claimHistory(await client.fetchRevisions("Recession", { limit: 50 }), "two consecutive quarters");
+
+const snapshot = await snapshotAt(
+  {
+    revisionsAround: async (title, at, { around }) => {
+      const { before, revision, after } = await client.revisionAt(title, at, { around });
+      return [...before, ...(revision ? [revision] : []), ...after];
+    },
+    // The lead alone when snapshotAt asks for section 0, the whole page otherwise.
+    fetchContent: async (revId, { section }) =>
+      section === undefined
+        ? ((await client.fetchRevisionsByIds([revId]))[0]?.content ?? null)
+        : ((await client.fetchSections([revId], section)).get(revId) ?? null),
+  },
+  "Recession",
+  "2022-07-29",
+  { scope: "lead" },
+);
+```
+
+`locateChange` reads leads through `fetchSections` as it is: `(ids) => client.fetchSections(ids, 0)`.
+
 Key exports:
 - **Event pipeline** (0.5.1+): `buildRevisionEvents`, `annotateEvents`, and the per-pair steps `parseContent`, `computeStructuralDiffs`, `detectEditorialSignals`
 - Instances: `sectionDiffer`, `citationTracker`, `revertDetector`, `templateTracker`, `protectionTracker`
 - Builders: `buildSectionLineage`, `buildSourceLineage`, `buildWikilinkEvents`, `buildPageMoveEvents`, `pageMovesFromEditSummaries`, `mergePageMoves`, `buildTalkThreadEvents`, `buildCategoryEvents`, `buildParamChangeEvents`
 - Classifiers: `classifyHeuristic`
 - Privacy: `redactEditorIdentity` (removes editor names from summary text)
-- Parsers: `sanitizeWikitext`, `extractHeadingMap`, `extractWikilinks`, `extractCategories`, `countCitations`, `countCitationsByKind`, `matchShortFootnotes`, `countKeywordMentions`, `deriveSectionHeading`, `findSectionForText` and `buildSectionCharMap` (0.5.1+)
+- Parsers: `sanitizeWikitext`, `extractHeadingMap`, `extractWikilinks`, `extractCategories`, `countCitations`, `countCitationsByKind`, `matchShortFootnotes`, `countKeywordMentions`, `deriveSectionHeading`, `findSectionForText` and `buildSectionCharMap` (0.5.1+); `stripWikitext`, `stripWikitextSections`, `stripLead`, `stripSection`
+- **Passage histories and dates**: `claimHistory(revisions, text, { page })` (what `refract claim` and `get_statement_history` report), `findPassageMatch`, `nearestPassage`; `locateChange(candidates, isNew, fetchLeads, { k })` and `locateTransitions` (the edit inside a bracket that made a change); `snapshotAt(fetchers, title, date, { scope, section, excludeRevertedStates })` (what `refract snapshot` reports)
+- **Wording**: `sameWording`, `contentWords`, `definitionalSentence(wikitext, title, { lang })`, `definitionHead(sentence, { lang })`, `DEFINITION_COPULAS` (en, de, es, fr)
 - Cross-revision: `correlateTalkRevisions`, `diffObservations`, `parseTalkThreads`, `diffTalkThreads`, `diffTemplateParams`, `diffCategories`, `diffWikilinks`
 - Clusters & activity: `detectEditClusters`, `detectTalkActivitySpikes`
 - **Semantic enrichment** (v0.5.0+): `computeCertaintyProfile`, `computeDirectionSignal`, `computeEditMagnitude`, `computeContentChange`, `extractKeyTerms`, `extractQuantitativeFindings`

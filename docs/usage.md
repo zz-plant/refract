@@ -16,7 +16,7 @@ the shared SQLite cache to avoid mixing wiki identities.
 | `analyze --from ID --to ID` | Revisions between the specified bounds, including the endpoints |
 | `analyze --since TIMESTAMP` | Revisions from that timestamp onward |
 | `claim --text TEXT` | Latest 50 revisions; change the count with `--limit` |
-| `snapshot --at DATE` | Fetches revisions at or before the date and selects the closest one |
+| `snapshot --at DATE` | The latest revision at or before the end of the date, past a state a later edit reverted; 10 revisions read either side to tell |
 | `explore PAGE` | Available history at detailed depth; accepts `--from`, `--to`, `--since`, `--depth`, and `--cache` |
 | `review PAGE` or `review --pages-file FILE` | Revisions since the last acknowledged report; the first run establishes a baseline for inspection |
 

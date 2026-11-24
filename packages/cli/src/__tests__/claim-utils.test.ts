@@ -1,24 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("bun:sqlite", () => {
-  class MockDB {
-    run() {}
-    query() {
-      return { all: () => [], get: () => null };
-    }
-    prepare() {
-      return { run: () => {} };
-    }
-    transaction(fn: () => void) {
-      fn();
-    }
-    close() {}
-  }
-  return { Database: MockDB };
-});
-
 import { stripWikitext } from "@refract-org/analyzers";
-import { fuzzyFindText } from "../commands/claim.js";
+import { describe, expect, it } from "vitest";
 
 describe("stripWikitext", () => {
   it("strips HTML comments", () => {
@@ -48,34 +29,5 @@ describe("stripWikitext", () => {
 
   it("removes HTML tags", () => {
     expect(stripWikitext("hello<br/>world")).toBe("helloworld");
-  });
-});
-
-describe("fuzzyFindText", () => {
-  it("finds exact match", () => {
-    const result = fuzzyFindText("Earth is the third planet", "Earth is the third planet from the Sun.");
-    expect(result).toBeTruthy();
-    expect(result?.length).toBeGreaterThan(0);
-  });
-
-  it("finds case-insensitive match", () => {
-    const result = fuzzyFindText("earth is the third", "Earth is the third planet.");
-    expect(result).toBeTruthy();
-  });
-
-  it("finds partial matches with sufficient word overlap", () => {
-    const result = fuzzyFindText("Earth third planet Sun", "Earth is the third planet from the Sun.");
-    expect(result).toBeTruthy();
-  });
-
-  it("returns empty string for no match", () => {
-    const result = fuzzyFindText("completely unrelated", "Earth is a planet.");
-    expect(result).toBe("");
-  });
-
-  it("handles empty claim text (returns source text since empty is always found)", () => {
-    const result = fuzzyFindText("", "Some text.");
-    expect(result).toBeTruthy();
-    expect(result?.length).toBeGreaterThan(0);
   });
 });
