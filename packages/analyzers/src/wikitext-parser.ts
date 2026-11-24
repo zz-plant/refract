@@ -1,7 +1,8 @@
 /**
- * A fragment of wikitext as plain text: comments, references and templates
- * removed, links reduced to their labels, bold and italic markers dropped,
- * whitespace runs as single spaces.
+ * A fragment of wikitext as plain text: comments and references removed,
+ * list templates reduced to their items and every other template removed,
+ * links reduced to their labels, bold and italic markers dropped, line breaks
+ * and whitespace runs as single spaces.
  *
  * Each step is a forward scan. The regexes these replace, such as
  * /<!--[\s\S]*?-->/ and /\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/, were retried from
@@ -10,9 +11,146 @@
  */
 export function sanitizeWikitext(value: string): string {
   const withoutMarkup = replaceExternalLinks(
-    replaceWikilinks(removeTemplates(removeRefTags(removeComments(value, " "), " "), " ")),
+    replaceWikilinks(removeTemplates(expandListTemplates(removeRefTags(removeComments(value, " "), " ")), " ")),
   );
-  return withoutMarkup.replaceAll("'''", "").replaceAll("''", "").replace(/\s+/g, " ").trim();
+  return withoutMarkup
+    .replaceAll("'''", "")
+    .replaceAll("''", "")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^· /, "");
+}
+
+/**
+ * Templates whose arguments are the words a reader sees, one list item each.
+ * plainlist and flatlist take one argument holding a "*" list. Matched by
+ * name without regard to case, with "_" as a space.
+ */
+const LIST_TEMPLATES = new Set([
+  "blist",
+  "bulleted list",
+  "ubl",
+  "ubil",
+  "unbulleted list",
+  "plainlist",
+  "plain list",
+  "flatlist",
+  "hlist",
+]);
+
+/** Longer than any name in LIST_TEMPLATES or "nowrap", so a template's name is read in bounded time. */
+const LONGEST_KEPT_NAME = 24;
+
+/** Lists nested deeper than this are left to removeTemplates, so no input can exhaust the call stack. */
+const DEEPEST_LIST = 16;
+
+/**
+ * Each list template replaced by its items, each after " · ", and each
+ * {{nowrap|…}} by its text. Removing them with every other template, as
+ * removeTemplates does, emptied an infobox value such as
+ * "Ongoing<br>{{blist|Strait of Hormuz crisis|…}}" down to "Ongoing", so an
+ * item added or removed read as a change to markup alone.
+ *
+ * Named arguments, such as class= and style=, set layout and are dropped: an
+ * argument is named when it has an "=" outside the templates and links inside
+ * it, as MediaWiki reads it. Within an argument, each line is an item, with
+ * its "*" or "#" markers removed. Every other template is left as it stands,
+ * for removeTemplates. Braces are paired in one scan, so each template's text
+ * is read once however deeply lists nest, and pairing follows removeTemplates:
+ * an opener that never closes, and a closer with no opener, stay as text.
+ * Lists nested more than DEEPEST_LIST deep are removed, as they were before.
+ */
+function expandListTemplates(text: string): string {
+  if (!text.includes("{{")) return text;
+  const closeOf = new Map<number, number>();
+  const openers: number[] = [];
+  for (let i = 0; i < text.length - 1; i++) {
+    if (text[i] === "{" && text[i + 1] === "{") {
+      openers.push(i);
+      i++;
+    } else if (text[i] === "}" && text[i + 1] === "}" && openers.length > 0) {
+      closeOf.set(openers.pop() as number, i);
+      i++;
+    }
+  }
+
+  type Arg = { from: number; to: number; named: boolean; lines: number[] };
+
+  // The template's top-level arguments, from just after its "{{" to its "}}".
+  const splitArgs = (from: number, to: number): Arg[] => {
+    const args: Arg[] = [];
+    let current: Arg = { from, to, named: false, lines: [] };
+    let links = 0;
+    for (let i = from; i < to; i++) {
+      const close = text[i] === "{" && text[i + 1] === "{" ? closeOf.get(i) : undefined;
+      if (close !== undefined) {
+        i = close + 1;
+      } else if (text[i] === "[" && text[i + 1] === "[") {
+        links++;
+        i++;
+      } else if (text[i] === "]" && text[i + 1] === "]" && links > 0) {
+        links--;
+        i++;
+      } else if (links === 0 && text[i] === "|") {
+        current.to = i;
+        args.push(current);
+        current = { from: i + 1, to, named: false, lines: [] };
+      } else if (links === 0 && text[i] === "=") {
+        current.named = true;
+      } else if (links === 0 && text[i] === "\n") {
+        current.lines.push(i);
+      }
+    }
+    args.push(current);
+    return args;
+  };
+
+  const expand = (from: number, to: number, depth: number): string | undefined => {
+    if (depth > DEEPEST_LIST) return undefined;
+    let nameEnd = from;
+    while (nameEnd < to && text[nameEnd] !== "|" && nameEnd - from <= LONGEST_KEPT_NAME) nameEnd++;
+    if (nameEnd - from > LONGEST_KEPT_NAME) return undefined;
+    const name = text.slice(from, nameEnd).replaceAll("_", " ").replace(/\s+/g, " ").trim().toLowerCase();
+    const isList = LIST_TEMPLATES.has(name);
+    if (!isList && name !== "nowrap") return undefined;
+    const positional = splitArgs(from, to)
+      .slice(1)
+      .filter((arg) => !arg.named);
+    if (!isList) return positional[0] ? render(positional[0].from, positional[0].to, depth) : " ";
+    const items: string[] = [];
+    for (const arg of positional) {
+      let start = arg.from;
+      for (const end of [...arg.lines, arg.to]) {
+        // A list nested as the item brings its own leading separator.
+        const item = render(start, end, depth)
+          .replace(/^\s*[*#]+/, "")
+          .trim()
+          .replace(/^· /, "");
+        if (item) items.push(item);
+        start = end + 1;
+      }
+    }
+    return `${items.map((item) => ` · ${item}`).join("")} `;
+  };
+
+  const render = (from: number, to: number, depth: number): string => {
+    let out = "";
+    let at = from;
+    for (let i = from; i < to - 1; i++) {
+      const close = text[i] === "{" && text[i + 1] === "{" ? closeOf.get(i) : undefined;
+      if (close === undefined) continue;
+      const expanded = expand(i + 2, close, depth + 1);
+      if (expanded !== undefined) {
+        out += text.slice(at, i) + expanded;
+        at = close + 2;
+      }
+      i = close + 1;
+    }
+    return out + text.slice(at, to);
+  };
+
+  return render(0, text.length, 0);
 }
 
 /** Remove each `<!-- … -->`, putting `replacement` where it stood; an opener with no `-->` after it stays. */

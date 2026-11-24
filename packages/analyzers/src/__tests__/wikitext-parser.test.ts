@@ -223,6 +223,8 @@ describe("sanitizeWikitext", () => {
 
 describe("sanitizeWikitext without regex backtracking", () => {
   // The regex version this replaced, kept here as the reference for its output.
+  // List templates and <br>, read since (see "sanitizeWikitext on list
+  // templates"), do not occur in these inputs.
   function regexSanitize(value: string): string {
     const withoutRefs = value
       .replace(/<!--[\s\S]*?-->/g, " ")
@@ -455,5 +457,71 @@ describe("heading parsing on a hostile line", () => {
       { position: 0, heading: "a = b" },
       { position: 14, heading: "" },
     ]);
+  });
+});
+
+describe("sanitizeWikitext on list templates", () => {
+  // An infobox value's words often sit in a list template. Removed with every
+  // other template, "Ongoing<br>{{blist|…}}" read as "Ongoing<br>", so an item
+  // added or removed looked like a change to markup alone.
+  it("keeps each list item, after a separator", () => {
+    expect(
+      sanitizeWikitext(
+        "[[List of ongoing armed conflicts|Ongoing]]<br>{{blist|[[Strait crisis (2026)|Strait crisis]]|Escalation of the border conflict}}",
+      ),
+    ).toBe("Ongoing · Strait crisis · Escalation of the border conflict");
+  });
+
+  it("reads the list template names without regard to case or underscores", () => {
+    for (const name of ["blist", "Bulleted_list", "UBL", "ubil", "unbulleted list", "hlist"]) {
+      expect([name, sanitizeWikitext(`{{${name}|a|b}}`)]).toEqual([name, "a · b"]);
+    }
+  });
+
+  it("reads a plainlist's lines as items, without their markers", () => {
+    expect(sanitizeWikitext("{{plainlist|\n* a\n* [[b|c]]\n}}")).toBe("a · c");
+    expect(sanitizeWikitext("{{Flatlist|\n# one\n# two}}")).toBe("one · two");
+    expect(sanitizeWikitext("{{blist\n|first\n|second\n}}")).toBe("first · second");
+  });
+
+  it("drops named arguments, as MediaWiki reads them", () => {
+    expect(sanitizeWikitext("{{ubl|class=nowrap|a|style = x|b}}")).toBe("a · b");
+    // An "=" inside a link or a nested template does not name the argument.
+    expect(sanitizeWikitext("{{blist|[[a=b|c]]|d{{efn|e=f}}}}")).toBe("c · d");
+  });
+
+  it("removes references before reading items, so a ref's name= does not drop the item", () => {
+    expect(sanitizeWikitext('{{blist|a<ref name="x">cite</ref>|b<ref name="y" />}}')).toBe("a · b");
+  });
+
+  it("expands lists nested in lists, and still removes other templates", () => {
+    expect(sanitizeWikitext("{{blist|a|{{ubl|b|c}}}}")).toBe("a · b · c");
+    expect(sanitizeWikitext("x{{efn|y}}{{blist|z}}")).toBe("x · z");
+    expect(sanitizeWikitext("{{infobox|status={{blist|a|b}}}}")).toBe("");
+  });
+
+  it("keeps nowrap's text on its own, without a separator", () => {
+    expect(sanitizeWikitext("from {{nowrap|28 February}} on")).toBe("from 28 February on");
+  });
+
+  it("reads line breaks as spaces", () => {
+    expect(sanitizeWikitext("a<br>b<br/>c<BR />d")).toBe("a b c d");
+  });
+
+  it("leaves an opener that never closes as text", () => {
+    expect(sanitizeWikitext("{{blist|a")).toBe("{{blist|a");
+  });
+
+  it("stays linear and bounded on deep or unclosed lists", () => {
+    const inputs = [
+      "{{blist|".repeat(20_000),
+      `${"{{blist|".repeat(20_000)}x${"}}".repeat(20_000)}`,
+      `{{blist|${"a|".repeat(50_000)}}}`,
+    ];
+    for (const input of inputs) {
+      const t0 = performance.now();
+      sanitizeWikitext(input);
+      expect([input.slice(0, 12), performance.now() - t0 < 500]).toEqual([input.slice(0, 12), true]);
+    }
   });
 });

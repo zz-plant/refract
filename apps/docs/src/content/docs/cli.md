@@ -158,7 +158,7 @@ refract field --pages-file <path> --param <name> [options]
 |---|---|---|
 | `page` | required unless `--pages-file` | Page title |
 | `-p, --param <name>` | required | Parameter to track, e.g. `result` |
-| `--template <name>` | any | Read the parameter only from this template, e.g. `Infobox military conflict`. Without it, the first top-level template in page order that has the parameter is read, and a note names any others. |
+| `--template <name>` | any | Read the parameter only from this template, e.g. `Infobox military conflict`. A page that calls the template's module directly, as `{{#invoke:Infobox military conflict\|main …}}`, matches the same name. Without it, the first top-level template in page order that has the parameter is read, and a note names any others. |
 | `--limit <n>` | `50` | Revisions read: the latest N. With both `--from` and `--to`, the whole range unless set |
 | `--from <revId>` | — | Start revision ID; reads forward from it |
 | `--to <revId>` | — | End revision ID; without `--from`, reads backward from it |
@@ -175,9 +175,11 @@ when its prose changes, and `markup` when only its wikitext does: a reference
 removed while the words stay is a `markup` change. `returnsToEarlierText` marks
 a value that matches one seen earlier in the selection, and `returns` counts
 them, which is how back-and-forth over a field shows. `value` is the
-parameter's wikitext; `text` is it with references, comments, templates and
-link markup removed. Names of templates and parameters compare without regard
-to case. Refract records what the field said, not whether it was right.
+parameter's wikitext; `text` is it with references, comments and link markup
+removed, list templates such as `{{blist}}` and `{{plainlist}}` reduced to
+their items, and other templates removed, so an item added to a listed value is
+a `text` change. Names of templates and parameters compare without regard to
+case. Refract records what the field said, not whether it was right.
 
 ```bash
 refract field "Pluto" --param discoverer --template "Infobox planet" --json | jq '.changes[] | [.revisionId, .kind, .text]'

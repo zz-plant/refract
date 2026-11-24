@@ -41,6 +41,25 @@ describe("readField", () => {
     expect(found?.value).toBe("Stalemate");
   });
 
+  it("matches a module call to the template of the same name", () => {
+    // Infobox templates expand to a module call, and some pages, such as an
+    // infobox moved to a template of its own, make that call directly.
+    const page = [
+      "<noinclude>{{Pp-extended|small=yes}}</noinclude>",
+      "{{#invoke:Infobox military conflict|main",
+      "| conflict = Example war",
+      "| status = Ongoing",
+      "}}",
+    ].join("\n");
+    expect(readField(page, { param: "status", template: "Infobox military conflict" })).toEqual({
+      template: "#invoke:Infobox military conflict",
+      value: "Ongoing",
+      others: [],
+    });
+    expect(readField(page, { param: "status", template: "Template:Infobox_military_conflict" })?.value).toBe("Ongoing");
+    expect(readField(page, { param: "status", template: "Infobox planet" })).toBeUndefined();
+  });
+
   it("treats an empty parameter as absent", () => {
     expect(readField(infobox(""), { param: "result" })).toBeUndefined();
   });
@@ -91,6 +110,23 @@ describe("fieldHistory", () => {
       ["markup", "Side A victory"],
     ]);
     expect(result.changes[1].value).toBe("Side A victory");
+  });
+
+  it("reports an item added to a listed value as a text change", () => {
+    const result = fieldHistory(
+      "Example war",
+      [
+        rev(1, infobox("Ongoing<br>{{blist|Strait crisis}}")),
+        rev(2, infobox("Ongoing<br>{{blist|Strait crisis|[[Border war (2026)|Border war]]}}")),
+        rev(3, infobox("Ongoing<br />{{blist|Strait crisis|[[Border war (2026)|Border war]]}}")),
+      ],
+      { param: "result" },
+    );
+    expect(result.changes.map((c) => [c.revisionId, c.kind, c.text])).toEqual([
+      [1, "added", "Ongoing · Strait crisis"],
+      [2, "text", "Ongoing · Strait crisis · Border war"],
+      [3, "markup", "Ongoing · Strait crisis · Border war"],
+    ]);
   });
 
   it("records the field's removal and reports it absent", () => {
