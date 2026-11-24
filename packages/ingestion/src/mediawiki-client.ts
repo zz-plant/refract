@@ -12,11 +12,14 @@ import type {
   SourceEntity,
   SourceQuery,
 } from "./index.js";
+import { protectionLevel, protectionReasonCategory } from "./protection-log.js";
 import { RateLimiter } from "./rate-limiter.js";
 
 const DEFAULT_API_URL = "https://en.wikipedia.org/w/api.php";
 export const DEFAULT_USER_AGENT = "Refract/0.1.0 (https://github.com/refract-org/refract; refract@nextconsensus.com)";
 const MAX_REVISIONS_PER_REQUEST = 500;
+/** The most revision IDs `revids=` takes in one request. */
+const MAX_REVIDS_PER_REQUEST = 50;
 const MAX_ATTEMPTS = 3;
 /** Longest a single Retry-After is honoured. Past this, giving up is better than hanging a run. */
 const MAX_RETRY_WAIT_MS = 60_000;
@@ -107,6 +110,31 @@ interface RevisionQueryResponse {
   continue?: {
     rvcontinue: string;
   };
+}
+
+interface TitleQueryResponse {
+  query?: {
+    pages?: Array<{ pageid?: number; ns?: number; title: string; missing?: boolean; invalid?: boolean }>;
+  };
+}
+
+/** A page a title resolved to: see `MediaWikiClient.resolveTitle`. */
+export interface ResolvedTitle {
+  pageId: number;
+  /** The page's title after redirects and normalization. */
+  title: string;
+  /** Namespace number: 0 for articles, 1 for their talk pages. */
+  ns: number;
+}
+
+/** See `MediaWikiClient.revisionAt`. */
+export interface RevisionAtResult {
+  /** The last revision made at or before the moment. Null when the page had none yet, or does not exist. */
+  revision: RevisionMetadata | null;
+  /** Up to `around` revisions before `revision`, oldest first. */
+  before: RevisionMetadata[];
+  /** Up to `around` revisions after `revision` (after the moment, when it is null), oldest first. */
+  after: RevisionMetadata[];
 }
 
 interface LogEventResponse {
@@ -354,6 +382,9 @@ export class MediaWikiClient implements RevisionFetcher, RevisionSource, DiffFet
               // fixture written against the old field still parses.
               details?: Array<{ type?: string; level?: string; expiry?: string }>;
               detail?: Array<{ type?: string; level?: string; expiry?: string }>;
+              // Entries logged before details existed (about 2009–2014) carry
+              // the levels only here: "[edit=autoconfirmed] (indefinite)".
+              description?: string;
             };
           }>;
         };
@@ -362,14 +393,20 @@ export class MediaWikiClient implements RevisionFetcher, RevisionSource, DiffFet
 
       if (data.query?.logevents) {
         for (const entry of data.query.logevents) {
-          const level = (entry.params?.details ?? entry.params?.detail)?.[0]?.level;
+          const comment = entry.comment ?? "";
+          const level = protectionLevel({
+            comment,
+            details: entry.params?.details ?? entry.params?.detail,
+            description: entry.params?.description,
+          });
           events.push({
             logId: entry.logid,
             pageTitle: entry.title,
             timestamp: entry.timestamp,
-            comment: entry.comment ?? "",
+            comment,
             action: entry.action as "protect" | "unprotect" | "modify",
-            level,
+            ...(level ? { level } : {}),
+            reasonCategory: protectionReasonCategory(comment),
           });
         }
       }
@@ -755,50 +792,13 @@ export class MediaWikiClient implements RevisionFetcher, RevisionSource, DiffFet
       idsToFetch.push(...uniqueIds);
     }
 
-    const BATCH_SIZE = 50;
-    const batches: number[][] = [];
-    for (let i = 0; i < idsToFetch.length; i += BATCH_SIZE) {
-      batches.push(idsToFetch.slice(i, i + BATCH_SIZE));
-    }
-
-    // Wikimedia asks API clients to keep at most 3 requests in flight
-    // (https://www.mediawiki.org/wiki/Wikimedia_APIs/Rate_limits).
-    const concurrency = Math.max(1, Math.min(options?.concurrency ?? 3, 8));
     const fetchedByRevId = new Map<number, Revision>();
-
-    let cursor = 0;
-    const runWorker = async () => {
-      while (cursor < batches.length) {
-        const batchIndex = cursor++;
-        const batch = batches[batchIndex];
-        if (!batch || batch.length === 0) continue;
-
-        const params = new URLSearchParams({
-          action: "query",
-          prop: "revisions",
-          revids: batch.join("|"),
-          rvprop: "content|ids|timestamp|flags|comment|size|user",
-          rvslots: "main",
-          format: "json",
-          formatversion: "2",
-        });
-
-        const url = `${this.apiUrl}?${params.toString()}`;
-        const data = await this.getJson<RevisionQueryResponse>(url);
-        if (!data.query?.pages) continue;
-
-        for (const page of Object.values(data.query.pages)) {
-          if (page.missing || !page.revisions) continue;
-          const info: PageInfo = { pageId: page.pageid, title: page.title };
-          for (const raw of page.revisions) {
-            fetchedByRevId.set(raw.revid, this.mapRevision(raw, info));
-          }
-        }
-      }
-    };
-
-    const workers = Array.from({ length: Math.min(concurrency, batches.length) }, () => runWorker());
-    await Promise.all(workers);
+    await this.queryRevisionsById(
+      idsToFetch,
+      { rvprop: "content|ids|timestamp|flags|comment|size|user", rvslots: "main" },
+      options?.concurrency,
+      (raw, info) => fetchedByRevId.set(raw.revid, this.mapRevision(raw, info)),
+    );
 
     const results: Revision[] = [];
     for (const id of uniqueIds) {
@@ -832,6 +832,128 @@ export class MediaWikiClient implements RevisionFetcher, RevisionSource, DiffFet
   }
 
   /**
+   * One section of each revision, from `rvsection`, keyed by revision ID:
+   * section 0 is the lead, and sections after it are numbered in page order,
+   * each with its subsections. Reads up to 50 revisions a request, as
+   * `fetchRevisionsByIds` does. A revision without that section, whose text is
+   * hidden, or that does not exist has no entry.
+   */
+  async fetchSections(revIds: readonly number[], section: number): Promise<Map<number, string>> {
+    if (!Number.isInteger(section) || section < 0) {
+      throw new RangeError(`section must be a non-negative integer, got ${section}`);
+    }
+    const contents = new Map<number, string>();
+    await this.queryRevisionsById(
+      [...new Set(revIds)],
+      { rvprop: "ids|content", rvslots: "main", rvsection: String(section) },
+      undefined,
+      (raw) => {
+        // A revision without the section comes back as `nosuchsection`, with no content.
+        const content = raw.slots?.main?.content;
+        if (typeof content === "string") contents.set(raw.revid, content);
+      },
+    );
+    return contents;
+  }
+
+  /**
+   * The page a title names, after following redirects and normalizing it
+   * ("UK" → United Kingdom), with its page ID and namespace number. Null when
+   * the page does not exist, the title is invalid, or it names a special page
+   * or another wiki.
+   */
+  async resolveTitle(title: string): Promise<ResolvedTitle | null> {
+    // `titles` takes a |-separated list; a title cannot contain one.
+    if (title.includes("|")) return null;
+    const params = new URLSearchParams({
+      action: "query",
+      titles: title,
+      redirects: "1",
+      format: "json",
+      formatversion: "2",
+    });
+    const data = await this.getJson<TitleQueryResponse>(`${this.apiUrl}?${params.toString()}`);
+    const page = data.query?.pages?.[0];
+    if (!page || page.missing || page.invalid || page.pageid === undefined || page.ns === undefined) return null;
+    return { pageId: page.pageid, title: page.title, ns: page.ns };
+  }
+
+  /**
+   * The revision that was live at a moment, the last one made at or before
+   * it, with up to `around` revisions either side, each with `sha1` and size
+   * so a caller can tell whether the live one was a state soon reverted
+   * (`findRevertedStates`). `title` is read as given; resolve a redirect with
+   * `resolveTitle` first. Two requests.
+   */
+  async revisionAt(title: string, isoDateTime: string, options?: { around?: number }): Promise<RevisionAtResult> {
+    const moment = new Date(isoDateTime);
+    if (Number.isNaN(moment.getTime())) throw new RangeError(`Not a date-time: ${isoDateTime}`);
+    const around = options?.around ?? 10;
+    if (!Number.isInteger(around) || around < 0) {
+      throw new RangeError(`around must be a non-negative integer, got ${around}`);
+    }
+
+    const [revision = null, ...earlier] = await this.fetchRevisionMetadata(title, {
+      start: moment,
+      direction: "older",
+      limit: around + 1,
+    });
+    let after: RevisionMetadata[] = [];
+    if (around > 0) {
+      // From the live revision's own position, so a revision made in the same
+      // second as it is still read; or from the moment, when none was live.
+      const later = await this.fetchRevisionMetadata(title, {
+        ...(revision ? { startRevId: revision.revId } : { start: moment }),
+        direction: "newer",
+        limit: around + 1,
+      });
+      after = later.filter((m) => m.revId !== revision?.revId).slice(0, around);
+    }
+    return { revision, before: earlier.reverse(), after };
+  }
+
+  /**
+   * `prop=revisions` for `revIds`, 50 to a request, with at most `concurrency`
+   * requests in flight (default 3), calling `visit` with each revision returned.
+   */
+  private async queryRevisionsById(
+    revIds: readonly number[],
+    params: Record<string, string>,
+    concurrency: number | undefined,
+    visit: (raw: RawRevision, page: PageInfo) => void,
+  ): Promise<void> {
+    const batches: number[][] = [];
+    for (let i = 0; i < revIds.length; i += MAX_REVIDS_PER_REQUEST) {
+      batches.push(revIds.slice(i, i + MAX_REVIDS_PER_REQUEST));
+    }
+
+    // Wikimedia asks API clients to keep at most 3 requests in flight
+    // (https://www.mediawiki.org/wiki/Wikimedia_APIs/Rate_limits).
+    const workers = Math.max(1, Math.min(concurrency ?? 3, 8));
+    let cursor = 0;
+    const runWorker = async () => {
+      while (cursor < batches.length) {
+        const batch = batches[cursor++];
+        const query = new URLSearchParams({
+          action: "query",
+          prop: "revisions",
+          revids: batch.join("|"),
+          ...params,
+          format: "json",
+          formatversion: "2",
+        });
+        const data = await this.getJson<RevisionQueryResponse>(`${this.apiUrl}?${query.toString()}`);
+        for (const page of Object.values(data.query?.pages ?? {})) {
+          if (page.missing || !page.revisions) continue;
+          const info: PageInfo = { pageId: page.pageid, title: page.title };
+          for (const raw of page.revisions) visit(raw, info);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(workers, batches.length) }, () => runWorker()));
+  }
+
+  /**
    * Ingest a multi-year revision history without the small-window bottleneck:
    * 1. Scans 100% of revision metadata in the date range at 500 revisions/request.
    * 2. Computes full-history telemetry (monthly velocity, SHA-1 & summary reverts,
@@ -862,6 +984,7 @@ export class MediaWikiClient implements RevisionFetcher, RevisionSource, DiffFet
     const excludeOption = options?.excludeRevertedStates ?? true;
     const selection = selectLongitudinalRevisionsWithExclusions(sortedMeta, options?.maxContentRevisions ?? 120, {
       excludeRevertedStates: excludeOption,
+      timeCoverage: options?.timeCoverage,
     });
     const metadataByRevId = new Map(sortedMeta.map((m) => [m.revId, m]));
     const revisions = await this.fetchRevisionsByIds(
@@ -883,7 +1006,12 @@ export class MediaWikiClient implements RevisionFetcher, RevisionSource, DiffFet
         ...(limit !== undefined ? { maxMetadataRevisions: limit } : {}),
         direction: options?.direction ?? "older",
         revertedStatesExcluded: selection.revertedStates.size,
-        ...(selection.windowHours !== undefined ? { revertedStateWindowHours: selection.windowHours } : {}),
+        ...(selection.rules
+          ? {
+              revertedStateWindowHours: selection.rules.windowHours,
+              revertedStateNearRestorations: selection.rules.nearRestorations,
+            }
+          : {}),
       },
     };
   }
@@ -927,7 +1055,7 @@ export interface FullHistoryTelemetry {
   monthlyVelocity: MonthlyVelocityBucket[];
 }
 
-export interface LongitudinalHistoryOptions extends RevisionOptions {
+export interface LongitudinalHistoryOptions extends RevisionOptions, Pick<SelectLongitudinalOptions, "timeCoverage"> {
   /** Maximum number of full-text revisions to hydrate across the window (default: 120). */
   maxContentRevisions?: number;
   /**
@@ -942,10 +1070,11 @@ export interface LongitudinalHistoryOptions extends RevisionOptions {
   /**
    * Leave states that a later edit reverted out of the hydrated sample, and
    * fill their slots with states that survived. See `findRevertedStates`.
-   * `true` (the default) uses a 48-hour window; `false` keeps them.
-   * Telemetry is computed from the full metadata either way.
+   * `true` (the default) uses its defaults: a 48-hour window, near-restorations
+   * included. An object sets `windowHours` or `nearRestorations`; `false` keeps
+   * every state. Telemetry is computed from the full metadata either way.
    */
-  excludeRevertedStates?: boolean | { windowHours?: number };
+  excludeRevertedStates?: boolean | RevertedStateOptions;
 }
 
 export interface LongitudinalCoverage {
@@ -960,6 +1089,8 @@ export interface LongitudinalCoverage {
   revertedStatesExcluded: number;
   /** The reverted-state window, when exclusion was on. */
   revertedStateWindowHours?: number;
+  /** Whether near-restorations counted as reverts, when exclusion was on. */
+  revertedStateNearRestorations?: boolean;
 }
 
 export interface LongitudinalHistoryResult {
@@ -1098,11 +1229,91 @@ export function computeFullHistoryTelemetry(metadata: readonly RevisionMetadata[
   };
 }
 
+/** One calendar year (UTC) of `yearlyPressure`. */
+export interface YearlyPressure {
+  year: number;
+  /** Revisions of the page made that year. */
+  edits: number;
+  /** Of those, revisions that were reverted states. */
+  revertedEdits: number;
+  /** `revertedEdits / edits`; null in a year without edits. */
+  revertedShare: number | null;
+  /** Talk-page revisions made that year. */
+  talkEdits: number;
+  /** Protection log entries that set or changed protection (`protect` and `modify`; not `unprotect`). */
+  protections: number;
+  /** Of those, entries whose comment names a content dispute (`reasonCategory: "content_dispute"`). */
+  contentDisputeProtections: number;
+}
+
+export interface YearlyPressureInput {
+  /** Timestamps of the talk page's revisions, e.g. from `fetchRevisionMetadata("Talk:…")`. */
+  talkTimestamps: readonly string[];
+  /** The page's protection log, from `fetchProtectionLogs`. */
+  protections: readonly Pick<ProtectionLogEvent, "timestamp" | "action" | "reasonCategory">[];
+  /** Revision IDs of reverted states. Default: `findRevertedStates(metadata)`. */
+  revertedStates?: ReadonlySet<number>;
+}
+
+/**
+ * Per calendar year (UTC), from the first year any input touches to the
+ * last, with zeros in between: the page's edits and how many were reverted
+ * states, talk-page edits, and protections, counting those whose stated reason
+ * is a content dispute. These are counts of what the histories record; reading
+ * a year as settled or contested is left to the caller. Citation density per
+ * year can be added from analyzed revisions with `countCitations` in
+ * `@refract-org/analyzers`.
+ */
+export function yearlyPressure(metadata: readonly RevisionMetadata[], input: YearlyPressureInput): YearlyPressure[] {
+  const revertedStates = input.revertedStates ?? findRevertedStates(metadata);
+  const protections = input.protections.filter((p) => p.action === "protect" || p.action === "modify");
+  const yearOf = (timestamp: string) => Number(timestamp.slice(0, 4));
+  let first = Number.POSITIVE_INFINITY;
+  let last = Number.NEGATIVE_INFINITY;
+  for (const timestamp of [
+    ...metadata.map((m) => m.timestamp),
+    ...input.talkTimestamps,
+    ...protections.map((p) => p.timestamp),
+  ]) {
+    first = Math.min(first, yearOf(timestamp));
+    last = Math.max(last, yearOf(timestamp));
+  }
+
+  const rows = new Map<number, YearlyPressure>();
+  for (let year = first; year <= last; year++) {
+    rows.set(year, {
+      year,
+      edits: 0,
+      revertedEdits: 0,
+      revertedShare: null,
+      talkEdits: 0,
+      protections: 0,
+      contentDisputeProtections: 0,
+    });
+  }
+  const row = (timestamp: string) => rows.get(yearOf(timestamp)) as YearlyPressure;
+  for (const m of metadata) {
+    const r = row(m.timestamp);
+    r.edits++;
+    if (revertedStates.has(m.revId)) r.revertedEdits++;
+  }
+  for (const timestamp of input.talkTimestamps) row(timestamp).talkEdits++;
+  for (const p of protections) {
+    const r = row(p.timestamp);
+    r.protections++;
+    if (p.reasonCategory === "content_dispute") r.contentDisputeProtections++;
+  }
+  for (const r of rows.values()) r.revertedShare = r.edits > 0 ? r.revertedEdits / r.edits : null;
+  return [...rows.values()];
+}
+
 /**
  * Deterministically select a longitudinal subset of revisions spanning the entire
  * multi-year window `[first, last]`:
- * 1. Anchors at least one revision per calendar month (or evenly spaced temporal
- *    buckets when months exceed half the budget) so no time period is omitted.
+ * 1. Anchors the first and last revision of each calendar month. When those
+ *    exceed 55% of the budget, it takes that many revisions evenly spaced by
+ *    position in the history instead, which crowds the sample into busy years.
+ *    `timeCoverage` replaces this step with checkpoints evenly spaced in time.
  * 2. Fills the remaining budget with the highest-signal structural edits (largest
  *    `|Δsize|` transitions and explicit reverts) together with their parent revision
  *    so localized transitions are preserved.
@@ -1117,32 +1328,77 @@ export function selectLongitudinalRevisions(
 
 export interface SelectLongitudinalOptions {
   /**
-   * Leave out states a later edit reverted (`findRevertedStates`). `true` uses
-   * a 48-hour window. Default for this function: `false`, the selection it
-   * has always made; `fetchLongitudinalHistory` turns it on.
+   * Leave out states a later edit reverted (`findRevertedStates`), with its
+   * defaults for `true` or the options given. Default for this function:
+   * `false`, the selection it has always made; `fetchLongitudinalHistory`
+   * turns it on.
    */
-  excludeRevertedStates?: boolean | { windowHours?: number };
+  excludeRevertedStates?: boolean | RevertedStateOptions;
+  /**
+   * The share of the budget, from 0 to 1, spent on checkpoints evenly spaced
+   * in time from the first revision to the last: at each, the last revision
+   * made at or before it (the last surviving one, with `excludeRevertedStates`).
+   * The rest goes to the high-signal picks. A quiet stretch whose checkpoints
+   * all land on one revision leaves the spare slots to those picks. Unset, the
+   * month anchors are used instead.
+   */
+  timeCoverage?: number;
+}
+
+export interface RevertedStateOptions {
+  /** How soon after the first reverted state the restoration must come. Default 48. */
+  windowHours?: number;
+  /**
+   * Also count states repaired by hand, which leave no `sha1` match: a size
+   * change of 30% or more from a surviving state, then, within the window, a
+   * revision within 1% of the size before it. Default `true`. See
+   * `findRevertedStates` for what it costs.
+   */
+  nearRestorations?: boolean;
 }
 
 const DEFAULT_REVERTED_STATE_WINDOW_HOURS = 48;
+/** A size change at least this share of the size before it can open a near-restoration. */
+const NEAR_RESTORATION_CHANGE = 0.3;
+/** A later size within this share of the size before the change restores it. */
+const NEAR_RESTORATION_TOLERANCE = 0.01;
 
 /**
  * Revisions whose state a later edit undid by restoring an earlier state.
  *
- * Revisions are read in time order, remembering the last revision with each
- * `sha1`. When revision j has the same `sha1` as an earlier revision k that is
- * not directly before it, j put k's text back, and every revision from k+1 to
- * j−1 is a state that was reverted — provided the first of them, k+1, was
- * made no more than `windowHours` before j. The window is measured from the
- * first reverted edit rather than from k, so a page left alone for a year and
- * then vandalised and reverted within the hour still counts. Revisions
- * without a `sha1` (text suppressed) neither restore nor are matched.
+ * Exact restorations: revisions are read in time order, remembering the last
+ * revision with each `sha1`. When revision j has the same `sha1` as an
+ * earlier revision k that is not directly before it, j put k's text back, and
+ * every revision from k+1 to j−1 is a state that was reverted — provided the
+ * first of them, k+1, was made no more than `windowHours` before j. The window
+ * is measured from the first reverted edit rather than from k, so a page left
+ * alone for a year and then vandalised and reverted within the hour still
+ * counts. Revisions without a `sha1` (text suppressed) neither restore nor are
+ * matched.
+ *
+ * Near-restorations (`nearRestorations`, on by default) catch damage repaired
+ * by hand, which no `sha1` matches: when revision i changes the size of the
+ * revision before it, itself not a reverted state, by 30% or more, and a
+ * revision j no more than `windowHours` after i comes back within 1% of that
+ * earlier size, i to j−1 are reverted states. Anarchism lost a third of its
+ * text on 13 October 2004 and got it back by hand four minutes later, 42 bytes
+ * short. The cost is a large edit that really was undone by hand and then
+ * redone, whose first appearance counts as reverted, and ordinary edits that
+ * happen to end the window within 1% of where a large change began. Over
+ * Pluto, Anarchism, Stoicism and Mutualism's 35,957 revisions the rule adds 11
+ * states to the 9,063 the exact rule finds, and 2 of the 11 are such edits.
+ * `nearRestorations: false` gives the exact rule alone.
+ *
+ * A number for `options` is the window in hours.
  */
 export function findRevertedStates(
   metadata: readonly RevisionMetadata[],
-  windowHours: number = DEFAULT_REVERTED_STATE_WINDOW_HOURS,
+  options: number | RevertedStateOptions = {},
 ): Set<number> {
+  const { windowHours = DEFAULT_REVERTED_STATE_WINDOW_HOURS, nearRestorations = true } =
+    typeof options === "number" ? { windowHours: options } : options;
   const sorted = [...metadata].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const times = sorted.map((m) => new Date(m.timestamp).getTime());
   const windowMs = windowHours * 60 * 60 * 1000;
   const lastIndexBySha1 = new Map<string, number>();
   const reverted = new Set<number>();
@@ -1150,13 +1406,26 @@ export function findRevertedStates(
     const sha1 = sorted[j].sha1;
     if (!sha1) continue;
     const k = lastIndexBySha1.get(sha1);
-    if (k !== undefined && j - k >= 2) {
-      const firstReverted = new Date(sorted[k + 1].timestamp).getTime();
-      if (new Date(sorted[j].timestamp).getTime() - firstReverted <= windowMs) {
-        for (let r = k + 1; r < j; r++) reverted.add(sorted[r].revId);
-      }
+    if (k !== undefined && j - k >= 2 && times[j] - times[k + 1] <= windowMs) {
+      for (let r = k + 1; r < j; r++) reverted.add(sorted[r].revId);
     }
     lastIndexBySha1.set(sha1, j);
+  }
+  if (!nearRestorations) return reverted;
+
+  for (let i = 1; i < sorted.length; i++) {
+    // A change is measured from a state that survived. Measured from a
+    // vandalised one, the revert that repaired it is itself a large change,
+    // and the vandal's next blanking brings the size back.
+    if (reverted.has(sorted[i - 1].revId)) continue;
+    const base = sorted[i - 1].size;
+    if (base <= 0 || Math.abs(sorted[i].size - base) < NEAR_RESTORATION_CHANGE * base) continue;
+    for (let j = i + 1; j < sorted.length && times[j] - times[i] <= windowMs; j++) {
+      if (Math.abs(sorted[j].size - base) <= NEAR_RESTORATION_TOLERANCE * base) {
+        for (let r = i; r < j; r++) reverted.add(sorted[r].revId);
+        break;
+      }
+    }
   }
   return reverted;
 }
@@ -1165,25 +1434,39 @@ function selectLongitudinalRevisionsWithExclusions(
   metadata: readonly RevisionMetadata[],
   maxRevisions: number,
   options?: SelectLongitudinalOptions,
-): { selected: RevisionMetadata[]; revertedStates: Set<number>; windowHours?: number } {
+): {
+  selected: RevisionMetadata[];
+  revertedStates: Set<number>;
+  rules?: { windowHours: number; nearRestorations: boolean };
+} {
+  const timeCoverage = options?.timeCoverage;
+  if (timeCoverage !== undefined && !(timeCoverage >= 0 && timeCoverage <= 1)) {
+    throw new RangeError(`timeCoverage must be between 0 and 1, got ${timeCoverage}`);
+  }
   const exclude = options?.excludeRevertedStates ?? false;
   if (exclude === false) {
-    return { selected: selectFromSorted(metadata, maxRevisions), revertedStates: new Set() };
+    return { selected: selectFromSorted(metadata, maxRevisions, { timeCoverage }), revertedStates: new Set() };
   }
-  const windowHours =
-    (typeof exclude === "object" ? exclude.windowHours : undefined) ?? DEFAULT_REVERTED_STATE_WINDOW_HOURS;
-  const revertedStates = findRevertedStates(metadata, windowHours);
+  const rules = {
+    windowHours: (exclude === true ? undefined : exclude.windowHours) ?? DEFAULT_REVERTED_STATE_WINDOW_HOURS,
+    nearRestorations: (exclude === true ? undefined : exclude.nearRestorations) ?? true,
+  };
+  const revertedStates = findRevertedStates(metadata, rules);
   // Selection runs over the surviving states only, so size deltas and month
   // anchors are measured between states readers saw for longer than the window.
   // A revert then sits next to the state it restored, a zero-size transition.
   const surviving = metadata.filter((m) => !revertedStates.has(m.revId));
-  return { selected: selectFromSorted(surviving, maxRevisions, true), revertedStates, windowHours };
+  return {
+    selected: selectFromSorted(surviving, maxRevisions, { skipUnchanged: true, timeCoverage }),
+    revertedStates,
+    rules,
+  };
 }
 
 function selectFromSorted(
   metadata: readonly RevisionMetadata[],
   maxRevisions: number,
-  skipUnchanged = false,
+  options: { skipUnchanged?: boolean; timeCoverage?: number } = {},
 ): RevisionMetadata[] {
   const sorted = [...metadata].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   if (sorted.length <= maxRevisions || maxRevisions < 2) {
@@ -1192,24 +1475,13 @@ function selectFromSorted(
 
   const selectedIndices = new Set<number>([0, sorted.length - 1]);
 
-  // Phase 1: Calendar-month anchors across the entire multi-year range
-  const monthFirstIdx = new Map<string, number>();
-  const monthLastIdx = new Map<string, number>();
-  for (let i = 0; i < sorted.length; i++) {
-    const m = sorted[i].timestamp.slice(0, 7);
-    if (!monthFirstIdx.has(m)) monthFirstIdx.set(m, i);
-    monthLastIdx.set(m, i);
-  }
-  const monthAnchorBudget = Math.floor(maxRevisions * 0.55);
-  const monthIndices = [...new Set([...monthFirstIdx.values(), ...monthLastIdx.values()])].sort((a, b) => a - b);
-  if (monthIndices.length <= monthAnchorBudget) {
-    for (const idx of monthIndices) selectedIndices.add(idx);
-  } else {
-    for (let k = 0; k < monthAnchorBudget; k++) {
-      const pos = Math.round((k / Math.max(1, monthAnchorBudget - 1)) * (sorted.length - 1));
-      selectedIndices.add(pos);
-    }
-  }
+  // Phase 1: anchors across the entire multi-year range, by calendar month or
+  // at moments evenly spaced in time.
+  const anchors =
+    options.timeCoverage === undefined
+      ? monthAnchors(sorted, maxRevisions)
+      : timeCheckpoints(sorted, Math.round(maxRevisions * options.timeCoverage));
+  for (const idx of anchors) selectedIndices.add(idx);
 
   // Phase 2: High-signal structural transitions (|Δsize| + non-trivial edits) across the full history
   const scoredTransitions: Array<{ idx: number; score: number }> = [];
@@ -1219,7 +1491,7 @@ function selectFromSorted(
     const cur = sorted[i];
     // Among surviving states, a revert follows the state it restored: the text
     // did not change, so neither it nor its parent adds a state to the sample.
-    if (skipUnchanged && cur.sha1 && cur.sha1 === prev.sha1) continue;
+    if (options.skipUnchanged && cur.sha1 && cur.sha1 === prev.sha1) continue;
     const absDelta = Math.abs(cur.size - prev.size);
     const isRevert = SUMMARY_REVERT_REGEX.test(cur.comment);
     // Prioritize large structural additions/removals and significant reverts
@@ -1237,6 +1509,45 @@ function selectFromSorted(
   }
 
   return [...selectedIndices].sort((a, b) => a - b).map((idx) => sorted[idx]);
+}
+
+/**
+ * The first and last revision of each calendar month, or, when those exceed
+ * 55% of the budget, that many revisions evenly spaced by position.
+ */
+function monthAnchors(sorted: readonly RevisionMetadata[], maxRevisions: number): number[] {
+  const monthFirstIdx = new Map<string, number>();
+  const monthLastIdx = new Map<string, number>();
+  for (let i = 0; i < sorted.length; i++) {
+    const m = sorted[i].timestamp.slice(0, 7);
+    if (!monthFirstIdx.has(m)) monthFirstIdx.set(m, i);
+    monthLastIdx.set(m, i);
+  }
+  const monthAnchorBudget = Math.floor(maxRevisions * 0.55);
+  const monthIndices = [...new Set([...monthFirstIdx.values(), ...monthLastIdx.values()])].sort((a, b) => a - b);
+  if (monthIndices.length <= monthAnchorBudget) return monthIndices;
+  return Array.from({ length: monthAnchorBudget }, (_, k) =>
+    Math.round((k / Math.max(1, monthAnchorBudget - 1)) * (sorted.length - 1)),
+  );
+}
+
+/**
+ * For `count` moments evenly spaced from the first revision's timestamp to
+ * the last's, the index of the last revision made at or before each. Moments
+ * in a quiet stretch share an index.
+ */
+function timeCheckpoints(sorted: readonly RevisionMetadata[], count: number): number[] {
+  const times = sorted.map((m) => new Date(m.timestamp).getTime());
+  const first = times[0];
+  const last = times[times.length - 1];
+  const indices: number[] = [];
+  let idx = 0;
+  for (let k = 0; k < count; k++) {
+    const moment = count === 1 ? last : first + ((last - first) * k) / (count - 1);
+    while (idx + 1 < times.length && times[idx + 1] <= moment) idx++;
+    indices.push(idx);
+  }
+  return indices;
 }
 
 function formatTimestamp(date: Date): string {

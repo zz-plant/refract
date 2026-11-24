@@ -78,6 +78,15 @@ export interface FakeMediaWikiOptions {
   history?: FakeHistoryRevision[];
   /** Entries for `list=logevents&letype=move`, keyed by the title queried. */
   moveLog?: Record<string, Array<{ logid: number; title: string; timestamp: string; target: string; comment?: string }>>;
+  /** Entries for `list=logevents&letype=protect`, keyed by the title queried, served as given. */
+  protectionLog?: Record<
+    string,
+    Array<{ logid: number; timestamp: string; action: string; comment: string; params?: Record<string, unknown> }>
+  >;
+  /** Pages a bare `titles=` query finds; any other valid title is missing. */
+  pages?: Array<{ pageid: number; ns: number; title: string }>;
+  /** Redirects a `titles=…&redirects=1` query follows, from title to title. */
+  redirects?: Record<string, string>;
 }
 
 /** What the fake saw since it was installed. */
@@ -100,7 +109,29 @@ function historyEntry(rev: FakeHistoryRevision, index: number, history: FakeHist
   };
 }
 
-/** Serves `history` the way the action API does: newest first by default, `rvlimit` rows a page, `rvcontinue` to go on. */
+/**
+ * Section `n` of wikitext as `rvsection` numbers them: 0 is the text before
+ * the first heading, and each heading after it counts in page order, its
+ * section running to the next heading at its level or above.
+ */
+function sectionOf(content: string, n: number): string | undefined {
+  const lines = content.split("\n");
+  const headings = lines.flatMap((line, at) => {
+    const match = /^(=+)[^=].*?\1\s*$/.exec(line);
+    return match ? [{ at, level: match[1].length }] : [];
+  });
+  if (n === 0) return lines.slice(0, headings[0]?.at ?? lines.length).join("\n");
+  const start = headings[n - 1];
+  if (!start) return undefined;
+  const end = headings.slice(n).find((h) => h.level <= start.level)?.at ?? lines.length;
+  return lines.slice(start.at, end).join("\n");
+}
+
+/**
+ * Serves `history` the way the action API does: newest first by default,
+ * `rvlimit` rows a page, `rvcontinue` to go on, starting at `rvstart` (a
+ * timestamp, inclusive) or `rvstartid` (a revision, inclusive) when given.
+ */
 function respondFromHistory(params: URLSearchParams, history: FakeHistoryRevision[]): Response {
   const page = (revisions: unknown[], cont?: string) =>
     json({
@@ -111,13 +142,33 @@ function respondFromHistory(params: URLSearchParams, history: FakeHistoryRevisio
   const revids = params.get("revids");
   if (revids) {
     const wanted = new Set(revids.split("|").map(Number));
+    const section = params.get("rvsection");
     return page(
-      history.flatMap((rev, index) => (wanted.has(rev.revid) ? [historyEntry(rev, index, history, true)] : [])),
+      history.flatMap((rev, index) => {
+        if (!wanted.has(rev.revid)) return [];
+        const entry = historyEntry(rev, index, history, true);
+        if (section === null) return [entry];
+        const content = sectionOf(rev.content, Number(section));
+        return [{ ...entry, slots: { main: content === undefined ? { nosuchsection: true } : { content } } }];
+      }),
     );
   }
 
-  const ordered = history.map((rev, index) => ({ rev, index }));
-  if (params.get("rvdir") !== "newer") ordered.reverse();
+  const newer = params.get("rvdir") === "newer";
+  const startId = params.get("rvstartid");
+  const startRev = startId ? history.find((rev) => rev.revid === Number(startId)) : undefined;
+  const startText = startRev?.timestamp ?? params.get("rvstart");
+  const start = startText ? Date.parse(startText) : undefined;
+  const ordered = history
+    .map((rev, index) => ({ rev, index }))
+    .filter(({ rev }) => {
+      if (start === undefined) return true;
+      const at = Date.parse(rev.timestamp);
+      // rvstartid breaks a tie in timestamp by revision ID.
+      if (at === start && startRev) return newer ? rev.revid >= startRev.revid : rev.revid <= startRev.revid;
+      return newer ? at >= start : at <= start;
+    });
+  if (!newer) ordered.reverse();
   const offset = Number(params.get("rvcontinue") ?? "0");
   const limit = Number(params.get("rvlimit") ?? "1");
   const withContent = (params.get("rvprop") ?? "").includes("content");
@@ -127,6 +178,17 @@ function respondFromHistory(params: URLSearchParams, history: FakeHistoryRevisio
     slice.map(({ rev, index }) => historyEntry(rev, index, history, withContent)),
     next,
   );
+}
+
+/** A bare `titles=` lookup, following `options.redirects` when `redirects=1`, as formatversion 2 shapes it. */
+function resolvePage(params: URLSearchParams, options: FakeMediaWikiOptions): Record<string, unknown> {
+  const title = params.get("titles") ?? "";
+  if (/[<>[\]{}|]/.test(title)) {
+    return { title, invalidreason: "The requested page title contains invalid characters.", invalid: true };
+  }
+  const target = (params.get("redirects") === "1" ? options.redirects?.[title] : undefined) ?? title;
+  const found = options.pages?.find((p) => p.title === target);
+  return found ?? { ns: 0, title: target, missing: true };
 }
 
 function json(body: unknown): Response {
@@ -180,11 +242,21 @@ function respond(url: URL, options: FakeMediaWikiOptions): Response {
     });
   }
 
+  if (list === "logevents" && params.get("letype") === "protect" && options.protectionLog) {
+    const title = params.get("letitle") ?? "";
+    const entries = options.protectionLog[title] ?? [];
+    return json({ query: { logevents: entries.map((e) => ({ title, type: "protect", ...e })) } });
+  }
+
   if (list === "logevents") {
-    // Both the move log and the protection log are empty here. The tests built
-    // on this file assert on shape and on diff arithmetic, never that a page
-    // has been moved or protected.
+    // Without a log passed in, both the move log and the protection log are
+    // empty. Most tests built on this file assert on shape and on diff
+    // arithmetic, never that a page has been moved or protected.
     return json({ query: { logevents: [] } });
+  }
+
+  if (!params.get("prop") && !list && params.get("titles")) {
+    return json({ query: { pages: [resolvePage(params, options)] } });
   }
 
   if (list === "search") {

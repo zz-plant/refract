@@ -142,6 +142,27 @@ free prose without one of those markers is not caught.
 |---|---|
 | `protection_changed` | Page protection level changed (protect, unprotect, modify) |
 
+An event from the protection log carries `protection_log_event`
+(`action=<action> logId=<id>`) and, when the entry has them:
+`protection_level` (`level=semi|extended|full|template`), the edit protection
+the entry set; `protection_reason`
+(`category=content_dispute|vandalism|disruption|sockpuppetry|sourcing|other`);
+and `protection_summary`, the comment with
+[editor names removed](#edit-summaries-carry-no-editor-names).
+
+The level comes from the entry's details or, in entries logged before about
+2015, from the `[edit=…]` list in its description or comment. The category
+comes from the policy page the comment links (`WP:PP#Content disputes`,
+`WP:Vandalism`, `WP:Disruptive editing`, `WP:Sock puppetry`, `WP:INTREF` or
+`WP:Verifiability`), or else from its wording ("edit war", "vandalism"), or is
+`other`.
+
+Both are categories of what the administrator wrote, not findings about the
+page: `content_dispute` means the comment names an edit war or content dispute,
+and an unprotection's comment is read the same way. English Wikipedia's policy
+names and English wording are recognized; on another wiki, a comment that links
+the same policy pages gets the same category, and one that does not is `other`.
+
 ## Event envelope
 
 All events share a common structure:

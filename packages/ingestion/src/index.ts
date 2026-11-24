@@ -1,4 +1,5 @@
 import type { DiffResult, EvidenceEvent, Revision } from "@refract-org/evidence-graph";
+import type { ProtectionLevel, ProtectionReasonCategory } from "./protection-log.js";
 
 /**
  * Source-agnostic interface for knowledge repositories.
@@ -86,7 +87,20 @@ export interface ProtectionLogEvent {
   timestamp: string;
   comment: string;
   action: "protect" | "unprotect" | "modify";
-  level?: string;
+  /**
+   * The edit protection the entry set (the create protection for a page
+   * protected from being created), from the entry's details, or else from the
+   * `[edit=…]` list older entries carry in their description or comment.
+   * Absent for an unprotection, a move-only protection, or a level not
+   * recognized. See `ProtectionLevel`.
+   */
+  level?: ProtectionLevel;
+  /**
+   * What kind of reason the administrator wrote, from the policy the comment
+   * links or else its wording. A category of the comment, not a finding about
+   * the page. See `ProtectionReasonCategory`.
+   */
+  reasonCategory: ProtectionReasonCategory;
 }
 
 export interface PageMove {
@@ -120,12 +134,19 @@ export {
   MediaWikiApiError,
   MediaWikiClient,
   type MonthlyVelocityBucket,
+  type ResolvedTitle,
+  type RevertedStateOptions,
+  type RevisionAtResult,
   type RevisionMetadata,
   retryAfterMs,
   type SelectLongitudinalOptions,
   type SiteInfo,
   selectLongitudinalRevisions,
+  type YearlyPressure,
+  type YearlyPressureInput,
+  yearlyPressure,
 } from "./mediawiki-client.js";
+export type { ProtectionLevel, ProtectionReasonCategory } from "./protection-log.js";
 export { RateLimiter } from "./rate-limiter.js";
 export { SnapshotDirectorySource, type SnapshotItem } from "./snapshot-source.js";
 export type { StreamClientOptions, StreamEvent } from "./stream-client.js";

@@ -334,6 +334,29 @@ describe("buildRevisionEvents", () => {
     ]);
   });
 
+  it("carries a log entry's level and reason category as facts when it has them", () => {
+    const entry = {
+      logId: 9,
+      pageTitle: "Topic",
+      timestamp: at(5),
+      comment: "[[WP:PP#Content disputes|Edit warring / content dispute]]",
+      action: "modify" as const,
+    };
+    const factsOf = (log: ProtectionLogRecord) =>
+      buildRevisionEvents([rev(1, 0, ARTICLE), rev(2, 10, `${ARTICLE} More.`)], { protectionLogs: [log] })
+        .find((e) => e.eventType === "protection_changed")
+        ?.deterministicFacts.map((f) => `${f.fact}: ${f.detail}`);
+
+    expect(factsOf({ ...entry, level: "full", reasonCategory: "content_dispute" })).toEqual([
+      "protection_log_event: action=modify logId=9",
+      "protection_level: level=full",
+      "protection_reason: category=content_dispute",
+      "protection_summary: [[WP:PP#Content disputes|Edit warring / content dispute]]",
+    ]);
+    // A record from elsewhere, without them, gets neither.
+    expect(factsOf(entry)?.filter((f) => /^protection_(level|reason):/.test(f))).toEqual([]);
+  });
+
   it("follows a sentence from first seen through removal to reintroduction", () => {
     const alpha = "Alpha is a sentence that is certainly long enough to be counted by the splitter here.";
     const beta = "Beta is another sentence long enough to be counted on its own.";
