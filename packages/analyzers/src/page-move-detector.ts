@@ -15,8 +15,10 @@ export interface PageMoveRecord {
 // MediaWiki's move summary, current and pre-2012 forms:
 //   "X moved page [[A]] to [[B]]: reason"
 //   "X moved [[A]] to [[B]] over redirect: reason"
+//   "X moved page [[A]] to [[B]] without leaving a redirect: reason"
+//   "X moved page [[A]] to [[B]] over a redirect without leaving a redirect: reason"
 const MOVE_SUMMARY =
-  /\bmoved\s+(?:page\s+)?\[\[([^\]|]+)(?:\|[^\]]*)?\]\]\s+to\s+\[\[([^\]|]+)(?:\|[^\]]*)?\]\](?:\s+over\s+(?:a\s+)?redirect)?(?:\s*:\s*([\s\S]*))?$/i;
+  /\bmoved\s+(?:page\s+)?\[\[([^\]|]+)(?:\|[^\]]*)?\]\]\s+to\s+\[\[([^\]|]+)(?:\|[^\]]*)?\]\](?:\s+over\s+(?:a\s+)?redirect)?(?:\s+without\s+leaving\s+a\s+redirect)?(?:\s*:\s*([\s\S]*))?$/i;
 
 /**
  * Moves read from revision edit summaries. The move log is keyed by the title
