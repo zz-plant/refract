@@ -181,6 +181,14 @@ their items, and other templates removed, so an item added to a listed value is
 a `text` change. Names of templates and parameters compare without regard to
 case. Refract records what the field said, not whether it was right.
 
+Each change also names the revision before it, as `refract claim`'s transitions
+do: `previousRevisionId` and `previousTimestamp` are the fetched revision with
+readable text that came before it, and `adjacent` is true when that revision is
+its parent. A change happened after `previousRevisionId` and at or before
+`revisionId`; when `adjacent` is false, revisions that were not fetched lie
+between them. The first revision read has no `previousRevisionId`, so a value
+reported `added` there may be older than the range.
+
 ```bash
 refract field "Pluto" --param discoverer --template "Infobox planet" --json | jq '.changes[] | [.revisionId, .kind, .text]'
 ```

@@ -5,10 +5,23 @@ import { DEFAULT_BATCH_CONCURRENCY, forEachPage } from "./batch.js";
 import { type ClaimRange, fetchRevisionRange } from "./claim.js";
 import type { RevisionSourceSpec } from "./revision-source.js";
 
-/** One revision at which the field's value differed from the revision before it. */
+/**
+ * One revision at which the field's value differed from the revision before it.
+ * The change happened after `previousRevisionId` and at or before `revisionId`;
+ * when `adjacent` is false, revisions that were not fetched lie between them and
+ * the change could be in any of those.
+ */
 export interface FieldChange {
   revisionId: number;
   timestamp: string;
+  /**
+   * The fetched revision before this one with readable text. Absent on the first
+   * revision read: a value reported `added` there may be older than the range.
+   */
+  previousRevisionId?: number;
+  previousTimestamp?: string;
+  /** True when `previousRevisionId` is this revision's parent, so no revision lies between them. */
+  adjacent: boolean;
   /** The template the value was read from, as the page names it; absent when the field is gone. */
   template?: string;
   /** The parameter's wikitext, references and comments included; absent when the field is gone. */
@@ -116,6 +129,7 @@ export function fieldHistory(pageTitle: string, revisions: Revision[], query: Fi
   const sharedWith = new Set<string>();
   let unavailable = 0;
   let latestReadable = true;
+  let priorReadable: Revision | undefined;
 
   for (const rev of revs) {
     if (rev.contentAvailable === false) {
@@ -124,6 +138,13 @@ export function fieldHistory(pageTitle: string, revisions: Revision[], query: Fi
       continue;
     }
     latestReadable = true;
+    // Taken before any `continue` below, so every readable revision becomes the next one's prior.
+    const before = priorReadable;
+    priorReadable = rev;
+    const between = {
+      ...(before ? { previousRevisionId: before.revId, previousTimestamp: before.timestamp } : {}),
+      adjacent: before !== undefined && rev.parentId === before.revId,
+    };
     const found = readField(rev.content, query);
     for (const other of found?.others ?? []) sharedWith.add(other);
     if (!found) {
@@ -131,6 +152,7 @@ export function fieldHistory(pageTitle: string, revisions: Revision[], query: Fi
         changes.push({
           revisionId: rev.revId,
           timestamp: rev.timestamp,
+          ...between,
           kind: "removed",
           returnsToEarlierText: false,
         });
@@ -145,6 +167,7 @@ export function fieldHistory(pageTitle: string, revisions: Revision[], query: Fi
     changes.push({
       revisionId: rev.revId,
       timestamp: rev.timestamp,
+      ...between,
       template: found.template,
       value: found.value,
       text,
@@ -207,7 +230,8 @@ export async function runField(
     const label = change.kind.toUpperCase().padEnd(7);
     const back = change.returnsToEarlierText ? "  (returns to an earlier value)" : "";
     const shown = change.kind === "removed" ? "(field removed)" : `"${change.text}"`;
-    console.log(`[${change.timestamp}] ${label} rev ${change.revisionId}  ${shown}${back}`);
+    const gap = change.previousRevisionId !== undefined && !change.adjacent ? "  (not adjacent)" : "";
+    console.log(`[${change.timestamp}] ${label} rev ${change.revisionId}  ${shown}${back}${gap}`);
     if (change.kind === "markup") console.log(`  wikitext: ${change.value}`);
   }
   console.log(`\nStatus:        ${result.status}`);

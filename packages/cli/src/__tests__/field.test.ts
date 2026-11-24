@@ -129,6 +129,40 @@ describe("fieldHistory", () => {
     ]);
   });
 
+  it("names the revision before each change and whether it is the parent", () => {
+    const result = fieldHistory(
+      "Example war",
+      [
+        rev(1, infobox("Ongoing")),
+        rev(2, infobox("Side A victory"), { parentId: 1 }),
+        rev(5, infobox("Side B victory"), { parentId: 4 }),
+        rev(6, "No infobox now.", { parentId: 5 }),
+      ],
+      { param: "result" },
+    );
+    expect(result.changes.map((c) => [c.revisionId, c.previousRevisionId, c.adjacent])).toEqual([
+      [1, undefined, false],
+      [2, 1, true],
+      [5, 2, false],
+      [6, 5, true],
+    ]);
+    expect(result.changes[1].previousTimestamp).toBe("2026-06-01T00:00:00Z");
+    expect("previousTimestamp" in result.changes[0]).toBe(false);
+  });
+
+  it("skips a revision with withheld text when naming the one before a change", () => {
+    const result = fieldHistory(
+      "Example war",
+      [
+        rev(1, infobox("Ongoing")),
+        rev(2, "", { parentId: 1, contentAvailable: false }),
+        rev(3, infobox("Side A victory"), { parentId: 2 }),
+      ],
+      { param: "result" },
+    );
+    expect(result.changes[1]).toMatchObject({ revisionId: 3, previousRevisionId: 1, adjacent: false });
+  });
+
   it("records the field's removal and reports it absent", () => {
     const result = fieldHistory("Example war", [rev(1, infobox("Ongoing")), rev(2, "No infobox now.")], {
       param: "result",

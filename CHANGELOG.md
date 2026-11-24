@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **`refract field` names the revision before each change.** A `FieldChange` carried the revision that changed a value and nothing about the one before it. A value already present on the first revision read came back as `added`, like one added later, and a caller could not tell which. Each change now carries `previousRevisionId`, `previousTimestamp` and `adjacent`, as `refract claim`'s transitions do. They name the fetched revision with readable text before it, and whether that revision is its parent. The first revision read has no `previousRevisionId`. The text report marks a change whose prior revision is not its parent `(not adjacent)`.
+
 ## 0.8.0 (2026-11-24)
 
 ### Added
