@@ -65,6 +65,8 @@ export interface TemplateChange {
   template: Template;
 }
 
+// Defined in evidence-graph so ingestion can use it too; re-exported here, where it was first published.
+export { redactEditorIdentity } from "@refract-org/evidence-graph";
 export type { RegisteredAnalyzer } from "./analyzer-registry.js";
 export { AnalyzerRegistry, registry } from "./analyzer-registry.js";
 export type {
@@ -139,7 +141,6 @@ export type {
 export { detectTextPropagation } from "./propagation-detector.js";
 export type { ProtectionChange, ProtectionLogRecord, ProtectionTracker } from "./protection-tracker.js";
 export { protectionTracker } from "./protection-tracker.js";
-export { redactEditorIdentity } from "./redact-editor-identity.js";
 export { findIdentityReverts, revertDetector } from "./revert-detector.js";
 export type { ParsedContent, RevisionEventDepth, RevisionEventOptions } from "./revision-events.js";
 export {

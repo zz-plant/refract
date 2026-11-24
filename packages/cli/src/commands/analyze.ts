@@ -30,6 +30,7 @@ import type { HistoryCoverage } from "../coverage.js";
 import { contiguousRevisionGroups } from "../coverage.js";
 import { REFRACT_VERSION } from "../version.js";
 import { correlateTalkPages, fetchRevisionsWithCache, finalizeEvents } from "./analyze-helpers.js";
+import { DEFAULT_BATCH_CONCURRENCY } from "./batch.js";
 import type { RevisionSourceSpec } from "./revision-source.js";
 
 interface BatchPageResult {
@@ -325,7 +326,7 @@ async function runBatch(
 
   console.error(`Batch mode: ${titles.length} pages from ${pagesFile}\n`);
 
-  const batchConcurrency = config?.batchConcurrency ?? 4;
+  const batchConcurrency = config?.batchConcurrency ?? DEFAULT_BATCH_CONCURRENCY;
   const pageResults: BatchPageResult[] = [];
   const allEvents: EvidenceEvent[] = [];
 

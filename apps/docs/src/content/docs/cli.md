@@ -38,7 +38,7 @@ refract analyze [page] [options]
 | `--brief-limit <n>` | `20` | Revisions read at `brief` depth: the latest N |
 | `-c, --cache` | off | Cache revisions in SQLite (`~/.wikihistory/refract.db`). Needs Bun and `@refract-org/persistence`, which is only available from a source checkout. |
 | `--pages-file <path>` | — | Batch file of page titles (one per line). Prints a total, not the events. |
-| `--batch-concurrency <n>` | `4` | Pages analyzed at once with `--pages-file` |
+| `--batch-concurrency <n>` | `3` | Pages analyzed at once with `--pages-file` |
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
 | `--cache-dir <path>` | `~/.wikihistory` | Cache directory path |
 | `-r, --report` | off | Output `ObservationReport` instead of raw events |
@@ -119,7 +119,7 @@ refract claim --pages-file <path> --text <text> [options]
 | `--from <revId>` | — | Start revision ID; reads forward from it |
 | `--to <revId>` | — | End revision ID; without `--from`, reads backward from it |
 | `--pages-file <path>` | — | Track the passage on each page in this file, one title per line; `#` starts a comment. Not with `--from` or `--to` |
-| `--batch-concurrency <n>` | `4` | Pages read at once with `--pages-file` |
+| `--batch-concurrency <n>` | `3` | Pages read at once with `--pages-file` |
 | `--dump <path>` | — | Read revisions from a MediaWiki XML export file instead of the API. See [other revision sources](#other-revision-sources) |
 | `--wayback` | off | Read the page's Internet Archive snapshots instead of the API. See [other revision sources](#other-revision-sources) |
 | `-j, --json` | off | Print the result as one JSON document instead of text |
@@ -163,7 +163,7 @@ refract field --pages-file <path> --param <name> [options]
 | `--from <revId>` | — | Start revision ID; reads forward from it |
 | `--to <revId>` | — | End revision ID; without `--from`, reads backward from it |
 | `--pages-file <path>` | — | Track the field on each page in this file, one title per line. Not with `--from` or `--to` |
-| `--batch-concurrency <n>` | `4` | Pages read at once with `--pages-file` |
+| `--batch-concurrency <n>` | `3` | Pages read at once with `--pages-file` |
 | `--dump <path>` | — | Read revisions from a MediaWiki XML export file instead of the API. See [other revision sources](#other-revision-sources) |
 | `--wayback` | off | Read the page's Internet Archive snapshots instead of the API. See [other revision sources](#other-revision-sources) |
 | `-j, --json` | off | Print the result as one JSON document instead of text; with `--pages-file`, one line per page as `claim` does |
@@ -383,7 +383,7 @@ refract export <page> [options]
 | `--since <ts>` | — | Analyze revisions from this ISO timestamp |
 | `--flatten` | off | Flatten nested fields into columns (`csv`) |
 | `--pages-file <path>` | — | Export each page in this file, one title per line, as NDJSON. Needs `--format ndjson`; not with `--from`, `--to`, `--bundle`, `--manifest` or `--proof` |
-| `--batch-concurrency <n>` | `4` | Pages analyzed at once with `--pages-file` |
+| `--batch-concurrency <n>` | `3` | Pages analyzed at once with `--pages-file` |
 | `--dump <path>` | — | Read revisions from a MediaWiki XML export file instead of the API. See [other revision sources](#other-revision-sources) |
 | `--wayback` | off | Read the page's Internet Archive snapshots instead of the API. See [other revision sources](#other-revision-sources) |
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |

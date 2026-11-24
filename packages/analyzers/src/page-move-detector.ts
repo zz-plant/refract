@@ -1,5 +1,5 @@
 import type { EvidenceEvent, EvidenceLayer } from "@refract-org/evidence-graph";
-import { redactEditorIdentity } from "./redact-editor-identity.js";
+import { redactEditorIdentity } from "@refract-org/evidence-graph";
 
 export interface PageMoveRecord {
   oldTitle: string;

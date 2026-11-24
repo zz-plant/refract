@@ -110,8 +110,8 @@ Edit summaries name editors: MediaWiki's own revert summary reads
 last revision by Y", and tools write "Revert to revision 57480834 dated … by X
 using popups". Wherever summary text reaches an event (`revert_detected`'s
 `after` and fact, `protection_summary`, `page_moved`'s `comment=`, and
-`talk_page_correlated`'s `talk_comment=`) and in `refract claim`'s
-`editSummary`, Refract replaces with `[editor]`: links to user, user talk and
+`talk_page_correlated`'s `talk_comment=`) and in the `editSummary` of
+`refract claim` and `wikidataStatementHistory` transitions, Refract replaces with `[editor]`: links to user, user talk and
 contributions pages (with any interwiki prefix, in English and Arabic);
 `{{u|…}}`-style user templates; IPv4 and IPv6 addresses; the name after "by"
 when "by" follows edit(s), revision(s) or version(s) (with or without an ID),

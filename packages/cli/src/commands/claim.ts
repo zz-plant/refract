@@ -9,7 +9,7 @@ import type { ClaimState, Revision } from "@refract-org/evidence-graph";
 import { createClaimIdentity } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
 import { MediaWikiClient } from "@refract-org/ingestion";
-import { forEachPage } from "./batch.js";
+import { DEFAULT_BATCH_CONCURRENCY, forEachPage } from "./batch.js";
 import { saveRevisions } from "./cache.js";
 import { type RevisionSourceSpec, readRevisionsFromSource } from "./revision-source.js";
 
@@ -462,7 +462,7 @@ export async function runClaimBatch(
   apiUrl?: string,
   auth?: AuthConfig,
   revisionLimit?: number,
-  concurrency = 4,
+  concurrency = DEFAULT_BATCH_CONCURRENCY,
   output: { json?: boolean; write?: (line: string) => void } = {},
   source?: RevisionSourceSpec,
 ): Promise<{ failed: number }> {

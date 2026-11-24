@@ -1,5 +1,5 @@
 import type { DeterministicFact, EvidenceEvent, EvidenceLayer, Revision, Section } from "@refract-org/evidence-graph";
-import { EVENT_SCHEMA_VERSION } from "@refract-org/evidence-graph";
+import { EVENT_SCHEMA_VERSION, redactEditorIdentity } from "@refract-org/evidence-graph";
 import { diffCategories, extractCategories } from "./category-tracker.js";
 import {
   type CitationAnchors,
@@ -11,7 +11,6 @@ import {
 } from "./citation-tracker.js";
 import type { CitationChange, CitationRef, Template, TemplateType } from "./index.js";
 import type { ProtectionLogRecord } from "./protection-tracker.js";
-import { redactEditorIdentity } from "./redact-editor-identity.js";
 import { findIdentityReverts, revertDetector } from "./revert-detector.js";
 import { sectionDiffer } from "./section-differ.js";
 import {

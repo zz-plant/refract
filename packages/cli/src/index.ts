@@ -130,7 +130,7 @@ const analyzeCmd = program
   .option("-c, --cache", "cache revisions in SQLite (~/.wikihistory/refract.db); needs Bun and a source checkout")
   .option("--pages-file <path>", "batch file of page titles (one per line)")
   .option("--brief-limit <n>", "max revisions in brief mode (default: 20)", parseInt)
-  .option("--batch-concurrency <n>", "max pages to analyze in parallel (default: 4)", parseInt)
+  .option("--batch-concurrency <n>", "max pages to analyze in parallel (default: 3)", parseInt)
   .option("-r, --report", "output ObservationReport JSON instead of raw events")
   .option("-j, --json", "force JSON output to stdout (disable interactive web UI)");
 withGlobal(analyzeCmd);
@@ -372,7 +372,7 @@ const claimCmd = program
   .option("--from <revId>", "start revision ID", parseInt)
   .option("--to <revId>", "end revision ID", parseInt)
   .option("--pages-file <path>", "track the passage on each page in this file (one title per line)")
-  .option("--batch-concurrency <n>", "max pages read at once with --pages-file (default: 4)", parseInt)
+  .option("--batch-concurrency <n>", "max pages read at once with --pages-file (default: 3)", parseInt)
   .option("-j, --json", "print the result as JSON instead of text")
   .option("-c, --cache", "cache revisions in SQLite; needs Bun and a source checkout");
 withGlobal(claimCmd);
@@ -422,7 +422,7 @@ const fieldCmd = program
   .option("--from <revId>", "start revision ID", parseInt)
   .option("--to <revId>", "end revision ID", parseInt)
   .option("--pages-file <path>", "track the field on each page in this file (one title per line)")
-  .option("--batch-concurrency <n>", "max pages read at once with --pages-file (default: 4)", parseInt)
+  .option("--batch-concurrency <n>", "max pages read at once with --pages-file (default: 3)", parseInt)
   .option("-j, --json", "print the result as JSON instead of text");
 withGlobal(fieldCmd, false);
 withRevisionSource(fieldCmd);
@@ -537,7 +537,7 @@ const exportCmd = program
   .option("--since <timestamp>", "re-observe from ISO timestamp")
   .option("--flatten", "flatten nested fields into flat columns (for csv format)")
   .option("--pages-file <path>", "export each page in this file (one title per line) as NDJSON with pageTitle added")
-  .option("--batch-concurrency <n>", "max pages analyzed at once with --pages-file (default: 4)", parseInt);
+  .option("--batch-concurrency <n>", "max pages analyzed at once with --pages-file (default: 3)", parseInt);
 withGlobal(exportCmd);
 withAnalyzerConfig(exportCmd);
 withRevisionSource(exportCmd);

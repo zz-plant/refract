@@ -15,6 +15,14 @@ export interface PageOutcome<T> {
 }
 
 /**
+ * Pages read at once with --pages-file. Pages are read in parallel, so this
+ * bounds the API requests in flight, which Wikimedia asks clients to keep at 3
+ * (https://www.mediawiki.org/wiki/Wikimedia_APIs/Rate_limits). A page's move
+ * log, protection log and talk reads still go out together.
+ */
+export const DEFAULT_BATCH_CONCURRENCY = 3;
+
+/**
  * Run `work` for each title, at most `concurrency` at a time, and pass each
  * outcome to `emit` in the order the titles were given: as soon as it and
  * every title before it have finished, so output is the same however the

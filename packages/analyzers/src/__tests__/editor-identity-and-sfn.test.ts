@@ -1,8 +1,7 @@
-import type { Revision } from "@refract-org/evidence-graph";
+import { type Revision, redactEditorIdentity } from "@refract-org/evidence-graph";
 import { describe, expect, it } from "vitest";
 import { citationTracker, countCitations, countCitationsByKind } from "../citation-tracker.js";
 import { buildPageMoveEvents, mergePageMoves, pageMovesFromEditSummaries } from "../page-move-detector.js";
-import { redactEditorIdentity } from "../redact-editor-identity.js";
 import { buildRevisionEvents } from "../revision-events.js";
 
 describe("redactEditorIdentity", () => {

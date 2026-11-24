@@ -10,7 +10,7 @@ export interface AnalyzerConfig {
   section?: SectionConfig;
   /** Max revisions to fetch in brief mode (default: 20). */
   briefRevisionLimit?: number;
-  /** Max pages to analyze concurrently in batch mode (default: 4). */
+  /** Max pages to analyze concurrently in batch mode (default: 3). */
   batchConcurrency?: number;
 }
 

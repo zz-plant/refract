@@ -1,4 +1,5 @@
 import type { EvidenceEvent, Revision } from "@refract-org/evidence-graph";
+import { redactEditorIdentity } from "@refract-org/evidence-graph";
 
 const WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php";
 const WIKIDATA_ENTITY_API = "https://www.wikidata.org/wiki/Special:EntityData";
@@ -225,7 +226,7 @@ export function wikidataStatementHistory(
           previousRevisionId: previous.rev.revId,
           previousTimestamp: previous.rev.timestamp,
           adjacent: rev.parentId === previous.rev.revId,
-          editSummary: rev.comment,
+          editSummary: redactEditorIdentity(rev.comment),
         });
       }
     }
