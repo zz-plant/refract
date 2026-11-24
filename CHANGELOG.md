@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **`refract field --template` matches an infobox written as a module call.** A page that calls `{{#invoke:Infobox military conflict|main …}}` directly, as English Wikipedia's `Template:2026 Iran war infobox` does, passes the module the parameters the template would; `--template "Infobox military conflict"` found nothing there, so the field read as absent. A module call now answers to the template name it implements. `FieldChange.template` still names it as the page does, `#invoke:Infobox military conflict`.
+- **`sanitizeWikitext` keeps the items of list templates.** It removed every template, so `[[…|Ongoing]]<br>{{blist|Strait of Hormuz crisis|…}}` read as `Ongoing<br>`, and `refract field` reported an item added to or removed from a listed value as a `markup` change, one where only the wikitext changed. In that template's 204 daily versions, 34 of the 67 changes to `status` were word changes reported as `markup`. The items of `blist`, `bulleted list`, `ubl`, `ubil`, `unbulleted list`, `plainlist`, `flatlist` and `hlist` are now kept, each after ` · `, without their named arguments or `*` markers, and `{{nowrap|…}}` keeps its text; `<br>` reads as a space. Other templates are still removed, and `stripWikitext`, which sentence events use, is unchanged. **Callers of `sanitizeWikitext` get list items and no `<br>` in its output**, so a `text` that `refract field` recorded earlier can differ from one recorded now for the same value.
+
 ## 0.7.0 (2026-11-19)
 
 ### Added

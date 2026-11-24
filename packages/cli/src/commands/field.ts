@@ -13,7 +13,10 @@ export interface FieldChange {
   template?: string;
   /** The parameter's wikitext, references and comments included; absent when the field is gone. */
   value?: string;
-  /** The value as prose: references, comments, templates and link markup removed. */
+  /**
+   * The value as prose: references, comments and link markup removed, list
+   * templates such as {{blist}} reduced to their items, and other templates removed.
+   */
   text?: string;
   /**
    * What changed: `added` and `removed` for the field appearing and going,
@@ -47,8 +50,12 @@ export interface FieldQuery {
   template?: string;
 }
 
+// A module call such as {{#invoke:Infobox military conflict|main …}} is what
+// the template of that name expands to, and pages that call the module
+// directly pass it the same parameters, so it answers to that template's name.
 function templateKey(name: string): string {
   return name
+    .replace(/^\s*#invoke\s*:/i, "")
     .replace(/^\s*template\s*:/i, "")
     .replace(/_/g, " ")
     .replace(/\s+/g, " ")
@@ -59,7 +66,8 @@ function templateKey(name: string): string {
 /**
  * The parameter's value in one revision's wikitext: from the named template,
  * or from the first top-level template in page order that has the parameter.
- * Names compare without regard to case, and a parameter left empty counts as
+ * Names compare without regard to case, a module call {{#invoke:Name|…}}
+ * answers to the template name Name, and a parameter left empty counts as
  * absent, as diffTemplateParams treats it.
  */
 export function readField(
