@@ -84,7 +84,7 @@ const revisions = await client.fetchRevisions("Earth", { limit: 50 });
 
 **Multi-year longitudinal ingestion (fast metadata scan + SHA-1 deduplicated hydration)**:
 
-For high-traffic articles with thousands of revisions across multiple years, `fetchLongitudinalHistory` scans 100% of revision metadata at 500 revisions/request (`fetchRevisionMetadata`), computes full-history monthly velocity, summary/SHA-1 reverts, and pseudonymous revert pairs (`computeFullHistoryTelemetry`), selects stratified monthly checkpoints plus the largest structural deltas (`selectLongitudinalRevisions`), leaving out states a later edit reverted within 48 hours (`findRevertedStates`; `excludeRevertedStates: false` keeps them), and hydrates their wikitext in parallel `revids=` batches with SHA-1 deduplication (`fetchRevisionsByIds`):
+For high-traffic articles with thousands of revisions across multiple years, `fetchLongitudinalHistory` scans 100% of revision metadata at 500 revisions/request (`fetchRevisionMetadata`), computes full-history monthly velocity, summary/SHA-1 reverts, and pseudonymous revert pairs (`computeFullHistoryTelemetry`), selects stratified monthly checkpoints, or with `timeCoverage` checkpoints evenly spaced in time, plus the largest structural deltas (`selectLongitudinalRevisions`), leaving out states a later edit reverted within 48 hours (`findRevertedStates`; `excludeRevertedStates: false` keeps them), and hydrates their wikitext in parallel `revids=` batches with SHA-1 deduplication (`fetchRevisionsByIds`):
 
 ```typescript
 import { MediaWikiClient } from "@refract-org/ingestion";
@@ -110,7 +110,56 @@ in flight by default, the limit Wikimedia asks API clients to keep to.
 `coverage.revertedStatesExcluded` counts the revisions left out of the sample
 as reverted states; telemetry is computed from every metadata row either way.
 
-Key exports: `MediaWikiClient` (class), `RevisionFetcher` (interface), `AuthConfig`, `computeFullHistoryTelemetry`, `selectLongitudinalRevisions`, `findRevertedStates`, `LongitudinalHistoryOptions`, `LongitudinalHistoryResult`, `LongitudinalCoverage`, `SelectLongitudinalOptions`, `FullHistoryTelemetry`, `RevisionMetadata`
+`findRevertedStates(metadata, { windowHours, nearRestorations })` finds a
+reverted state two ways. A later revision whose `sha1` matches an earlier one
+restored that text, and the revisions between were reverted. A size change of
+30% or more from a surviving state, followed within the window by a revision
+within 1% of the size before it, is damage repaired by hand, which no `sha1`
+matches. The second rule also counts a large edit undone by hand and then
+redone, and ordinary edits that end the window within 1% of where a large
+change began; `excludeRevertedStates: { nearRestorations: false }` keeps the
+exact rule alone.
+
+`timeCoverage` (0 to 1) spends that share of `maxContentRevisions` on
+checkpoints evenly spaced in time, each the revision live then, and the rest on
+the largest structural changes. Without it, once a page has more months than
+the sample has anchors, the anchors are spaced by position in the history, so
+busy years take most of them: at 60 revisions, 10 of Anarchism's 26 years get
+none. With `timeCoverage: 0.75`, every year gets at least one.
+
+`yearlyPressure` counts, per calendar year (UTC), the page's edits and how many
+were reverted states, talk-page edits, and protections:
+
+```typescript
+import { yearlyPressure } from "@refract-org/ingestion";
+
+const talk = await client.fetchRevisionMetadata("Talk:Anarchism");
+const protections = await client.fetchProtectionLogs("Anarchism");
+const years = yearlyPressure(history.metadata, {
+  talkTimestamps: talk.map((m) => m.timestamp),
+  protections,
+});
+// [{ year: 2005, edits, revertedEdits, revertedShare, talkEdits, protections, contentDisputeProtections }, …]
+```
+
+Every year from the first to the last any input touches has a row, with zeros
+in quiet years; `revertedShare` is null in a year without edits. `protections`
+counts entries that set or changed protection, not unprotections. Pass
+`revertedStates` to count reverted states found another way.
+
+`fetchProtectionLogs` entries carry `level` (`semi`, `extended`, `full` or
+`template`), the edit protection the entry set, read from its details or, in
+entries logged before about 2015, from the `[edit=…]` list in its description
+or comment; and `reasonCategory`, the kind of reason the administrator wrote.
+Both are categories of the log's text; see [protection events](events.md#access-control).
+
+**Lookups through the client's retries and rate limit**:
+
+- `resolveTitle(title)` follows redirects to `{ pageId, title, ns }`, or null for a missing page, an invalid title, or a special page.
+- `fetchSections(revIds, section)` reads one section of each revision (0 is the lead), 50 revisions a request, into a `Map` from revision ID to its text. A revision without the section has no entry.
+- `revisionAt(title, isoDateTime, { around = 10 })` returns the revision live at that moment, the last made at or before it, with up to `around` revisions either side, each with `sha1` and size, so `findRevertedStates` can say whether the live one was soon undone.
+
+Key exports: `MediaWikiClient` (class), `RevisionFetcher` (interface), `AuthConfig`, `computeFullHistoryTelemetry`, `selectLongitudinalRevisions`, `findRevertedStates`, `yearlyPressure`, `LongitudinalHistoryOptions`, `LongitudinalHistoryResult`, `LongitudinalCoverage`, `SelectLongitudinalOptions`, `RevertedStateOptions`, `FullHistoryTelemetry`, `YearlyPressure`, `RevisionMetadata`, `ResolvedTitle`, `RevisionAtResult`, `ProtectionLogEvent`, `ProtectionLevel`, `ProtectionReasonCategory`
 
 **Wayback Machine, Git and snapshot revision sources**:
 

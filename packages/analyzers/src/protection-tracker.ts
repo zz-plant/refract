@@ -1,9 +1,21 @@
+/**
+ * A protection log entry. `@refract-org/ingestion`'s `fetchProtectionLogs`
+ * returns this shape, with `level` and `reasonCategory` filled in.
+ */
 export interface ProtectionLogRecord {
   logId: number;
   pageTitle: string;
   timestamp: string;
   comment: string;
   action: "protect" | "unprotect" | "modify";
+  /** Who may edit after the entry: `semi` (autoconfirmed), `extended` (extended-confirmed), `full` (administrators), `template` (template editors). */
+  level?: "semi" | "extended" | "full" | "template";
+  /**
+   * What kind of reason the administrator wrote, from the policy the comment
+   * links or else its wording. A category of the comment, not a finding about
+   * the page.
+   */
+  reasonCategory?: "content_dispute" | "vandalism" | "disruption" | "sockpuppetry" | "sourcing" | "other";
 }
 
 export interface ProtectionState {

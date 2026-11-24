@@ -454,6 +454,8 @@ export function detectEditorialSignals(
       after: log.action,
       deterministicFacts: [
         { fact: "protection_log_event", detail: `action=${log.action} logId=${log.logId}` },
+        ...(log.level ? [{ fact: "protection_level", detail: `level=${log.level}` }] : []),
+        ...(log.reasonCategory ? [{ fact: "protection_reason", detail: `category=${log.reasonCategory}` }] : []),
         ...(log.comment ? [{ fact: "protection_summary", detail: redactEditorIdentity(log.comment) }] : []),
         ...extraFacts,
       ],

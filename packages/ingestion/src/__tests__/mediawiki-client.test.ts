@@ -246,6 +246,27 @@ describe("MediaWikiClient failure handling", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("retries the title, section and moment lookups as it does every other request", async () => {
+    const lagged = () =>
+      jsonResponse({ error: { code: "maxlag", info: "lagged" } }, { headers: { "Retry-After": "2" } });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(lagged())
+      .mockResolvedValueOnce(jsonResponse({ query: { pages: [{ pageid: 7, ns: 0, title: "Test" }] } }))
+      .mockResolvedValueOnce(new Response("busy", { status: 429, headers: { "Retry-After": "3" } }))
+      .mockResolvedValueOnce(jsonResponse(revisionsPage([1])))
+      .mockResolvedValueOnce(lagged())
+      .mockResolvedValueOnce(jsonResponse(revisionsPage([1])))
+      .mockResolvedValueOnce(jsonResponse(revisionsPage([2])));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await client.resolveTitle("Test")).toEqual({ pageId: 7, title: "Test", ns: 0 });
+    expect(await client.fetchSections([1], 0)).toEqual(new Map([[1, "r1"]]));
+    const at = await client.revisionAt("Test", "2026-01-01T12:00:00Z", { around: 1 });
+    expect([at.revision?.revId, at.after.map((m) => m.revId)]).toEqual([1, [2]]);
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([2000, 3000, 2000]);
+  });
+
   it("returns no more revisions than the limit when a page overshoots it", async () => {
     const fetchMock = vi
       .fn()
@@ -289,7 +310,8 @@ describe("MediaWikiClient failure handling", () => {
         timestamp: "2026-03-01T00:00:00Z",
         comment: "vandalism",
         action: "protect",
-        level: "autoconfirmed",
+        level: "semi",
+        reasonCategory: "vandalism",
       },
     ]);
   });
