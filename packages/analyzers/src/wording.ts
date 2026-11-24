@@ -115,14 +115,27 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** The sentence with each parenthetical removed, innermost first: etymologies and pronunciations, which can hold copulas of their own. */
+/**
+ * The sentence with each parenthetical removed, nested ones with it:
+ * etymologies and pronunciations, which can hold copulas of their own.
+ * Parentheses are paired in one scan, so deep nesting takes linear time; an
+ * unpaired one stays.
+ */
 function withoutParentheticals(sentence: string): string {
-  let text = sentence;
-  for (let previous = ""; previous !== text; ) {
-    previous = text;
-    text = text.replace(/\([^()]*\)/g, " ");
+  const closeOf = new Map<number, number>();
+  const opens: number[] = [];
+  for (let i = 0; i < sentence.length; i++) {
+    if (sentence[i] === "(") opens.push(i);
+    else if (sentence[i] === ")" && opens.length > 0) closeOf.set(opens.pop() as number, i);
   }
-  return text.replace(/\s+/g, " ").trim();
+  let out = "";
+  let at = 0;
+  for (const [open, close] of [...closeOf].sort((a, b) => a[0] - b[0])) {
+    if (open < at) continue;
+    out += `${sentence.slice(at, open)} `;
+    at = close + 1;
+  }
+  return (out + sentence.slice(at)).replace(/\s+/g, " ").trim();
 }
 
 /** The title word a definitional sentence has to name: the first word of three letters or more that is not an article, disambiguation removed. */
@@ -193,7 +206,9 @@ function sentences(line: string, lang: string): string[] {
     const next = /^\s+(?=[\p{Lu}\p{N}"'“„«‚(¿¡])/u.exec(line.slice(i + 1, i + 3));
     if (!next) continue;
     if (c === ".") {
-      const word = /[\p{L}\p{N}]+$/u.exec(line.slice(start, i))?.[0] ?? "";
+      let wordStart = i;
+      while (wordStart > start && LETTER_OR_DIGIT.test(line[wordStart - 1])) wordStart--;
+      const word = line.slice(wordStart, i);
       if (word.length === 1 && /\p{L}/u.test(word)) continue;
       if (ABBREVIATIONS.has(word.toLowerCase())) continue;
       if (lang === "de" && /^\d+$/.test(word)) continue;

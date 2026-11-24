@@ -51,6 +51,18 @@ describe("an infobox whose last value holds a literal <", () => {
     expect(stripWikitext("{{Infobox|a = <1%}}Lead. a < b and c > d.<br />End.")).toBe("Lead. a < b and c > d.End.");
     expect(stripWikitext('x<span class="y">z</span><sup>2</sup>')).toBe("xz2");
   });
+
+  it("removes a tag that removing another tag puts together", () => {
+    expect(stripWikitext("a<scr<b>ipt>b")).toBe("ab");
+    expect(stripWikitext("a<<b>br>b")).toBe("ab");
+    expect(stripWikitext("a<1<b>x>b")).toBe("a<1x>b");
+  });
+
+  it("stays linear on tags that nest as they are removed", () => {
+    const start = performance.now();
+    expect(stripWikitext(`${"<a".repeat(50000)}${">".repeat(50000)}end`)).toBe("end");
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
 });
 
 describe("embedded files", () => {

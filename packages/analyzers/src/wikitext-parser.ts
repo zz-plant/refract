@@ -392,9 +392,12 @@ function removeFileLinks(text: string): string {
   return out + text.slice(at);
 }
 
+/** What a tag holds between "<" and ">": "/" or not, a name, and attributes or a closing "/". */
+const TAG_SHAPE = /^<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*|\/)?$/;
+
 /**
- * An HTML or extension tag such as `<br />`, `<span class="x">` or `</sup>`:
- * "<", an optional "/", a letter, and no "<" before the closing ">".
+ * Remove each HTML or extension tag, such as `<br />`, `<span class="x">` or
+ * `</sup>`: "<", an optional "/", a letter, and no "<" before the closing ">".
  *
  * /<[^>]+>/ read any "<" as a tag and deleted the text up to the next ">".
  * English Wikipedia's Pluto infobox ends `| flattening = <1%<ref … />` and
@@ -402,8 +405,38 @@ function removeFileLinks(text: string): string {
  * pattern deleted the infobox's closing braces and the whole lead with them;
  * the infobox, left unclosed, came through as prose. A "<" not followed by a
  * letter, as in "<1%" or "a < b", is text, as it is to MediaWiki.
+ *
+ * Removing a tag can join the text either side into another, as
+ * "<scr<b>ipt>" becomes "<script>", so the output is scanned as it is
+ * written: each "<" no ">" has followed waits on a stack, and at each ">" the
+ * text since the latest of them is removed if it is a tag. The output is what
+ * removing tags until none is left would give, in one linear pass.
  */
-const HTML_TAG = /<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?\/?>/g;
+function removeHtmlTags(text: string): string {
+  if (!text.includes("<")) return text;
+  const parts: string[] = [];
+  const opens: number[] = [];
+  let from = 0;
+  for (const { index } of text.matchAll(/[<>]/g)) {
+    if (index > from) parts.push(text.slice(from, index));
+    from = index + 1;
+    if (text[index] === "<") {
+      opens.push(parts.length);
+      parts.push("<");
+      continue;
+    }
+    // Nothing after the latest "<" is a "<" or ">", so each character is tested once.
+    const open = opens.pop();
+    if (open !== undefined && TAG_SHAPE.test(parts.slice(open).join(""))) {
+      parts.length = open;
+      continue;
+    }
+    opens.length = 0;
+    parts.push(">");
+  }
+  if (from < text.length) parts.push(text.slice(from));
+  return parts.join("");
+}
 
 export interface SectionOffset {
   charOffset: number;
@@ -537,7 +570,7 @@ function stripMarkup(wikitext: string): string {
   text = text.replace(/<!--[\s\S]*?-->/g, "");
   text = text.replace(/<ref\b[^>]*\/\s*>/gi, "");
   text = text.replace(/<ref\b[^>]*>[\s\S]*?<\/ref\s*>/gi, "");
-  text = text.replace(HTML_TAG, "");
+  text = removeHtmlTags(text);
   // French Wikipedia writes an apostrophe before bold text as {{'}}, which
   // renders "'"; removed with the other templates, L{{'}}'''anarchisme'''
   // read "Lanarchisme".

@@ -94,6 +94,13 @@ describe("definitionalSentence", () => {
     expect(definitionalSentence(lead, "Anarchism")).toBe("Anarchism is a political philosophy.");
   });
 
+  it("stays linear on deeply nested parentheses", () => {
+    const start = performance.now();
+    const sentence = `Pluto ${"(".repeat(20000)}is${")".repeat(20000)} is a dwarf planet.`;
+    expect(definitionHead(sentence)).toBe("a dwarf planet");
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
   it("ignores copulas inside parentheticals", () => {
     const lead = "'''Mutualism''' (which is to say, reciprocity) is an anarchist school of thought.";
     expect(definitionHead(definitionalSentence(lead, "Mutualism (economic theory)") as string)).toBe(
