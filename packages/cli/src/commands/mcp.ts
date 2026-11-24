@@ -2,12 +2,7 @@ import { isAbsolute, join } from "node:path";
 import { stripWikitext } from "@refract-org/analyzers";
 import type { AnalyzerConfig, EvidenceEvent, InferenceBoundary } from "@refract-org/evidence-graph";
 import { buildInferencePrompt, DEFAULT_ANALYZER_CONFIG, parseInferenceResponse } from "@refract-org/evidence-graph";
-import {
-  type McpServerOptions,
-  type StatementHistoryOptions,
-  statementHistoryOptions,
-  statementHistoryResponse,
-} from "@refract-org/mcp";
+import { type StatementHistoryOptions, statementHistoryOptions, statementHistoryResponse } from "@refract-org/mcp";
 import { OpenAICompatibleProvider } from "../inference-provider.js";
 import { REFRACT_VERSION } from "../version.js";
 import { runAnalyze } from "./analyze.js";
@@ -454,212 +449,6 @@ function formatEventLine(e: EvidenceEvent): string {
 
 /** Start the MCP JSON-RPC server over stdio for AI agent integration. */
 export async function runMcpServer(): Promise<void> {
-  const options: McpServerOptions = {
-    analyze: async (page, opts) => {
-      const depth = opts?.depth ?? "detailed";
-      const apiUrl = opts?.api;
-      const from = opts?.from ? parseInt(opts.from, 10) : undefined;
-      const to = opts?.to ? parseInt(opts.to, 10) : undefined;
-      const since = opts?.since;
-
-      const mcpConfig = opts?.config as Record<string, unknown> | undefined;
-      let config: AnalyzerConfig | undefined;
-      if (mcpConfig) {
-        config = structuredClone(DEFAULT_ANALYZER_CONFIG);
-        if (mcpConfig.similarityThreshold !== undefined) {
-          config.section ??= {};
-          config.section.similarityThreshold = mcpConfig.similarityThreshold as number;
-        }
-        if (mcpConfig.spikeFactor !== undefined) {
-          config.talkSpike ??= {};
-          config.talkSpike.spikeFactor = mcpConfig.spikeFactor as number;
-        }
-        if (mcpConfig.clusterWindowMinutes !== undefined) {
-          config.editCluster ??= {};
-          config.editCluster.windowMs = (mcpConfig.clusterWindowMinutes as number) * 60 * 1000;
-        }
-        if (mcpConfig.talkWindowBeforeDays !== undefined) {
-          config.talkCorrelation ??= {};
-          config.talkCorrelation.windowBeforeMs = (mcpConfig.talkWindowBeforeDays as number) * 24 * 60 * 60 * 1000;
-        }
-        if (mcpConfig.talkWindowAfterDays !== undefined) {
-          config.talkCorrelation ??= {};
-          config.talkCorrelation.windowAfterMs = (mcpConfig.talkWindowAfterDays as number) * 24 * 60 * 60 * 1000;
-        }
-        if (mcpConfig.renameDetection !== undefined) {
-          const mode = mcpConfig.renameDetection as string;
-          if (mode === "exact" || mode === "similarity" || mode === "none") {
-            config.section ??= {};
-            config.section.renameDetection = mode;
-          }
-        }
-      }
-
-      const { events, revisions } = await runAnalyze(
-        page,
-        depth,
-        from,
-        to,
-        since,
-        false,
-        apiUrl,
-        undefined,
-        undefined,
-        undefined,
-        config,
-      );
-      const summary = summarizeEvents(events);
-      const lines = [
-        `Analysis of "${page}" (depth=${depth}):`,
-        `  Revisions fetched: ${revisions.length}`,
-        `  Total events: ${events.length}`,
-        `  Sections with activity: ${summary.sections}`,
-        "",
-        "Event type breakdown:",
-      ];
-      for (const [type, count] of Object.entries(summary.byType).sort(([, a], [, b]) => b - a)) {
-        lines.push(`  ${type}: ${count}`);
-      }
-      if (events.length > 0) {
-        const sample = events.slice(0, 30);
-        lines.push("", "Sample events:");
-        for (const e of sample) lines.push(`  ${formatEventLine(e)}`);
-        if (events.length > 30) lines.push(`  ... and ${events.length - 30} more events`);
-      }
-      return { events, report: { format: "refract-export/v1", pageTitle: page } };
-    },
-
-    claim: async (page, text, opts) => {
-      let captured = "";
-      const origLog = console.log;
-      console.log = (...args: unknown[]) => {
-        captured += `${args.map(String).join(" ")}\n`;
-      };
-      try {
-        await runClaim(page, text, false, opts?.api, undefined, undefined);
-      } finally {
-        console.log = origLog;
-      }
-      if (!captured.trim()) captured = `Sentence "${text}" not found in "${page}" revision history.`;
-      return captured.trim();
-    },
-
-    exportData: async (page, opts) => {
-      const depth = opts?.depth ?? "detailed";
-      const since = opts?.since;
-      const apiUrl = opts?.api;
-      const { events, revisions } = await runAnalyze(
-        page,
-        depth,
-        undefined,
-        undefined,
-        since,
-        false,
-        apiUrl,
-        undefined,
-        undefined,
-        undefined,
-      );
-      const report = {
-        format: "refract-export/v1",
-        generatedAt: new Date().toISOString(),
-        pageTitle: page,
-        revisionCount: revisions.length,
-        eventCount: events.length,
-        summary: summarizeEvents(events),
-        events,
-      };
-      return report;
-    },
-
-    cron: async (pagesFile) => {
-      const fs = await import("node:fs");
-      if (!fs.existsSync(pagesFile)) {
-        return `Error: pages file not found: ${pagesFile}`;
-      }
-      const pages = fs
-        .readFileSync(pagesFile, "utf-8")
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
-      const results: Array<{ page: string; newEvents: number; ok: boolean; error?: string }> = [];
-      for (const page of pages) {
-        try {
-          const { events } = await runAnalyze(
-            page,
-            "brief",
-            undefined,
-            undefined,
-            undefined,
-            false,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-          );
-          results.push({ page, newEvents: events.length, ok: true });
-        } catch (err) {
-          results.push({ page, newEvents: 0, ok: false, error: String(err) });
-        }
-      }
-      const totalNew = results.reduce((s, r) => s + r.newEvents, 0);
-      const errors = results.filter((r) => !r.ok).length;
-      const lines = [
-        "Cron re-observation:",
-        `  Pages checked: ${results.length}`,
-        `  New events total: ${totalNew}`,
-        `  Errors: ${errors}`,
-      ];
-      const changed = results.filter((r) => r.newEvents > 0);
-      if (changed.length > 0) {
-        lines.push("", "Changed pages:");
-        for (const r of changed) lines.push(`  ${r.page}: ${r.newEvents} new events`);
-      }
-      const failed = results.filter((r) => !r.ok);
-      if (failed.length > 0) {
-        lines.push("", "Errors:");
-        for (const f of failed) lines.push(`  ${f.page}: ${f.error ?? "unknown error"}`);
-      }
-      return lines.join("\n");
-    },
-
-    classify: async (boundary: string, input: unknown) => {
-      const apiKey = (process.env.REFRACT_INFERENCE_API_KEY as string) || "";
-      const endpoint = (process.env.REFRACT_INFERENCE_ENDPOINT as string) || "";
-      const model = (process.env.REFRACT_INFERENCE_MODEL as string) || "";
-
-      try {
-        let result: unknown;
-
-        if (apiKey) {
-          const provider = new OpenAICompatibleProvider({ endpoint, apiKey, model });
-          result = await provider.infer(boundary as InferenceBoundary, input as any);
-        } else if (_clientCapabilities?.sampling) {
-          const reply = await requestSampling(
-            buildInferencePrompt(boundary as InferenceBoundary, input as Record<string, unknown>),
-          );
-          result = parseInferenceResponse(boundary as InferenceBoundary, reply.text, input as any, reply.model);
-        } else {
-          return {
-            boundary,
-            output: {},
-            source: "default",
-            note: "No inference provider configured. Set REFRACT_INFERENCE_API_KEY or connect via MCP client with sampling support.",
-          };
-        }
-
-        return result;
-      } catch (error) {
-        return { error: String(error) };
-      }
-    },
-
-    getStatementHistory: statementHistory,
-
-    snapshot: snapshotTool,
-    review: reviewTool,
-  };
-
   process.stderr.write("Refract MCP server starting...\n");
 
   let buffer = "";
@@ -717,7 +506,7 @@ export async function runMcpServer(): Promise<void> {
       if (!("id" in msg)) continue;
 
       handling = handling.then(() =>
-        handleRequest(request, options).catch((err) => {
+        handleRequest(request).catch((err) => {
           process.stderr.write(`Unhandled error: ${err.message}\n`);
         }),
       );
@@ -734,10 +523,12 @@ export async function runMcpServer(): Promise<void> {
   await handling;
 }
 
-async function handleRequest(
-  request: { jsonrpc: string; id: number | string; method: string; params?: Record<string, unknown> },
-  options: McpServerOptions,
-): Promise<void> {
+async function handleRequest(request: {
+  jsonrpc: string;
+  id: number | string;
+  method: string;
+  params?: Record<string, unknown>;
+}): Promise<void> {
   switch (request.method) {
     case "initialize": {
       _clientCapabilities = (request.params?.capabilities as Record<string, unknown>) ?? null;
