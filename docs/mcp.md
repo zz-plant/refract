@@ -137,19 +137,23 @@ Response fields: `statement`, `page`, `context` (when one was passed), `revision
 ### `snapshot`
 
 Return the revision that was live at a date: the newest revision at or before
-it. The same lookup as `refract snapshot`, returned as JSON.
+the end of that date (or the timestamp given), stepping back past a state a
+later edit reverted within 48 hours. The same lookup as `refract snapshot`,
+returned as JSON.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `page` | string | ✅ | Page title |
-| `at` | string | | ISO 8601 date or timestamp. Defaults to the current time |
+| `at` | string | | ISO 8601 date, read to its end in UTC, or timestamp. Defaults to the current time |
 | `api` | string | | MediaWiki API base URL. Defaults to English Wikipedia |
-| `revisionLimit` | number | | Revisions to fetch at or before the date (default 500) |
+| `revisionLimit` | number | | Revisions read on each side of the date to find reverted states (default 10) |
 | `content` | enum | | `plain` (markup stripped, default), `wikitext`, or `none` |
 
-Response fields: `pageTitle`, `at`, `revisionId`, `pageId`, `timestamp`,
-`daysBeforeTarget`, `minor`, `user`, `size`, `comment`, `sections` (heading
-`level` and `name`), and `text` or `wikitext` as `content` selects.
+Response fields: `pageTitle`, `at`, `cutoff` (the moment read), `revisionId`,
+`pageId`, `timestamp`, `daysBeforeTarget` (before `cutoff`), `minor`, `user`,
+`size`, `comment`, `skipped` and `restoredBy` when a reverted state was stepped
+past, `sections` (heading `level` and `name`), and `text` or `wikitext` as
+`content` selects.
 
 ### `review`
 

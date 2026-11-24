@@ -107,6 +107,15 @@ export {
   normalizeAnchor,
 } from "./citation-tracker.js";
 export type {
+  ClaimHistoryOptions,
+  ClaimHistoryResult,
+  ClaimHistoryVariant,
+  ClaimTransition,
+  LocatedTransition,
+  TransitionLocator,
+} from "./claim-history.js";
+export { claimHistory, findPassageMatch, locateTransitions, nearestPassage } from "./claim-history.js";
+export type {
   ConstitutionalDriftInput,
   ConstitutionalDriftResult,
   RevisionMetadata,
@@ -124,6 +133,8 @@ export type { EditClusterOptions } from "./edit-cluster-detector.js";
 export { detectEditClusters } from "./edit-cluster-detector.js";
 export type { HeuristicKind, HeuristicOptions, UserMetadata } from "./heuristic-classifier.js";
 export { classifyHeuristic } from "./heuristic-classifier.js";
+export type { BatchFetcher, LocateChangeOptions, LocatedChange } from "./locate-change.js";
+export { locateChange } from "./locate-change.js";
 export type { ObservationDiff } from "./observation-differ.js";
 export { diffObservations } from "./observation-differ.js";
 export {
@@ -167,6 +178,14 @@ export {
   extractKeyTerms,
   extractQuantitativeFindings,
 } from "./semantic-enrichment.js";
+export type {
+  DatedSnapshot,
+  SnapshotAtOptions,
+  SnapshotFetchers,
+  SnapshotRevision,
+  SnapshotScope,
+} from "./snapshot-at.js";
+export { snapshotAt } from "./snapshot-at.js";
 export type { TalkActivityOptions, TalkActivityResult } from "./talk-activity-detector.js";
 export { detectTalkActivitySpikes } from "./talk-activity-detector.js";
 export type { TalkCorrelationOptions } from "./talk-correlator.js";
@@ -176,7 +195,7 @@ export { buildTalkThreadEvents, diffTalkThreads, parseTalkThreads } from "./talk
 export type { ParamChange } from "./template-tracker.js";
 export { buildParamChangeEvents, diffTemplateParams, templateTracker } from "./template-tracker.js";
 export { buildWikilinkEvents, diffWikilinks, extractWikilinks } from "./wikilink-extractor.js";
-export type { HeadingPosition } from "./wikitext-parser.js";
+export type { HeadingPosition, StrippedSection } from "./wikitext-parser.js";
 export {
   buildSectionCharMap,
   countKeywordMentions,
@@ -185,5 +204,16 @@ export {
   extractHeadingMap,
   findSectionForText,
   sanitizeWikitext,
+  stripLead,
+  stripSection,
   stripWikitext,
+  stripWikitextSections,
 } from "./wikitext-parser.js";
+export type { DefinitionOptions, WordingLanguage } from "./wording.js";
+export {
+  contentWords,
+  DEFINITION_COPULAS,
+  definitionalSentence,
+  definitionHead,
+  sameWording,
+} from "./wording.js";

@@ -122,6 +122,8 @@ refract claim --pages-file <path> --text <text> [options]
 | `--batch-concurrency <n>` | `3` | Pages read at once with `--pages-file` |
 | `--dump <path>` | — | Read revisions from a MediaWiki XML export file instead of the API. See [other revision sources](#other-revision-sources) |
 | `--wayback` | off | Read the page's Internet Archive snapshots instead of the API. See [other revision sources](#other-revision-sources) |
+| `--sample <n>` | — | Read N revisions spread across the history (or the `--from`/`--to` range) instead of consecutive ones, leaving out states a later edit reverted. Not with `--limit` |
+| `--locate` | off | Narrow each transition between revisions that are not adjacent to the edit that made it. Not with `--pages-file`, `--dump` or `--wayback` |
 | `-j, --json` | off | Print the result as one JSON document instead of text |
 | `-c, --cache` | off | Cache revisions in SQLite |
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
@@ -143,6 +145,21 @@ line per page: the same object, or `{"page", "status": "error", "error"}` for a
 page that could not be read; text output is one line per page. The command exits
 2 when any page failed. Searching a set of pages finds a passage that moved
 between them, as when one article is merged into another.
+
+Consecutive revisions place every change exactly, but 50 of them cover days on a
+busy page. `--sample` covers the whole history, and each change then lies
+between two samples. `--locate` finds the edit inside that bracket: it reads the
+revisions between, drops the states a later edit in the bracket reverted, and
+searches them eight at a time for the first that holds the new state (the
+passage present, absent, or in the new wording). Each such transition gains
+`located` (`revisionId`, `timestamp`, `previousRevisionId`, `requests`), and its
+text line ends `made by rev N (…), after rev M`. The search assumes the
+passage changed once in the bracket; see
+[claim trajectories](./temporal-model.md#claim-trajectories).
+
+```bash
+refract claim "Pluto" --text "dwarf planet in the Kuiper belt" --sample 120 --locate
+```
 
 
 ## `refract field`
@@ -233,13 +250,23 @@ refract snapshot <page> [options]
 | Flag | Default | Description |
 |---|---|---|
 | `page` | required (positional) | Page title |
-| `--at <date>` | today | Target date (ISO 8601, e.g. `2024-01-15`). Finds the closest revision at or before this date. |
-| `--revision-limit <n>` | `500` | Revisions fetched while looking for the date |
+| `--at <date>` | today | Target date (ISO 8601, e.g. `2024-01-15`), read to its end in UTC, or a timestamp (`2024-01-15T12:00:00Z`). Finds the latest revision at or before it. |
+| `--scope <scope>` | `full` | Text to show: `lead`, `section` (with `--section`) or `full` |
+| `--section <heading>` | — | The section to show with `--scope section`, by its heading in the revision found, so a heading renamed since is found under its name then |
+| `--keep-reverted` | off | Show the revision live at the date even when a later edit reverted it |
+| `--revision-limit <n>` | `10` | Revisions read on each side of the date to find reverted states |
 | `-c, --cache` | off | Cache revisions in SQLite |
 | `--api <url>` | `en.wikipedia.org` | MediaWiki API base URL |
 
-Displays section list, plain text content, and metadata (revision ID, editor, size,
-edit comment). Content is truncated at 2000 characters.
+Displays section list, plain text of the scope, and metadata (revision ID, editor, size,
+edit comment). Text is truncated at 2000 characters.
+
+When the revision live at the date is a state a later edit undid within 48
+hours, as vandalism reverted the next morning is, the snapshot steps back to
+the latest revision before it that was not, and prints `Skipped rev N`.
+Reverted states are found among the revisions read around the date by
+`findRevertedStates`: a later revision with the same `sha1` as an earlier one,
+or a size change of 30% or more that a later revision repairs to within 1%.
 
 ## `refract drift`
 

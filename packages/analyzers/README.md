@@ -22,6 +22,9 @@ bun add @refract-org/analyzers
 
 - `sanitizeWikitext`, `extractHeadingMap`, `deriveSectionHeading`, `countCitations`, `countCitationsByKind`, `matchShortFootnotes`, `countKeywordMentions`, `extractAnchorSnippet` — wikitext parsing helpers
 - `findSectionForText`, `buildSectionCharMap` — which section a sentence sits in
+- `stripWikitext`, `stripWikitextSections`, `stripLead`, `stripSection(wikitext, heading)` — a page's prose, whole, section by section, its lead, or one section with its subsections
+- `contentWords`, `sameWording(a, b, { lang, threshold })` — a symmetric wording test: each phrase shares at least 80% of its content words with the other
+- `definitionalSentence(wikitext, title, { lang })`, `definitionHead(sentence, { lang })`, `DEFINITION_COPULAS` — the lead sentence that defines the subject, and the dozen words after its copula, in English, German, Spanish and French
 
 ### Builders
 
@@ -66,6 +69,30 @@ import { createEventIdentity } from "@refract-org/evidence-graph";
 
 const events = annotateEvents(buildRevisionEvents(revisions, { protectionLogs }));
 const ids = events.map((e) => createEventIdentity(e));
+```
+
+### Passage histories, dates and snapshots
+
+The functions behind `refract claim` and `refract snapshot`, with no I/O: each takes revisions, or the functions that fetch them, so a Worker can call it with its own requests.
+
+- `claimHistory(revisions, text, { page })` — a passage followed across revisions: where it matches in each, its `transitions` (`first_seen`, `text_changed`, `removed`, `reintroduced`) with the revisions either side, and a status. `findPassageMatch` and `nearestPassage` are its matching steps.
+- `locateChange(candidates, isNew, fetchLeads, { k = 8 })` — the first of the revision IDs between two samples for which `isNew` holds, reading `k` per round through `fetchLeads(revIds)`. Assumes one change in the bracket; remove reverted states from `candidates` first. `locateTransitions(result, { between, fetchTexts })` narrows a passage history's non-adjacent transitions with it.
+- `snapshotAt({ revisionsAround, fetchContent }, title, date, { scope, section, excludeRevertedStates, around })` — the latest revision at or before the end of `date`, stepping back past a reverted state found from the neighbours' `sha1`, with the lead, one section or the whole page as text. Returns the revision, its timestamp, any revisions skipped, and the text; null when none existed yet.
+
+```ts
+import { definitionalSentence, definitionHead, snapshotAt } from "@refract-org/analyzers";
+
+const snapshot = await snapshotAt(
+  {
+    revisionsAround: (title, at, { around }) => myRevisionsAround(title, at, around), // metadata with sha1
+    fetchContent: (revId) => myWikitext(revId),
+  },
+  "Pluto",
+  "2015-07-15",
+  { scope: "lead" },
+);
+const sentence = snapshot?.wikitext && definitionalSentence(snapshot.wikitext, "Pluto");
+const head = sentence && definitionHead(sentence); // compare heads across dates with sameWording
 ```
 
 For everything `refract analyze` prints, add `buildPageMoveEvents(windowPageMoves(...))` before and `correlateTalkRevisions(revisions, talkRevisions)` after `buildRevisionEvents`, then annotate all of them together.

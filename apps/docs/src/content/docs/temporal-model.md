@@ -59,6 +59,14 @@ consumer needs to weigh it:
 | `restoresRevisionId` | The revision's text is identical to this earlier one: an identity revert |
 | `heldRevisions`, `endedByRevisionId`, `endedAt` | How many revisions read the resulting state lasted, and the next transition that ended it; both end fields are absent when it held through the latest revision read |
 | `nearest` | On a removal, the remaining sentence carrying at least half of the passage's words, with that share. Below the matching threshold; shown so a rewrite is not taken for a deletion unseen |
+| `located` | With `refract claim --locate`, on a transition whose revisions are not adjacent: the edit inside the bracket that made the change (`revisionId`, `timestamp`), the surviving revision before it (`previousRevisionId`), and the batched reads it took (`requests`) |
+
+`--locate` searches the revisions between the two that bracket a change, with
+reverted states removed, for the first that holds the new state: for a
+rewording, the new version's text, not merely the end of the old one. Tested
+the other way, a search lands on intermediate drafts that match neither. It
+assumes the passage changed once inside the bracket; if it came and went, the
+edit found is one that brought it, not necessarily the first.
 
 These are observations. Whether a state that held for N revisions counts as
 settled, or a removal is a correction, is a downstream reading.

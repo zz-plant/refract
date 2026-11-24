@@ -169,14 +169,14 @@ Track normalized text or partial word matches across revisions. Returns the pass
 
 ### `snapshot`
 
-Return the revision that was live at a date: the newest revision at or before it, with its revision ID, timestamp, section headings, and text. The same lookup as `refract snapshot`, returned as JSON.
+Return the revision that was live at a date: the newest revision at or before the end of that date (or the timestamp given), stepping back past a state a later edit reverted within 48 hours, with its revision ID, timestamp, section headings, and text. The same lookup as `refract snapshot`, returned as JSON; `skipped` and `restoredBy` name the revisions it stepped past and the one that undid them.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `page` | string | required | Page title |
-| `at` | string | | ISO 8601 date or timestamp (default: now) |
+| `at` | string | | ISO 8601 date, read to its end in UTC, or timestamp (default: now) |
 | `api` | string | | MediaWiki API base URL |
-| `revisionLimit` | number | | Revisions to fetch at or before the date (default 500) |
+| `revisionLimit` | number | | Revisions read on each side of the date to find reverted states (default 10) |
 | `content` | enum | | `plain` (default), `wikitext`, `none` |
 
 ### `review`

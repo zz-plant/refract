@@ -64,12 +64,12 @@
     },
     {
       "name": "snapshot",
-      "description": "Return the revision of a page that was live at a date, with its revision ID, timestamp, section headings, and text.",
+      "description": "Return the revision of a page that was live at the end of a date, skipping a state a later edit reverted, with its revision ID, timestamp, section headings, and text.",
       "input": {
         "page": "string",
         "at": "string optional (ISO 8601 date, default now)",
         "api": "string optional (MediaWiki API base URL)",
-        "revisionLimit": "number optional (default 500)",
+        "revisionLimit": "number optional (revisions read on each side of the date, default 10)",
         "content": "plain | wikitext | none (optional, default plain)"
       }
     },

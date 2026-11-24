@@ -1,5 +1,4 @@
 import { isAbsolute, join } from "node:path";
-import { stripWikitext } from "@refract-org/analyzers";
 import type { AnalyzerConfig, EvidenceEvent, InferenceBoundary } from "@refract-org/evidence-graph";
 import { buildInferencePrompt, DEFAULT_ANALYZER_CONFIG, parseInferenceResponse } from "@refract-org/evidence-graph";
 import { type StatementHistoryOptions, statementHistoryOptions, statementHistoryResponse } from "@refract-org/mcp";
@@ -358,8 +357,8 @@ export async function snapshotTool(params: Record<string, unknown>): Promise<Rec
     apiUrl: params.api as string | undefined,
     revisionLimit: params.revisionLimit === undefined ? undefined : Number(params.revisionLimit),
   });
-  const { wikitext, ...metadata } = snapshot;
-  if (content === "plain") return { ...metadata, text: stripWikitext(wikitext) };
+  const { wikitext, text, ...metadata } = snapshot;
+  if (content === "plain") return { ...metadata, text };
   if (content === "wikitext") return { ...metadata, wikitext };
   return metadata;
 }

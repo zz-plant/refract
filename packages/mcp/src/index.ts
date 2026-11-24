@@ -137,17 +137,21 @@ export const TOOLS = [
   {
     name: "snapshot",
     description:
-      "Return the revision of a MediaWiki page that was live at a date: the newest revision at or before it, with its revision ID, timestamp, section headings, and text.",
+      "Return the revision of a MediaWiki page that was live at a date: the newest revision at or before the end of that date, stepping back past a state a later edit reverted within 48 hours, with its revision ID, timestamp, section headings, and text.",
     inputSchema: {
       type: "object",
       properties: {
         page: { type: "string", description: "Page title" },
         at: {
           type: "string",
-          description: "Target date or timestamp, ISO 8601 (e.g. '2024-01-15'). Defaults to the current time.",
+          description:
+            "Target date, read to its end in UTC, or timestamp, ISO 8601 (e.g. '2024-01-15'). Defaults to the current time.",
         },
         api: { type: "string", description: "MediaWiki API base URL. Defaults to English Wikipedia." },
-        revisionLimit: { type: "number", description: "Max revisions to fetch at or before the date (default 500)" },
+        revisionLimit: {
+          type: "number",
+          description: "Revisions read on each side of the date to find reverted states (default 10)",
+        },
         content: {
           type: "string",
           enum: ["plain", "wikitext", "none"],

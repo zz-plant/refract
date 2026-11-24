@@ -335,6 +335,109 @@ const CATEGORY_NAMESPACE_NAMES: readonly string[] = [
 
 const CATEGORY_TAG = new RegExp(`\\[\\[\\s*(?:${CATEGORY_NAMESPACE_NAMES.join("|")})\\s*:[^\\]]*\\]\\]`, "giu");
 
+/**
+ * The names a wiki gives its file namespace, as CATEGORY_NAMESPACE_NAMES does
+ * for categories: the canonical "File" and its old alias "Image", which every
+ * wiki accepts, then local names. To cover another edition, add its names.
+ */
+const FILE_NAMESPACE_NAMES: readonly string[] = [
+  "File",
+  "Image",
+  "Datei", // German
+  "Bild", // German, old alias
+  "Fichier", // French
+  "Archivo", // Spanish
+  "Imagen", // Spanish, old alias
+  "ファイル", // Japanese
+  "画像", // Japanese, old alias
+];
+
+const FILE_LINK_OPENER = new RegExp(`^\\[\\[\\s*(?:${FILE_NAMESPACE_NAMES.join("|")})\\s*:`, "iu");
+
+/**
+ * Remove each embedded file, `[[File:X.svg|thumb|caption]]`, whole: its
+ * options and caption, links inside the caption included.
+ *
+ * The link patterns in stripMarkup read a link as running to its first "]",
+ * so a caption holding a link was cut short there: "[[Datei:A.svg|mini|Das A im
+ * Kreis: ein [[Anarchistische Symbolik|Symbol]]]]" became the prose line
+ * "mini|Das A im Kreis: ein [[Anarchistische Symbolik|Symbol]]", and the
+ * caption of every image in a lead joined it. Brackets are paired in one scan,
+ * as expandListTemplates pairs braces, so nested captions take linear time. A
+ * file link that never closes stays as text. A visible link to a file page,
+ * `[[:File:X.svg]]`, has a leading colon and stays, as [[:Category:X]] does.
+ */
+function removeFileLinks(text: string): string {
+  if (!text.includes("[[")) return text;
+  const closeOf = new Map<number, number>();
+  const openers: number[] = [];
+  for (let i = 0; i < text.length - 1; i++) {
+    if (text[i] === "[" && text[i + 1] === "[") {
+      openers.push(i);
+      i++;
+    } else if (text[i] === "]" && text[i + 1] === "]" && openers.length > 0) {
+      closeOf.set(openers.pop() as number, i);
+      i++;
+    }
+  }
+  let out = "";
+  let at = 0;
+  for (const [open, close] of [...closeOf].sort((a, b) => a[0] - b[0])) {
+    if (open < at) continue;
+    // A namespace name and its colon are short; reading a bounded prefix keeps each check constant-time.
+    if (!FILE_LINK_OPENER.test(text.slice(open, open + 24))) continue;
+    out += text.slice(at, open);
+    at = close + 2;
+  }
+  return out + text.slice(at);
+}
+
+/** What a tag holds between "<" and ">": "/" or not, a name, and attributes or a closing "/". */
+const TAG_SHAPE = /^<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*|\/)?$/;
+
+/**
+ * Remove each HTML or extension tag, such as `<br />`, `<span class="x">` or
+ * `</sup>`: "<", an optional "/", a letter, and no "<" before the closing ">".
+ *
+ * /<[^>]+>/ read any "<" as a tag and deleted the text up to the next ">".
+ * English Wikipedia's Pluto infobox ends `| flattening = <1%<ref … />` and
+ * `}}`, and no ">" comes after the reference until the "Name" section, so the
+ * pattern deleted the infobox's closing braces and the whole lead with them;
+ * the infobox, left unclosed, came through as prose. A "<" not followed by a
+ * letter, as in "<1%" or "a < b", is text, as it is to MediaWiki.
+ *
+ * Removing a tag can join the text either side into another, as
+ * "<scr<b>ipt>" becomes "<script>", so the output is scanned as it is
+ * written: each "<" no ">" has followed waits on a stack, and at each ">" the
+ * text since the latest of them is removed if it is a tag. The output is what
+ * removing tags until none is left would give, in one linear pass.
+ */
+function removeHtmlTags(text: string): string {
+  if (!text.includes("<")) return text;
+  const parts: string[] = [];
+  const opens: number[] = [];
+  let from = 0;
+  for (const { index } of text.matchAll(/[<>]/g)) {
+    if (index > from) parts.push(text.slice(from, index));
+    from = index + 1;
+    if (text[index] === "<") {
+      opens.push(parts.length);
+      parts.push("<");
+      continue;
+    }
+    // Nothing after the latest "<" is a "<" or ">", so each character is tested once.
+    const open = opens.pop();
+    if (open !== undefined && TAG_SHAPE.test(parts.slice(open).join(""))) {
+      parts.length = open;
+      continue;
+    }
+    opens.length = 0;
+    parts.push(">");
+  }
+  if (from < text.length) parts.push(text.slice(from));
+  return parts.join("");
+}
+
 export interface SectionOffset {
   charOffset: number;
   section: string;
@@ -375,36 +478,87 @@ const HEADING_MARKS = new RegExp(`${HEADING_MARK}(\\d+)${HEADING_MARK}`);
  * A heading inside a comment or a template goes with it and opens no section.
  */
 export function stripWikitextWithSections(wikitext: string): StrippedWikitext {
-  const titles: string[] = [];
+  const sections: SectionOffset[] = [];
+  const blocks: string[] = [];
+  let offset = 0;
+  for (const { section, text } of stripWikitextSections(wikitext)) {
+    sections.push({ charOffset: offset, section });
+    if (!text) continue;
+    blocks.push(text);
+    offset += normalizeForSearch(text).length + 1;
+  }
+  return { text: blocks.join("\n\n"), sections };
+}
+
+/** One section of a page as prose, in the order the page gives them. */
+export interface StrippedSection {
+  /** The heading's text as written, trimmed; "(lead)" for the prose before the first heading. */
+  section: string;
+  /** 1 for the lead; otherwise the number of "=" on each side of the heading, so 2 for "== History ==". */
+  level: number;
+  /** The section's own prose, stripped as stripWikitext strips a page. Its subsections are entries of their own. */
+  text: string;
+}
+
+/**
+ * A page's prose section by section: the lead first, then one entry per
+ * heading, each with the prose up to the next heading. Joined with blank
+ * lines, the nonempty texts are stripWikitext's output. As there, a heading
+ * inside a comment or a template goes with it and opens no section.
+ */
+export function stripWikitextSections(wikitext: string): StrippedSection[] {
+  const headings: Array<{ section: string; level: number }> = [];
   const marked = wikitext
     .replaceAll(HEADING_MARK, "")
     .split("\n")
     .map((line) => {
       const match = HEADING_LINE.exec(line);
       if (!match) return line;
-      titles.push(match[2].trim());
-      return `${HEADING_MARK}${titles.length - 1}${HEADING_MARK}`;
+      headings.push({ section: match[2].trim(), level: match[1].length });
+      return `${HEADING_MARK}${headings.length - 1}${HEADING_MARK}`;
     })
     .join("\n");
 
   // split() with one capture group alternates prose and heading index.
   const parts = stripMarkup(marked).split(HEADING_MARKS);
-  const sections: SectionOffset[] = [{ charOffset: 0, section: "(lead)" }];
-  const blocks: string[] = [];
-  let offset = 0;
-  for (let i = 0; i < parts.length; i += 2) {
-    if (i > 0) sections.push({ charOffset: offset, section: titles[Number(parts[i - 1])] });
-    const block = parts[i].replace(/\n{3,}/g, "\n\n").trim();
-    if (!block) continue;
-    blocks.push(block);
-    offset += normalizeForSearch(block).length + 1;
-  }
-  return { text: blocks.join("\n\n"), sections };
+  const block = (part: string) => part.replace(/\n{3,}/g, "\n\n").trim();
+  const sections: StrippedSection[] = [{ section: "(lead)", level: 1, text: block(parts[0]) }];
+  for (let i = 2; i < parts.length; i += 2) sections.push({ ...headings[Number(parts[i - 1])], text: block(parts[i]) });
+  return sections;
 }
 
 /** A page's prose: markup and headings removed, with a paragraph break where each heading stood. */
 export function stripWikitext(wikitext: string): string {
   return stripWikitextWithSections(wikitext).text;
+}
+
+/** The prose before a page's first heading: its lead, stripped as stripWikitext strips the page. */
+export function stripLead(wikitext: string): string {
+  return stripWikitextSections(wikitext)[0].text;
+}
+
+/**
+ * The prose of the section with this heading, its subsections included, as
+ * paragraphs; null when the page has no such heading. Headings are compared
+ * as a reader sees them: markup removed, without regard to case, and with "_"
+ * as a space, so "Planetary_status" finds "== ''Planetary'' status ==". The
+ * first matching heading wins. "(lead)" names the lead.
+ */
+export function stripSection(wikitext: string, heading: string): string | null {
+  const key = (title: string) => sanitizeWikitext(title.replaceAll("_", " ")).toLowerCase();
+  const wanted = key(heading);
+  const sections = stripWikitextSections(wikitext);
+  const start = sections.findIndex((s) => key(s.section) === wanted);
+  if (start < 0) return null;
+  // The lead has no subsections: every heading ends it.
+  const { level } = sections[start];
+  let end = start + 1;
+  while (start > 0 && end < sections.length && sections[end].level > level) end++;
+  return sections
+    .slice(start, end)
+    .map((s) => s.text)
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function normalizeForSearch(text: string): string {
@@ -416,8 +570,13 @@ function stripMarkup(wikitext: string): string {
   text = text.replace(/<!--[\s\S]*?-->/g, "");
   text = text.replace(/<ref\b[^>]*\/\s*>/gi, "");
   text = text.replace(/<ref\b[^>]*>[\s\S]*?<\/ref\s*>/gi, "");
-  text = text.replace(/<[^>]+>/g, "");
+  text = removeHtmlTags(text);
+  // French Wikipedia writes an apostrophe before bold text as {{'}}, which
+  // renders "'"; removed with the other templates, L{{'}}'''anarchisme'''
+  // read "Lanarchisme".
+  text = text.replaceAll("{{'}}", "'");
   text = removeTemplates(text, "");
+  text = removeFileLinks(text);
   text = text.replace(/'''(.+?)'''/g, "$1");
   text = text.replace(/''(.+?)''/g, "$1");
   // A category tag is page metadata, not prose. Left in, its name joined the next
