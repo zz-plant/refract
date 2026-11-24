@@ -1,7 +1,7 @@
 # Source change review
 
-Report: 7890806ac77386e70b1f962fcf0e038e7fe46588839599e5751f60fcca87b504
-Analyzer: 0.8.0; scope: article revisions only.
+Report: 54a088ffea808034f01dac0788150b4bb23618ce3d8205fc37c03e9a8248c547
+Analyzer: 0.9.0; scope: article revisions only.
 
 ## Rivergate Library (fictional)
 
@@ -201,4 +201,4 @@ After:
 The library provides free printing for all registered members
 ```
 
-After inspecting the saved report: refract review --state-dir './review-state' --ack 7890806ac77386e70b1f962fcf0e038e7fe46588839599e5751f60fcca87b504
+After inspecting the saved report: refract review --state-dir './review-state' --ack 54a088ffea808034f01dac0788150b4bb23618ce3d8205fc37c03e9a8248c547

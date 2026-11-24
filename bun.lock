@@ -41,23 +41,23 @@
     },
     "packages/analyzers": {
       "name": "@refract-org/analyzers",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "dependencies": {
         "@refract-org/evidence-graph": "^0.5.6",
       },
     },
     "packages/cli": {
       "name": "@refract-org/cli",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "bin": {
         "refract": "dist/src/cli.js",
         "wikihistory": "dist/src/cli.js",
       },
       "dependencies": {
-        "@refract-org/analyzers": "^0.6.0",
+        "@refract-org/analyzers": "^0.7.0",
         "@refract-org/evidence-graph": "^0.5.6",
-        "@refract-org/ingestion": "^0.4.0",
-        "@refract-org/mcp": "^0.1.4",
+        "@refract-org/ingestion": "^0.5.0",
+        "@refract-org/mcp": "^0.1.5",
         "commander": "^12.0.0",
       },
       "optionalDependencies": {
@@ -78,18 +78,18 @@
     },
     "packages/ingestion": {
       "name": "@refract-org/ingestion",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@refract-org/evidence-graph": "^0.5.6",
       },
     },
     "packages/mcp": {
       "name": "@refract-org/mcp",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
-        "@refract-org/analyzers": "^0.6.0",
+        "@refract-org/analyzers": "^0.7.0",
         "@refract-org/evidence-graph": "^0.5.6",
-        "@refract-org/ingestion": "^0.4.0",
+        "@refract-org/ingestion": "^0.5.0",
       },
     },
     "packages/persistence": {
