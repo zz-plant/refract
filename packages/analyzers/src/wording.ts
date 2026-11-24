@@ -140,7 +140,7 @@ function withoutParentheticals(sentence: string): string {
 
 /** The title word a definitional sentence has to name: the first word of three letters or more that is not an article, disambiguation removed. */
 function subjectWord(title: string): string {
-  const words = [...fold(title.replace(/\([^)]*\)/g, " ")).matchAll(/[\p{L}\p{N}]+/gu)].map(([word]) => word);
+  const words = [...fold(withoutParentheticals(title)).matchAll(/[\p{L}\p{N}]+/gu)].map(([word]) => word);
   return words.find((word) => word.length >= 3 && !ARTICLES.has(word)) ?? words[0] ?? "";
 }
 
@@ -258,6 +258,16 @@ export function definitionalSentence(wikitext: string, title: string, options: D
   return null;
 }
 
+/** A word without the hyphens and apostrophes at its ends; those inside it stay. */
+function trimJoiners(word: string): string {
+  const joiner = (c: string) => c === "-" || c === "'" || c === "’";
+  let start = 0;
+  let end = word.length;
+  while (start < end && joiner(word[start])) start++;
+  while (end > start && joiner(word[end - 1])) end--;
+  return word.slice(start, end);
+}
+
 /** How many words definitionHead keeps. */
 const HEAD_WORDS = 12;
 
@@ -285,12 +295,7 @@ export function definitionHead(sentence: string, options: DefinitionOptions & { 
   const words = parts.after
     .slice(parts.headStart)
     .split(/\s+/)
-    .map((word) =>
-      word
-        .toLowerCase()
-        .replace(/[^\p{L}\p{N}'’-]+/gu, "")
-        .replace(/^['’-]+|['’-]+$/g, ""),
-    )
+    .map((word) => trimJoiners(word.toLowerCase().replace(/[^\p{L}\p{N}'’-]+/gu, "")))
     .filter(Boolean)
     .slice(0, HEAD_WORDS);
   return words.length > 0 ? words.join(" ") : null;
