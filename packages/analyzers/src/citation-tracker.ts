@@ -116,6 +116,90 @@ function matchSelfClosingRefs(text: string): Array<{ attrs: string; raw: string;
   return tags;
 }
 
+// Templates that cite a source in place of a <ref> tag. The sfn family
+// (shortened footnotes) generates its own footnote; the harv family is an
+// in-text Harvard citation, or, inside a <ref>, the text of that reference.
+const SHORT_FOOTNOTE_TEMPLATES = new Set([
+  "sfn",
+  "sfnp",
+  "sfnm",
+  "sfnmp",
+  "harv",
+  "harvp",
+  "harvnb",
+  "harvtxt",
+  "harvs",
+  "harvcol",
+  "harvcolnb",
+  "harvcoltxt",
+]);
+const TEMPLATE_NAME_CHAR = /[A-Za-z]/;
+
+/**
+ * Each sfn- or harv-family template (`{{sfn|Smith|2001|p=4}}`,
+ * `{{harvnb|Smith|2001}}`) outside a `<ref>…</ref>`, in order. One inside a
+ * reference is that reference's text and is already counted with it.
+ */
+export function matchShortFootnotes(text: string): Array<{ name: string; raw: string; start: number; end: number }> {
+  const refSpans = matchRefTags(text);
+  const found: Array<{ name: string; raw: string; start: number; end: number }> = [];
+  let from = 0;
+  let span = 0;
+  for (;;) {
+    const open = text.indexOf("{{", from);
+    if (open < 0) break;
+    let i = open + 2;
+    while (i < text.length && WHITESPACE.test(text[i])) i++;
+    let j = i;
+    while (j < text.length && TEMPLATE_NAME_CHAR.test(text[j])) j++;
+    const name = text.slice(i, j).toLowerCase();
+    let k = j;
+    while (k < text.length && WHITESPACE.test(text[k])) k++;
+    if (!SHORT_FOOTNOTE_TEMPLATES.has(name) || (text[k] !== "|" && !text.startsWith("}}", k))) {
+      from = open + 2;
+      continue;
+    }
+    let depth = 1;
+    let p = open + 2;
+    while (p < text.length && depth > 0) {
+      if (text.startsWith("{{", p)) {
+        depth++;
+        p += 2;
+      } else if (text.startsWith("}}", p)) {
+        depth--;
+        p += 2;
+      } else {
+        p++;
+      }
+    }
+    if (depth > 0) break;
+    while (span < refSpans.length && refSpans[span].end <= open) span++;
+    const insideRef = span < refSpans.length && refSpans[span].start <= open;
+    if (!insideRef) found.push({ name, raw: text.slice(open, p), start: open, end: p });
+    from = p;
+  }
+  return found;
+}
+
+/**
+ * How many times the text cites a source: `<ref>` tags (a reused
+ * `<ref name="x"/>` counts each time) and sfn/harv-family templates outside
+ * them. Articles that cite with shortened footnotes put few or no `<ref>`
+ * tags in their text, so counting tags alone read them as nearly uncited.
+ * A bibliography's `{{cite book}}` entries outside any reference are the
+ * sources those footnotes point to, not citations, and are not counted.
+ */
+export function countCitationsByKind(wikitext: string): { refTags: number; shortFootnotes: number; total: number } {
+  const refTags = Array.from(wikitext.matchAll(/<ref\b/gi)).length;
+  const shortFootnotes = matchShortFootnotes(wikitext).length;
+  return { refTags, shortFootnotes, total: refTags + shortFootnotes };
+}
+
+/** `countCitationsByKind(wikitext).total`. */
+export function countCitations(wikitext: string): number {
+  return countCitationsByKind(wikitext).total;
+}
+
 /**
  * /title\s*=\s*([^|}\]]+?)(?:\s*[|}\]])/i, trimmed: the value after the first
  * "title" (in any ASCII case) followed by "=" and at least one character before
@@ -315,6 +399,14 @@ export const citationTracker: CitationTracker = {
         refName: key,
         raw: tag.raw,
       });
+    }
+
+    // A shortened footnote is matched between revisions by its whole text,
+    // as an unnamed <ref> is; the same footnote cited twice is one citation.
+    for (const sfn of matchShortFootnotes(wikitext)) {
+      if (seen.has(sfn.raw)) continue;
+      seen.add(sfn.raw);
+      refs.push({ raw: sfn.raw });
     }
 
     return refs;

@@ -1,4 +1,10 @@
-import { findIdentityReverts, findSectionForText, revertDetector, stripWikitext } from "@refract-org/analyzers";
+import {
+  findIdentityReverts,
+  findSectionForText,
+  redactEditorIdentity,
+  revertDetector,
+  stripWikitext,
+} from "@refract-org/analyzers";
 import type { ClaimState, Revision } from "@refract-org/evidence-graph";
 import { createClaimIdentity } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
@@ -183,7 +189,7 @@ export async function runClaimHistory(
       adjacent: previous !== undefined && rev.parentId === previous.revId,
       before,
       after,
-      editSummary: rev.comment,
+      editSummary: redactEditorIdentity(rev.comment),
       revertSummary: revertDetector.isRevert(rev.comment),
       ...(restored !== undefined ? { restoresRevisionId: restored } : {}),
       heldRevisions: 0,

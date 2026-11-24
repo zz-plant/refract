@@ -11,6 +11,7 @@ import {
 } from "./citation-tracker.js";
 import type { CitationChange, CitationRef, Template, TemplateType } from "./index.js";
 import type { ProtectionLogRecord } from "./protection-tracker.js";
+import { redactEditorIdentity } from "./redact-editor-identity.js";
 import { findIdentityReverts, revertDetector } from "./revert-detector.js";
 import { sectionDiffer } from "./section-differ.js";
 import {
@@ -424,9 +425,9 @@ export function detectEditorialSignals(
       toRevisionId: after.revId,
       section: "",
       before: "",
-      after: isBrief ? "" : after.comment,
+      after: isBrief ? "" : redactEditorIdentity(after.comment),
       deterministicFacts: [
-        ...(isRevRevert ? [{ fact: "revert_detected", detail: after.comment }] : []),
+        ...(isRevRevert ? [{ fact: "revert_detected", detail: redactEditorIdentity(after.comment) }] : []),
         ...(restoredRevisionId !== undefined
           ? [{ fact: "identity_revert", detail: `restores=${restoredRevisionId}` }]
           : []),
@@ -454,7 +455,7 @@ export function detectEditorialSignals(
       after: log.action,
       deterministicFacts: [
         { fact: "protection_log_event", detail: `action=${log.action} logId=${log.logId}` },
-        ...(log.comment ? [{ fact: "protection_summary", detail: log.comment }] : []),
+        ...(log.comment ? [{ fact: "protection_summary", detail: redactEditorIdentity(log.comment) }] : []),
         ...extraFacts,
       ],
       layer: "policy_coded",

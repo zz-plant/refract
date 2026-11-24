@@ -97,8 +97,11 @@ export {
   citationTracker,
   classifyCitationAuthority,
   classifyCitationSource,
+  countCitations,
+  countCitationsByKind,
   extractCitationAnchors,
   extractCitationIdentifiers,
+  matchShortFootnotes,
   normalizeAnchor,
 } from "./citation-tracker.js";
 export type {
@@ -121,7 +124,13 @@ export type { HeuristicKind, HeuristicOptions, UserMetadata } from "./heuristic-
 export { classifyHeuristic } from "./heuristic-classifier.js";
 export type { ObservationDiff } from "./observation-differ.js";
 export { diffObservations } from "./observation-differ.js";
-export { buildPageMoveEvents, windowPageMoves } from "./page-move-detector.js";
+export {
+  buildPageMoveEvents,
+  mergePageMoves,
+  type PageMoveRecord,
+  pageMovesFromEditSummaries,
+  windowPageMoves,
+} from "./page-move-detector.js";
 export type {
   PropagationOptions,
   TextBorrowingSpan,
@@ -130,6 +139,7 @@ export type {
 export { detectTextPropagation } from "./propagation-detector.js";
 export type { ProtectionChange, ProtectionLogRecord, ProtectionTracker } from "./protection-tracker.js";
 export { protectionTracker } from "./protection-tracker.js";
+export { redactEditorIdentity } from "./redact-editor-identity.js";
 export { findIdentityReverts, revertDetector } from "./revert-detector.js";
 export type { ParsedContent, RevisionEventDepth, RevisionEventOptions } from "./revision-events.js";
 export {
@@ -168,7 +178,6 @@ export { buildWikilinkEvents, diffWikilinks, extractWikilinks } from "./wikilink
 export type { HeadingPosition } from "./wikitext-parser.js";
 export {
   buildSectionCharMap,
-  countCitations,
   countKeywordMentions,
   deriveSectionHeading,
   extractAnchorSnippet,

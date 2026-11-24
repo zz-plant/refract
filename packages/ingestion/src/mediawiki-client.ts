@@ -761,7 +761,9 @@ export class MediaWikiClient implements RevisionFetcher, RevisionSource, DiffFet
       batches.push(idsToFetch.slice(i, i + BATCH_SIZE));
     }
 
-    const concurrency = Math.max(1, Math.min(options?.concurrency ?? 4, 8));
+    // Wikimedia asks API clients to keep at most 3 requests in flight
+    // (https://www.mediawiki.org/wiki/Wikimedia_APIs/Rate_limits).
+    const concurrency = Math.max(1, Math.min(options?.concurrency ?? 3, 8));
     const fetchedByRevId = new Map<number, Revision>();
 
     let cursor = 0;
@@ -841,32 +843,48 @@ export class MediaWikiClient implements RevisionFetcher, RevisionSource, DiffFet
     pageTitle: string,
     options?: LongitudinalHistoryOptions,
   ): Promise<LongitudinalHistoryResult> {
-    const metadata = await this.fetchRevisionMetadata(pageTitle, {
+    const limit = options?.maxMetadataRevisions;
+    // One row past the limit tells a history that was cut short from one
+    // that happens to be exactly that long.
+    const fetched = await this.fetchRevisionMetadata(pageTitle, {
       start: options?.start,
       end: options?.end,
       startRevId: options?.startRevId,
       endRevId: options?.endRevId,
       direction: options?.direction ?? "older",
-      limit: options?.maxMetadataRevisions ?? 10_000,
+      ...(limit !== undefined ? { limit: limit + 1 } : {}),
     });
+    const truncated = limit !== undefined && fetched.length > limit;
+    const metadata = truncated ? fetched.slice(0, limit) : fetched;
 
     const sortedMeta = [...metadata].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const telemetry = computeFullHistoryTelemetry(sortedMeta);
-    const selectedMeta = selectLongitudinalRevisions(sortedMeta, options?.maxContentRevisions ?? 120);
+    const excludeOption = options?.excludeRevertedStates ?? true;
+    const selection = selectLongitudinalRevisionsWithExclusions(sortedMeta, options?.maxContentRevisions ?? 120, {
+      excludeRevertedStates: excludeOption,
+    });
     const metadataByRevId = new Map(sortedMeta.map((m) => [m.revId, m]));
     const revisions = await this.fetchRevisionsByIds(
-      selectedMeta.map((m) => m.revId),
+      selection.selected.map((m) => m.revId),
       {
-        concurrency: options?.concurrency ?? 4,
+        concurrency: options?.concurrency ?? 3,
         metadataByRevId,
       },
     );
 
     return {
       metadata: sortedMeta,
-      selectedMetadata: selectedMeta,
+      selectedMetadata: selection.selected,
       revisions,
       telemetry,
+      coverage: {
+        metadataRevisions: sortedMeta.length,
+        truncated,
+        ...(limit !== undefined ? { maxMetadataRevisions: limit } : {}),
+        direction: options?.direction ?? "older",
+        revertedStatesExcluded: selection.revertedStates.size,
+        ...(selection.windowHours !== undefined ? { revertedStateWindowHours: selection.windowHours } : {}),
+      },
     };
   }
 }
@@ -912,10 +930,36 @@ export interface FullHistoryTelemetry {
 export interface LongitudinalHistoryOptions extends RevisionOptions {
   /** Maximum number of full-text revisions to hydrate across the window (default: 120). */
   maxContentRevisions?: number;
-  /** Maximum number of metadata rows to scan at 500/request (default: 10,000). */
+  /**
+   * Maximum number of metadata rows to scan at 500/request. Default: no limit,
+   * so the whole history in the window is read. With a limit, the rows kept are
+   * the newest (`direction: "older"`, the default) or the oldest (`"newer"`),
+   * and `coverage.truncated` says whether rows were left out.
+   */
   maxMetadataRevisions?: number;
-  /** Parallel batch concurrency for `revids=` queries (default: 4). */
+  /** Parallel batch concurrency for `revids=` queries (default: 3, Wikimedia's limit). */
   concurrency?: number;
+  /**
+   * Leave states that a later edit reverted out of the hydrated sample, and
+   * fill their slots with states that survived. See `findRevertedStates`.
+   * `true` (the default) uses a 48-hour window; `false` keeps them.
+   * Telemetry is computed from the full metadata either way.
+   */
+  excludeRevertedStates?: boolean | { windowHours?: number };
+}
+
+export interface LongitudinalCoverage {
+  /** Metadata rows read, and the population telemetry was computed over. */
+  metadataRevisions: number;
+  /** Whether the page has revisions in the window that `maxMetadataRevisions` left out. */
+  truncated: boolean;
+  maxMetadataRevisions?: number;
+  /** Which end of the history was kept when truncated. */
+  direction: "older" | "newer";
+  /** Revisions left out of the sample as reverted states. */
+  revertedStatesExcluded: number;
+  /** The reverted-state window, when exclusion was on. */
+  revertedStateWindowHours?: number;
 }
 
 export interface LongitudinalHistoryResult {
@@ -923,6 +967,7 @@ export interface LongitudinalHistoryResult {
   selectedMetadata: RevisionMetadata[];
   revisions: Revision[];
   telemetry: FullHistoryTelemetry;
+  coverage: LongitudinalCoverage;
 }
 
 const SUMMARY_REVERT_REGEX =
@@ -1065,6 +1110,80 @@ export function computeFullHistoryTelemetry(metadata: readonly RevisionMetadata[
 export function selectLongitudinalRevisions(
   metadata: readonly RevisionMetadata[],
   maxRevisions: number = 120,
+  options?: SelectLongitudinalOptions,
+): RevisionMetadata[] {
+  return selectLongitudinalRevisionsWithExclusions(metadata, maxRevisions, options).selected;
+}
+
+export interface SelectLongitudinalOptions {
+  /**
+   * Leave out states a later edit reverted (`findRevertedStates`). `true` uses
+   * a 48-hour window. Default for this function: `false`, the selection it
+   * has always made; `fetchLongitudinalHistory` turns it on.
+   */
+  excludeRevertedStates?: boolean | { windowHours?: number };
+}
+
+const DEFAULT_REVERTED_STATE_WINDOW_HOURS = 48;
+
+/**
+ * Revisions whose state a later edit undid by restoring an earlier state.
+ *
+ * Revisions are read in time order, remembering the last revision with each
+ * `sha1`. When revision j has the same `sha1` as an earlier revision k that is
+ * not directly before it, j put k's text back, and every revision from k+1 to
+ * j−1 is a state that was reverted — provided the first of them, k+1, was
+ * made no more than `windowHours` before j. The window is measured from the
+ * first reverted edit rather than from k, so a page left alone for a year and
+ * then vandalised and reverted within the hour still counts. Revisions
+ * without a `sha1` (text suppressed) neither restore nor are matched.
+ */
+export function findRevertedStates(
+  metadata: readonly RevisionMetadata[],
+  windowHours: number = DEFAULT_REVERTED_STATE_WINDOW_HOURS,
+): Set<number> {
+  const sorted = [...metadata].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const windowMs = windowHours * 60 * 60 * 1000;
+  const lastIndexBySha1 = new Map<string, number>();
+  const reverted = new Set<number>();
+  for (let j = 0; j < sorted.length; j++) {
+    const sha1 = sorted[j].sha1;
+    if (!sha1) continue;
+    const k = lastIndexBySha1.get(sha1);
+    if (k !== undefined && j - k >= 2) {
+      const firstReverted = new Date(sorted[k + 1].timestamp).getTime();
+      if (new Date(sorted[j].timestamp).getTime() - firstReverted <= windowMs) {
+        for (let r = k + 1; r < j; r++) reverted.add(sorted[r].revId);
+      }
+    }
+    lastIndexBySha1.set(sha1, j);
+  }
+  return reverted;
+}
+
+function selectLongitudinalRevisionsWithExclusions(
+  metadata: readonly RevisionMetadata[],
+  maxRevisions: number,
+  options?: SelectLongitudinalOptions,
+): { selected: RevisionMetadata[]; revertedStates: Set<number>; windowHours?: number } {
+  const exclude = options?.excludeRevertedStates ?? false;
+  if (exclude === false) {
+    return { selected: selectFromSorted(metadata, maxRevisions), revertedStates: new Set() };
+  }
+  const windowHours =
+    (typeof exclude === "object" ? exclude.windowHours : undefined) ?? DEFAULT_REVERTED_STATE_WINDOW_HOURS;
+  const revertedStates = findRevertedStates(metadata, windowHours);
+  // Selection runs over the surviving states only, so size deltas and month
+  // anchors are measured between states readers saw for longer than the window.
+  // A revert then sits next to the state it restored, a zero-size transition.
+  const surviving = metadata.filter((m) => !revertedStates.has(m.revId));
+  return { selected: selectFromSorted(surviving, maxRevisions, true), revertedStates, windowHours };
+}
+
+function selectFromSorted(
+  metadata: readonly RevisionMetadata[],
+  maxRevisions: number,
+  skipUnchanged = false,
 ): RevisionMetadata[] {
   const sorted = [...metadata].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   if (sorted.length <= maxRevisions || maxRevisions < 2) {
@@ -1098,6 +1217,9 @@ export function selectLongitudinalRevisions(
     if (selectedIndices.has(i)) continue;
     const prev = sorted[i - 1];
     const cur = sorted[i];
+    // Among surviving states, a revert follows the state it restored: the text
+    // did not change, so neither it nor its parent adds a state to the sample.
+    if (skipUnchanged && cur.sha1 && cur.sha1 === prev.sha1) continue;
     const absDelta = Math.abs(cur.size - prev.size);
     const isRevert = SUMMARY_REVERT_REGEX.test(cur.comment);
     // Prioritize large structural additions/removals and significant reverts

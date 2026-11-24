@@ -18,9 +18,17 @@ Each Refract event describes what changed at a revision boundary. Events are det
 
 | Event type | Trigger |
 |---|---|
-| `citation_added` | New `<ref>` tag added |
-| `citation_removed` | Existing `<ref>` tag removed |
+| `citation_added` | New `<ref>` tag, or new shortened-footnote template (`{{sfn}}`, `{{sfnp}}`, `{{sfnm}}`, `{{harvnb}}`, `{{harvtxt}}` and the rest of the sfn and harv families) outside a `<ref>`, added |
+| `citation_removed` | Existing `<ref>` tag or shortened-footnote template removed |
 | `citation_replaced` | One citation swapped for another in the same position |
+
+A shortened footnote is matched between revisions by its whole text, as an
+unnamed `<ref>` is, so changing its page number reads as one removed and one
+added. One inside a `<ref>` is that reference's text and is not a second
+citation. A bibliography's `{{cite book}}` entries outside any reference are
+the sources the footnotes point to, not citations, and produce no citation
+events. `countCitations` counts the same way: on 2026-11-24 Anarchism's
+latest revision had 14 `<ref>` tags and 210 shortened footnotes.
 
 Citation events carry facts about the source and the passage it supports:
 
@@ -62,7 +70,20 @@ refract export "Page" --format ndjson |
 | `section_reorganized` | Sections added, removed, or reordered |
 | `lead_promotion` | Content moves from body into the lead section |
 | `lead_demotion` | Content moves from lead into the body |
-| `page_moved` | Page renamed (detected via logevents API) |
+| `page_moved` | Page renamed. Read from the move log and from the analyzed revisions' edit summaries; see below |
+
+MediaWiki's move log is keyed by the title a page was moved from, so asking it
+about the current title lists moves away from that title and never the moves
+into it: Pluto's moves back from "(134340) Pluto" and "Pluto (dwarf planet)"
+are not there. Each move also leaves a null revision in the moved page's
+history whose summary reads `X moved page [[A]] to [[B]]` (before 2012,
+`X moved [[A]] to [[B]]`), and those summaries give the rest. A move found
+both ways is reported once, as the log has it; one found only in a summary
+carries `page_move_source: edit_summary` and its `toRevisionId` is the null
+revision, where a logged move's is the log entry's ID. Only English summaries
+are read, and only those of the analyzed revisions, so a move whose null
+revision falls outside them is found only if it left the current title.
+Revisions read from `--dump` now report the moves their summaries name.
 
 ## Links and categories
 
@@ -77,10 +98,26 @@ refract export "Page" --format ndjson |
 
 | Event type | Trigger |
 |---|---|
-| `revert_detected` | The edit summary matches a default English or Arabic MediaWiki revert pattern (`revert…`, `undid revision`, `rvv`, `rollback`, `restore…`, `[[WP:ROLLBACK]]`, `استرجاع`, `رجوع`, `إلغاء تعديل`, `استعادة النسخة`; a bare "rv" or "undo" does not match), or the revision's text is identical to an earlier analyzed revision other than the one directly before it. Facts say which: `revert_detected` carries the summary, `identity_revert` names the revision restored (`restores=<revId>`). A revert to a state older than every analyzed revision is found only by its summary |
+| `revert_detected` | The edit summary matches a default English or Arabic MediaWiki revert pattern (`revert…`, `undid revision`, `rvv`, `rollback`, `restore…`, `[[WP:ROLLBACK]]`, `استرجاع`, `رجوع`, `إلغاء تعديل`, `استعادة النسخة`; a bare "rv" or "undo" does not match), or the revision's text is identical to an earlier analyzed revision other than the one directly before it. Facts say which: `revert_detected` carries the summary with editor names removed (see below), `identity_revert` names the revision restored (`restores=<revId>`). A revert to a state older than every analyzed revision is found only by its summary |
 | `edit_cluster_detected` | 3+ edits within a configurable time window (default: 1 hour). The fact's `detail` gives `revisions`, `editors` (a count of unique editors; no identities recorded), `window_ms` and `single_editor` |
 
 An `edit_cluster_detected` event spans the cluster: `fromRevisionId` is its first revision and `toRevisionId` its last. `--cluster-window` sets the window in minutes. When input revisions include editor usernames, `annotateEvents` attaches run-scoped pseudonymous actor cohorts (`actorCohort`, e.g. `Actor_1`, `revertedActorPseudonym: "Actor_2"`) without emitting raw usernames or changing `eventId` hashes.
+
+### Edit summaries carry no editor names
+
+Edit summaries name editors: MediaWiki's own revert summary reads
+"Reverted edits by [[Special:Contributions/X|X]] ([[User talk:X|talk]]) to
+last revision by Y", and tools write "Revert to revision 57480834 dated … by X
+using popups". Wherever summary text reaches an event (`revert_detected`'s
+`after` and fact, `protection_summary`, `page_moved`'s `comment=`, and
+`talk_page_correlated`'s `talk_comment=`) and in `refract claim`'s
+`editSummary`, Refract replaces with `[editor]`: links to user, user talk and
+contributions pages (with any interwiki prefix, in English and Arabic);
+`{{u|…}}`-style user templates; IPv4 and IPv6 addresses; the name after "by"
+when "by" follows edit(s), revision(s) or version(s) (with or without an ID),
+change(s), or a time of day; and the mover's name before "moved page". The
+revert pattern, revision IDs and stated reason are kept. A name typed into
+free prose without one of those markers is not caught.
 
 ## Talk page activity
 

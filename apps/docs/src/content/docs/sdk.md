@@ -84,7 +84,7 @@ const revisions = await client.fetchRevisions("Earth", { limit: 50 });
 
 **Multi-year longitudinal ingestion (fast metadata scan + SHA-1 deduplicated hydration)**:
 
-For high-traffic articles with thousands of revisions across multiple years, `fetchLongitudinalHistory` scans 100% of revision metadata at 500 revisions/request (`fetchRevisionMetadata`), computes full-history monthly velocity, summary/SHA-1 reverts, and pseudonymous revert pairs (`computeFullHistoryTelemetry`), selects stratified monthly checkpoints plus the largest structural deltas (`selectLongitudinalRevisions`), and hydrates their wikitext in parallel `revids=` batches with SHA-1 deduplication (`fetchRevisionsByIds`):
+For high-traffic articles with thousands of revisions across multiple years, `fetchLongitudinalHistory` scans 100% of revision metadata at 500 revisions/request (`fetchRevisionMetadata`), computes full-history monthly velocity, summary/SHA-1 reverts, and pseudonymous revert pairs (`computeFullHistoryTelemetry`), selects stratified monthly checkpoints plus the largest structural deltas (`selectLongitudinalRevisions`), leaving out states a later edit reverted within 48 hours (`findRevertedStates`; `excludeRevertedStates: false` keeps them), and hydrates their wikitext in parallel `revids=` batches with SHA-1 deduplication (`fetchRevisionsByIds`):
 
 ```typescript
 import { MediaWikiClient } from "@refract-org/ingestion";
@@ -92,17 +92,25 @@ import { MediaWikiClient } from "@refract-org/ingestion";
 const client = new MediaWikiClient({ apiUrl: "https://en.wikipedia.org/w/api.php" });
 const history = await client.fetchLongitudinalHistory("Climate change", {
   start: new Date("2023-01-01T00:00:00Z"),
-  maxMetadataRevisions: 10_000,
   maxContentRevisions: 60,
-  concurrency: 4,
+  concurrency: 3,
 });
 
 console.log("Total revisions scanned:", history.telemetry.totalRevisions);
 console.log("Summary / SHA-1 reverts:", history.telemetry.summaryReverts, history.telemetry.sha1IdentityReverts);
 console.log("Hydrated checkpoints:", history.revisions.length);
+if (history.coverage.truncated) console.warn("Metadata scan stopped at maxMetadataRevisions");
 ```
 
-Key exports: `MediaWikiClient` (class), `RevisionFetcher` (interface), `AuthConfig`, `computeFullHistoryTelemetry`, `selectLongitudinalRevisions`, `LongitudinalHistoryOptions`, `LongitudinalHistoryResult`, `FullHistoryTelemetry`, `RevisionMetadata`
+The metadata scan reads the whole history in the window unless
+`maxMetadataRevisions` is set; with a limit, `coverage.truncated` says whether
+revisions were left out, and `direction` decides which end was kept
+(`"older"`, the default, keeps the newest). Hydration keeps at most 3 requests
+in flight by default, the limit Wikimedia asks API clients to keep to.
+`coverage.revertedStatesExcluded` counts the revisions left out of the sample
+as reverted states; telemetry is computed from every metadata row either way.
+
+Key exports: `MediaWikiClient` (class), `RevisionFetcher` (interface), `AuthConfig`, `computeFullHistoryTelemetry`, `selectLongitudinalRevisions`, `findRevertedStates`, `LongitudinalHistoryOptions`, `LongitudinalHistoryResult`, `LongitudinalCoverage`, `SelectLongitudinalOptions`, `FullHistoryTelemetry`, `RevisionMetadata`
 
 **Wayback Machine, Git and snapshot revision sources**:
 
@@ -224,9 +232,10 @@ The events do not record which options produced them. Store the options with the
 Key exports:
 - **Event pipeline** (0.5.1+): `buildRevisionEvents`, `annotateEvents`, and the per-pair steps `parseContent`, `computeStructuralDiffs`, `detectEditorialSignals`
 - Instances: `sectionDiffer`, `citationTracker`, `revertDetector`, `templateTracker`, `protectionTracker`
-- Builders: `buildSectionLineage`, `buildSourceLineage`, `buildWikilinkEvents`, `buildPageMoveEvents`, `buildTalkThreadEvents`, `buildCategoryEvents`, `buildParamChangeEvents`
+- Builders: `buildSectionLineage`, `buildSourceLineage`, `buildWikilinkEvents`, `buildPageMoveEvents`, `pageMovesFromEditSummaries`, `mergePageMoves`, `buildTalkThreadEvents`, `buildCategoryEvents`, `buildParamChangeEvents`
 - Classifiers: `classifyHeuristic`
-- Parsers: `sanitizeWikitext`, `extractHeadingMap`, `extractWikilinks`, `extractCategories`, `countCitations`, `countKeywordMentions`, `deriveSectionHeading`, `findSectionForText` and `buildSectionCharMap` (0.5.1+)
+- Privacy: `redactEditorIdentity` (removes editor names from summary text)
+- Parsers: `sanitizeWikitext`, `extractHeadingMap`, `extractWikilinks`, `extractCategories`, `countCitations`, `countCitationsByKind`, `matchShortFootnotes`, `countKeywordMentions`, `deriveSectionHeading`, `findSectionForText` and `buildSectionCharMap` (0.5.1+)
 - Cross-revision: `correlateTalkRevisions`, `diffObservations`, `parseTalkThreads`, `diffTalkThreads`, `diffTemplateParams`, `diffCategories`, `diffWikilinks`
 - Clusters & activity: `detectEditClusters`, `detectTalkActivitySpikes`
 - **Semantic enrichment** (v0.5.0+): `computeCertaintyProfile`, `computeDirectionSignal`, `computeEditMagnitude`, `computeContentChange`, `extractKeyTerms`, `extractQuantitativeFindings`

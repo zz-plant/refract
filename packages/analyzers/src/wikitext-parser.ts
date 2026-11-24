@@ -466,10 +466,6 @@ export function deriveSectionHeading(wikitext: string, position: number): string
   return selected;
 }
 
-export function countCitations(wikitext: string): number {
-  return Array.from(wikitext.matchAll(/<ref\b/gi)).length;
-}
-
 export function countKeywordMentions(
   wikitext: string,
   phrases: string[],

@@ -1,4 +1,5 @@
 import type { AnalyzerConfig, EvidenceEvent, Revision } from "@refract-org/evidence-graph";
+import { redactEditorIdentity } from "./redact-editor-identity.js";
 
 const DEFAULT_WINDOW_BEFORE_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_WINDOW_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
@@ -54,7 +55,7 @@ export function correlateTalkRevisions(
         deterministicFacts: [
           {
             fact: "talk_page_correlated",
-            detail: `time_delta_hours=${deltaHours} talk_comment=${closest.comment.slice(0, 200)}`,
+            detail: `time_delta_hours=${deltaHours} talk_comment=${redactEditorIdentity(closest.comment).slice(0, 200)}`,
           },
         ],
         layer: "observed",

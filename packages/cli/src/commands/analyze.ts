@@ -6,6 +6,8 @@ import {
   buildTalkThreadEvents,
   detectEditClusters,
   detectTalkActivitySpikes,
+  mergePageMoves,
+  pageMovesFromEditSummaries,
   windowPageMoves,
 } from "@refract-org/analyzers";
 import type {
@@ -218,8 +220,9 @@ export async function runAnalyze(
 
   const events: EvidenceEvent[] = [];
 
-  // A dump or an archive holds the page's text and nothing else: its moves,
-  // protection log and talk page are not read, so no network is needed.
+  // A dump or an archive holds the page's text and nothing else: its move log,
+  // protection log and talk page are not read, so no network is needed. Moves
+  // its edit summaries name are still found below.
   const [pageMoves, protectionLogs, talkRevs] = source
     ? [[], [], []]
     : await Promise.all([
@@ -236,10 +239,13 @@ export async function runAnalyze(
           .then((revs) => [...revs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())),
       ]);
   // Bound moves to the analyzed span: the move log covers the page's whole
-  // lifetime, and a --since window must not open with moves from 2005.
+  // lifetime, and a --since window must not open with moves from 2005. The log
+  // only lists moves away from this title; moves into it are read from the
+  // analyzed revisions' edit summaries.
+  const allMoves = mergePageMoves(pageMoves, pageMovesFromEditSummaries(sortedRevs));
   events.push(
     ...buildPageMoveEvents(
-      windowPageMoves(pageMoves, sortedRevs[0].timestamp, sortedRevs[sortedRevs.length - 1].timestamp),
+      windowPageMoves(allMoves, sortedRevs[0].timestamp, sortedRevs[sortedRevs.length - 1].timestamp),
     ),
   );
 
