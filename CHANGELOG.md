@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 (2026-11-24)
 
 ### Added
 - **`fetchLongitudinalHistory` leaves reverted states out of its sample.** Of the 120 revisions it hydrated, 33 of Stoicism's and 44 of Pluto's were states a later edit undid within two days: vandalised leads, blankings, citations dropping to zero. `findRevertedStates(metadata, windowHours = 48)` finds them from `sha1` alone: when a revision restores an earlier revision's text, every revision between the two is a reverted state if the first of them came no more than `windowHours` before the restoration. `fetchLongitudinalHistory` now picks its sample from the surviving states (`excludeRevertedStates`, on by default; `false` keeps them, `{ windowHours }` changes the window), so those slots go to states readers saw; both pages' samples now hold none. Telemetry is still computed over every revision. `selectLongitudinalRevisions` takes the same option as a third argument, off by default, so its selection is unchanged unless asked.
