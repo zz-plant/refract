@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { countCitations } from "../citation-tracker.js";
 import {
   buildSectionCharMap,
-  countCitations,
   countKeywordMentions,
   deriveSectionHeading,
   extractAnchorSnippet,

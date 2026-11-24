@@ -20,7 +20,7 @@ bun add @refract-org/analyzers
 
 ### Utilities
 
-- `sanitizeWikitext`, `extractHeadingMap`, `deriveSectionHeading`, `countCitations`, `countKeywordMentions`, `extractAnchorSnippet` — wikitext parsing helpers
+- `sanitizeWikitext`, `extractHeadingMap`, `deriveSectionHeading`, `countCitations`, `countCitationsByKind`, `matchShortFootnotes`, `countKeywordMentions`, `extractAnchorSnippet` — wikitext parsing helpers
 - `findSectionForText`, `buildSectionCharMap` — which section a sentence sits in
 
 ### Builders

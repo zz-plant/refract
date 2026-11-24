@@ -112,7 +112,9 @@ export {
   DEFAULT_USER_AGENT,
   type ExternalLinkUsage,
   type FullHistoryTelemetry,
+  findRevertedStates,
   type LanguageLink,
+  type LongitudinalCoverage,
   type LongitudinalHistoryOptions,
   type LongitudinalHistoryResult,
   MediaWikiApiError,
@@ -120,6 +122,7 @@ export {
   type MonthlyVelocityBucket,
   type RevisionMetadata,
   retryAfterMs,
+  type SelectLongitudinalOptions,
   type SiteInfo,
   selectLongitudinalRevisions,
 } from "./mediawiki-client.js";

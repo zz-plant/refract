@@ -65,6 +65,8 @@ export interface TemplateChange {
   template: Template;
 }
 
+// Defined in evidence-graph so ingestion can use it too; re-exported here, where it was first published.
+export { redactEditorIdentity } from "@refract-org/evidence-graph";
 export type { RegisteredAnalyzer } from "./analyzer-registry.js";
 export { AnalyzerRegistry, registry } from "./analyzer-registry.js";
 export type {
@@ -97,8 +99,11 @@ export {
   citationTracker,
   classifyCitationAuthority,
   classifyCitationSource,
+  countCitations,
+  countCitationsByKind,
   extractCitationAnchors,
   extractCitationIdentifiers,
+  matchShortFootnotes,
   normalizeAnchor,
 } from "./citation-tracker.js";
 export type {
@@ -121,7 +126,13 @@ export type { HeuristicKind, HeuristicOptions, UserMetadata } from "./heuristic-
 export { classifyHeuristic } from "./heuristic-classifier.js";
 export type { ObservationDiff } from "./observation-differ.js";
 export { diffObservations } from "./observation-differ.js";
-export { buildPageMoveEvents, windowPageMoves } from "./page-move-detector.js";
+export {
+  buildPageMoveEvents,
+  mergePageMoves,
+  type PageMoveRecord,
+  pageMovesFromEditSummaries,
+  windowPageMoves,
+} from "./page-move-detector.js";
 export type {
   PropagationOptions,
   TextBorrowingSpan,
@@ -168,7 +179,6 @@ export { buildWikilinkEvents, diffWikilinks, extractWikilinks } from "./wikilink
 export type { HeadingPosition } from "./wikitext-parser.js";
 export {
   buildSectionCharMap,
-  countCitations,
   countKeywordMentions,
   deriveSectionHeading,
   extractAnchorSnippet,

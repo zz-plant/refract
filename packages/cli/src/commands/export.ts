@@ -12,7 +12,7 @@ import type { AuthConfig } from "@refract-org/ingestion";
 import { renderHtmlReport } from "../html-renderer.js";
 import { REFRACT_VERSION } from "../version.js";
 import { runAnalyze } from "./analyze.js";
-import { forEachPage } from "./batch.js";
+import { DEFAULT_BATCH_CONCURRENCY, forEachPage } from "./batch.js";
 import type { RevisionSourceSpec } from "./revision-source.js";
 
 interface EvidenceBundle {
@@ -52,7 +52,7 @@ export async function runBatchExport(
   let total = 0;
   const { failed } = await forEachPage(
     titles,
-    options.concurrency ?? 4,
+    options.concurrency ?? DEFAULT_BATCH_CONCURRENCY,
     (title) =>
       runAnalyze(
         title,

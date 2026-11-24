@@ -36,7 +36,7 @@ const history = await client.fetchLongitudinalHistory(PAGE, {
   direction: "newer",
   maxMetadataRevisions: 5_000,
   maxContentRevisions: 24,
-  concurrency: 4,
+  concurrency: 3,
 });
 
 const fetchSec = ((Date.now() - t0) / 1000).toFixed(1);

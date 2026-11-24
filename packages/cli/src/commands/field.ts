@@ -1,7 +1,7 @@
 import { sanitizeWikitext, templateTracker } from "@refract-org/analyzers";
 import type { Revision } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
-import { forEachPage } from "./batch.js";
+import { DEFAULT_BATCH_CONCURRENCY, forEachPage } from "./batch.js";
 import { type ClaimRange, fetchRevisionRange } from "./claim.js";
 import type { RevisionSourceSpec } from "./revision-source.js";
 
@@ -228,7 +228,7 @@ export async function runFieldBatch(
   apiUrl?: string,
   auth?: AuthConfig,
   revisionLimit?: number,
-  concurrency = 4,
+  concurrency = DEFAULT_BATCH_CONCURRENCY,
   output: { json?: boolean; write?: (line: string) => void } = {},
   source?: RevisionSourceSpec,
 ): Promise<{ failed: number }> {

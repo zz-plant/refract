@@ -53,7 +53,7 @@ Refract reports what changed. Why it changed, and whether that matters, is for y
 - **Developers feeding wiki content to RAG pipelines or agents** who need change events alongside the current text.
 - **Anyone who relies on a set of wiki pages** and wants to see what changed since they last checked.
 
-Refract reads Wikipedia and any other MediaWiki wiki. It does not fetch arbitrary web pages; the libraries accept versioned text you supply. Events carry no editor identity, and the [misuse policy](./MISUSE_POLICY.md) rules out editor targeting.
+Refract reads Wikipedia and any other MediaWiki wiki. It does not fetch arbitrary web pages; the libraries accept versioned text you supply. Events carry no editor identity: editor names in edit summaries are replaced with `[editor]` before the text reaches an event ([details](./docs/events.md#edit-summaries-carry-no-editor-names)), and the [misuse policy](./MISUSE_POLICY.md) rules out editor targeting.
 
 ## Questions it answers
 

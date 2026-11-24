@@ -32,6 +32,7 @@ export {
   buildInferencePrompt,
   parseInferenceResponse,
 } from "./inference.js";
+export { redactEditorIdentity } from "./redact-editor-identity.js";
 export type {
   BundleSignature,
   BundleSignatureResult,

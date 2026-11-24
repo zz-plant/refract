@@ -275,7 +275,7 @@ describe("claim history transitions", () => {
     const { transitions } = await read();
     expect(transitions[2]).toMatchObject({
       kind: "reintroduced",
-      editSummary: "Undid revision 4 by Example",
+      editSummary: "Undid revision 4 by [editor]",
       revertSummary: true,
       restoresRevisionId: 3,
     });

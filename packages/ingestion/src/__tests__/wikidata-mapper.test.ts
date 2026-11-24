@@ -305,4 +305,22 @@ describe("wikidataStatementHistory", () => {
       { type: "time", value: "+2024-01-15T00:00:00Z", precision: 11 },
     ]);
   });
+
+  it("carries no editor names in edit summaries", () => {
+    const history = wikidataStatementHistory(
+      "Q100",
+      [
+        rev(10, 9, "02", JSON.stringify(entityJson([office("Q1")]))),
+        rev(
+          20,
+          10,
+          "18",
+          JSON.stringify(entityJson([office("Q1"), office("Q2")])),
+          "Undid revision 15 by [[Special:Contributions/Example|Example]] ([[User talk:Example|talk]])",
+        ),
+      ],
+      { properties: ["P488"] },
+    );
+    expect(history.transitions.map((t) => t.editSummary)).toEqual(["Undid revision 15 by [editor]"]);
+  });
 });

@@ -1,5 +1,5 @@
 import type { DeterministicFact, EvidenceEvent, EvidenceLayer, Revision, Section } from "@refract-org/evidence-graph";
-import { EVENT_SCHEMA_VERSION } from "@refract-org/evidence-graph";
+import { EVENT_SCHEMA_VERSION, redactEditorIdentity } from "@refract-org/evidence-graph";
 import { diffCategories, extractCategories } from "./category-tracker.js";
 import {
   type CitationAnchors,
@@ -424,9 +424,9 @@ export function detectEditorialSignals(
       toRevisionId: after.revId,
       section: "",
       before: "",
-      after: isBrief ? "" : after.comment,
+      after: isBrief ? "" : redactEditorIdentity(after.comment),
       deterministicFacts: [
-        ...(isRevRevert ? [{ fact: "revert_detected", detail: after.comment }] : []),
+        ...(isRevRevert ? [{ fact: "revert_detected", detail: redactEditorIdentity(after.comment) }] : []),
         ...(restoredRevisionId !== undefined
           ? [{ fact: "identity_revert", detail: `restores=${restoredRevisionId}` }]
           : []),
@@ -454,7 +454,7 @@ export function detectEditorialSignals(
       after: log.action,
       deterministicFacts: [
         { fact: "protection_log_event", detail: `action=${log.action} logId=${log.logId}` },
-        ...(log.comment ? [{ fact: "protection_summary", detail: log.comment }] : []),
+        ...(log.comment ? [{ fact: "protection_summary", detail: redactEditorIdentity(log.comment) }] : []),
         ...extraFacts,
       ],
       layer: "policy_coded",

@@ -1,4 +1,10 @@
-import { citationTracker, revertDetector, sectionDiffer, templateTracker } from "@refract-org/analyzers";
+import {
+  citationTracker,
+  redactEditorIdentity,
+  revertDetector,
+  sectionDiffer,
+  templateTracker,
+} from "@refract-org/analyzers";
 import type { EvidenceEvent, EvidenceLayer } from "@refract-org/evidence-graph";
 import type { AuthConfig } from "@refract-org/ingestion";
 import { MediaWikiClient } from "@refract-org/ingestion";
@@ -103,8 +109,8 @@ export async function runWatch(
               toRevisionId: rev.revId,
               section: "",
               before: "",
-              after: rev.comment,
-              deterministicFacts: [{ fact: "revert_detected", detail: rev.comment }],
+              after: redactEditorIdentity(rev.comment),
+              deterministicFacts: [{ fact: "revert_detected", detail: redactEditorIdentity(rev.comment) }],
               layer,
               timestamp: rev.timestamp,
             });
