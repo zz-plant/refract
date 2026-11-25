@@ -3,21 +3,11 @@ name: Docs site
 # apps/docs, the public documentation site. Separate from the CI gate so a site
 # change cannot block an engine release, and the engine gate does not wait on
 # the site build.
+# Pull requests only. The lint and tests already passed on the pull request,
+# and on main docs-deploy.yml builds the site on the same paths before
+# deploying it, so a push run here repeated both.
 on:
   pull_request:
-    branches: [main]
-    paths:
-      - apps/docs/**
-      - docs/**
-      # The site's logo is the brand mark itself.
-      - assets/brand/**
-      # The site builds the viewer into viewer/ (apps/docs/viewer.mjs). Its
-      # event types are erased at build time, so evidence-graph is not listed.
-      - apps/ui/**
-      - package.json
-      - bun.lock
-      - .github/workflows/docs-site.yml
-  push:
     branches: [main]
     paths:
       - apps/docs/**
