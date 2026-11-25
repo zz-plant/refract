@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.1 (2026-11-25)
+
+### Fixed
+- **Moves made without leaving a redirect are read (#107).** `pageMovesFromEditSummaries` allowed only "over redirect" between the titles and the reason, so `moved page [[A]] to [[B]] without leaving a redirect: …` and `… over a redirect without leaving a redirect` matched nothing. The 2024 move of Bangalore to Bengaluru reads the first way, so moves-into missed the move that gave the article its current title.
+- **Sentences end after era abbreviations (#108).** The sentence splitter behind `definitionalSentence` never ended a sentence after a single letter and a stop, so "… founded in Athens in the early third century B.C. The stoics considered …" was one sentence, and Stoicism's 2009 definition quoted both. "B.C.", "B.C.E.", "A.D." and "C.E." now end a sentence when a capitalised word follows; other initials still don't ("U.S. Army"), and "A.D. 79" is unchanged because a digit follows.
+- **Origin copulas are not definitions (#108).** `definitionalSentence` took "The word anarchism is derived from the Greek …" and "Mutualism is based on a labor theory of value" as definitions when the first sentence did not qualify. In English, "is derived from", "based on", "named after", "pronounced", "taken from" or "borrowed from" right after the copula disqualifies the sentence, and `definitionHead` returns null for it. A participle later in the phrase ("a poem based on fourteen lines") still counts.
+- **Character references are decoded (#108).** `stripWikitext`, and `stripLead`, `stripSection` and `definitionalSentence` with it, left `&#945;`, `&#x3B1;`, `&nbsp;` and `&mdash;` in the text, so definition heads picked up runs of digits and stripped prose did not read as the page does. Numeric references and a short list of named ones (`nbsp`, `amp`, `lt`, `gt`, `quot`, `apos`, `ndash`, `mdash`, `minus`, `hellip`, `thinsp`) are decoded in one pass, so `&amp;lt;` stays the text `&lt;`; unknown names and invalid code points stay as written. **Sentence and citation events on pages that use character references change, and their `eventId`s with them.** The saved examples are unchanged.
+- **`move_prot` is typed (#108).** The protection log returns `move_prot` when protection moves with a page to its new title, but `ProtectionLogEvent.action` and the analyzers' `ProtectionLogRecord.action` left it out and a cast hid it. Both include it; the protection tracker changes no state for it, as before.
+- **`selectLongitudinalRevisions` respects budgets under two (#108).** A `maxRevisions` of 0 or 1 returned every revision. It now returns none for 0 and the latest revision for 1.
+
 ## 0.9.0 (2026-11-24)
 
 ### Added
