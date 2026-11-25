@@ -4,17 +4,10 @@ name: Viewer
 # from packages/evidence-graph (types only, nothing bundled) and its contract
 # test reads the engine output captured under docs/examples, so a change to
 # either runs this too: that is where the viewer and the engine can drift.
+# Pull requests only: the push to main after a merge re-ran the suite on the
+# tree its pull request had already passed.
 on:
   pull_request:
-    branches: [main]
-    paths:
-      - apps/ui/**
-      - packages/evidence-graph/**
-      - docs/examples/**
-      - package.json
-      - bun.lock
-      - .github/workflows/viewer.yml
-  push:
     branches: [main]
     paths:
       - apps/ui/**

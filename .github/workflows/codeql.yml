@@ -1,7 +1,8 @@
 name: CodeQL Analysis
+# Pull requests and the weekly scan. The push to main after a merge analysed
+# the tree its pull request had just analysed; the Monday run keeps main's
+# baseline for code scanning current.
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   schedule:

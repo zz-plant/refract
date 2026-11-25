@@ -5,18 +5,10 @@ name: Python adapter
 # under docs/examples, so a change to the CLI, the schema or those files runs
 # it too. Separate from the CI gate: a Python failure cannot block an engine
 # release.
+# Pull requests only: the push to main after a merge re-ran the suite on the
+# tree its pull request had already passed.
 on:
   pull_request:
-    branches: [main]
-    paths:
-      - clients/python/**
-      - packages/cli/**
-      - packages/evidence-graph/**
-      - docs/examples/**
-      - package.json
-      - bun.lock
-      - .github/workflows/python.yml
-  push:
     branches: [main]
     paths:
       - clients/python/**
