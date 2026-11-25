@@ -86,7 +86,8 @@ export interface ProtectionLogEvent {
   pageTitle: string;
   timestamp: string;
   comment: string;
-  action: "protect" | "unprotect" | "modify";
+  /** "move_prot": the protection moved with the page to its new title. */
+  action: "protect" | "unprotect" | "modify" | "move_prot";
   /**
    * The edit protection the entry set (the create protection for a page
    * protected from being created), from the entry's details, or else from the

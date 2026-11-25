@@ -645,3 +645,13 @@ describe("sanitizeWikitext on list templates", () => {
     }
   });
 });
+
+describe("character references", () => {
+  it("reads numeric and common named references as a reader sees them, in one pass", () => {
+    expect(
+      stripWikitext("Greek &#945; and &#x3B1;, a half-life of 20&nbsp;seconds &mdash; and &amp;lt;b&amp;gt; as text."),
+    ).toBe("Greek α and α, a half-life of 20 seconds — and &lt;b&gt; as text.");
+    // Unknown names and impossible code points stay as written.
+    expect(stripWikitext("&madeup; &#xD800; &#1114112;")).toBe("&madeup; &#xD800; &#1114112;");
+  });
+});

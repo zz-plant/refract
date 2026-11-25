@@ -7,7 +7,8 @@ export interface ProtectionLogRecord {
   pageTitle: string;
   timestamp: string;
   comment: string;
-  action: "protect" | "unprotect" | "modify";
+  /** "move_prot" carries protection to a moved page's new title and changes no state here. */
+  action: "protect" | "unprotect" | "modify" | "move_prot";
   /** Who may edit after the entry: `semi` (autoconfirmed), `extended` (extended-confirmed), `full` (administrators), `template` (template editors). */
   level?: "semi" | "extended" | "full" | "template";
   /**

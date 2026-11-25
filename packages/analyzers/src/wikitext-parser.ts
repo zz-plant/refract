@@ -589,7 +589,35 @@ function stripMarkup(wikitext: string): string {
   text = text.replace(/\[\[[a-z][a-z0-9_-]*:[^\]]*\]\]/g, "");
   text = text.replace(/\[\[([^\]|]+?)\]\]/g, "$1");
   text = text.replace(/\[\[[^\]]+?\|([^\]]+?)\]\]/g, "$1");
-  return text;
+  return decodeEntities(text);
+}
+
+/** Named entities common in article prose; a no-break space reads as a space. */
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: " ",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  ndash: "\u2013",
+  mdash: "\u2014",
+  minus: "\u2212",
+  hellip: "\u2026",
+  thinsp: " ",
+};
+
+/**
+ * Character references as a reader sees them: "&#945;" and "&#x3B1;" read "α", "20&nbsp;seconds" reads
+ * "20 seconds". One pass, so "&amp;lt;" stays the text "&lt;". Unknown names and invalid code points stay as written.
+ */
+function decodeEntities(text: string): string {
+  if (!text.includes("&")) return text;
+  return text.replace(/&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z]+));/g, (whole, dec, hex, name) => {
+    if (name) return NAMED_ENTITIES[name] ?? whole;
+    const code = dec ? Number(dec) : Number.parseInt(hex, 16);
+    return code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff) ? String.fromCodePoint(code) : whole;
+  });
 }
 
 export interface HeadingPosition {

@@ -168,6 +168,9 @@ interface DefinitionParts {
  * after it, as German word order puts it after an opening phrase ("Im engeren
  * Sinn ist der Anarchismus …") and Spanish and French naming verbs do.
  */
+/** Participles after an English copula that make the sentence about the subject's origin or name, not a definition. */
+const NOT_DEFINING = /^\s*(?:derived|based|named|pronounced|taken|borrowed)\s+(?:from|on|upon|after|for|as)\b/i;
+
 function splitDefinition(
   sentence: string,
   subject: string | undefined,
@@ -178,6 +181,8 @@ function splitDefinition(
   const verb = copula.exec(clean);
   if (!verb) return null;
   const after = clean.slice(verb.index + verb[0].length);
+  // A passive "is derived from", "is based on" or "is named after" tells where the subject comes from, not what it is.
+  if (lang === "en" && NOT_DEFINING.test(after)) return null;
   if (subject === undefined || names(clean.slice(0, verb.index), subject)) return { after, headStart: 0 };
   if (lang === "en") return null;
   const words = [...after.matchAll(/\S+/g)].slice(0, SUBJECT_AFTER_VERB_WORDS);
@@ -187,6 +192,8 @@ function splitDefinition(
 
 /** Words that end in "." without ending a sentence. A single letter followed by "." (an initial, "z. B.") never ends one either. */
 const ABBREVIATIONS = new Set("ca approx bzw vgl sog st dr mr mrs ms jr sr nr chr sra mme mlle".split(" "));
+/** Era abbreviations written with stops, at the end of the text so far: "B.C.", "B.C.E.", "A.D.", "C.E.". */
+const ERA = /(?:^|[^\p{L}.])(?:B\.C\.(?:E\.)?|A\.D\.|C\.E\.)$/u;
 
 /**
  * The sentences of one line of prose. A sentence ends at ".", "!" or "?"
@@ -209,7 +216,14 @@ function sentences(line: string, lang: string): string[] {
       let wordStart = i;
       while (wordStart > start && LETTER_OR_DIGIT.test(line[wordStart - 1])) wordStart--;
       const word = line.slice(wordStart, i);
-      if (word.length === 1 && /\p{L}/u.test(word)) continue;
+      // An era abbreviation ends a sentence when a capitalised word follows ("… third century B.C. The
+      // stoics …"); other initials ("U.S. Army", "z. B.") don't. "A.D." before a year is followed by a digit.
+      if (
+        word.length === 1 &&
+        /\p{L}/u.test(word) &&
+        !(ERA.test(line.slice(start, i + 1)) && /^\s+\p{Lu}/u.test(line.slice(i + 1, i + 3)))
+      )
+        continue;
       if (ABBREVIATIONS.has(word.toLowerCase())) continue;
       if (lang === "de" && /^\d+$/.test(word)) continue;
     }

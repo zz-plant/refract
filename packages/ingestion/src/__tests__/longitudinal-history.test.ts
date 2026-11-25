@@ -460,3 +460,24 @@ describe("fetchLongitudinalHistory", () => {
     expect(fakeMediaWikiStats.maxInFlight).toBe(3);
   });
 });
+
+describe("selectLongitudinalRevisions with a tiny budget", () => {
+  const meta = (revId: number, day: number): RevisionMetadata => ({
+    revId,
+    parentId: revId - 1,
+    pageId: 1,
+    pageTitle: "P",
+    timestamp: new Date(START + day * 24 * HOUR).toISOString(),
+    comment: "",
+    size: 10 * revId,
+    minor: false,
+    sha1: `s${revId}`,
+  });
+  const history = [meta(1, 0), meta(2, 1), meta(3, 2), meta(4, 3)];
+
+  it("returns nothing for a budget of zero and only the latest state for one", () => {
+    expect(selectLongitudinalRevisions(history, 0)).toEqual([]);
+    expect(selectLongitudinalRevisions(history, 1).map((m) => m.revId)).toEqual([4]);
+    expect(selectLongitudinalRevisions(history, 9).map((m) => m.revId)).toEqual([1, 2, 3, 4]);
+  });
+});

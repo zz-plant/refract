@@ -404,7 +404,7 @@ export class MediaWikiClient implements RevisionFetcher, RevisionSource, DiffFet
             pageTitle: entry.title,
             timestamp: entry.timestamp,
             comment,
-            action: entry.action as "protect" | "unprotect" | "modify",
+            action: entry.action as ProtectionLogEvent["action"],
             ...(level ? { level } : {}),
             reasonCategory: protectionReasonCategory(comment),
           });
@@ -1469,9 +1469,9 @@ function selectFromSorted(
   options: { skipUnchanged?: boolean; timeCoverage?: number } = {},
 ): RevisionMetadata[] {
   const sorted = [...metadata].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  if (sorted.length <= maxRevisions || maxRevisions < 2) {
-    return sorted.slice(0, Math.max(sorted.length, maxRevisions));
-  }
+  if (sorted.length <= maxRevisions) return sorted;
+  // Too small a budget for the first and the last: none, or only the latest state.
+  if (maxRevisions < 2) return maxRevisions >= 1 ? sorted.slice(-1) : [];
 
   const selectedIndices = new Set<number>([0, sorted.length - 1]);
 
