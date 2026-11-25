@@ -164,3 +164,32 @@ describe("definitionHead", () => {
     expect(definitionHead("There are many types of anarchism.", { title: "Anarchism" })).toBeNull();
   });
 });
+
+describe("sentence ends and non-defining copulas", () => {
+  it("ends a sentence after an era abbreviation followed by a capital, and not after other initials", () => {
+    const stoicism =
+      "'''Stoicism''' was a school of [[Hellenistic philosophy]] founded in Athens in the early third century B.C. The stoics considered destructive emotions to be errors of judgment.";
+    expect(definitionalSentence(stoicism, "Stoicism")).toBe(
+      "Stoicism was a school of Hellenistic philosophy founded in Athens in the early third century B.C.",
+    );
+    // An initialism mid-sentence, and "A.D." before a year, still don't end one.
+    expect(
+      definitionalSentence("'''Fort Knox''' is a U.S. Army installation in Kentucky. It holds gold.", "Fort Knox"),
+    ).toBe("Fort Knox is a U.S. Army installation in Kentucky.");
+    expect(
+      definitionalSentence("'''Pompeii''' was a city buried in A.D. 79 by Vesuvius. It lay near Naples.", "Pompeii"),
+    ).toBe("Pompeii was a city buried in A.D. 79 by Vesuvius.");
+  });
+
+  it("skips sentences about where the subject or its name comes from", () => {
+    const lead =
+      "The word '''anarchism''' is derived from the Greek ''anarkhia''.\n\n'''Anarchism''' is a political philosophy that rejects involuntary authority.";
+    expect(definitionalSentence(lead, "Anarchism")).toBe(
+      "Anarchism is a political philosophy that rejects involuntary authority.",
+    );
+    expect(definitionHead("Mutualism is based on a labor theory of value.")).toBeNull();
+    expect(definitionHead("Pluto is named after the Roman god of the underworld.")).toBeNull();
+    // A participle that is part of a definition stays.
+    expect(definitionHead("A sonnet is a poem based on fourteen lines.")).toBe("a poem based on fourteen lines");
+  });
+});
