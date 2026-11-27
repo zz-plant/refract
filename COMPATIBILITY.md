@@ -23,21 +23,22 @@ as this tree. `publish.yml` publishes in the order the script prints.
 
 ## Version Matrix
 
-| Package | In this tree | On npm (2026-11-12) | Downstream consumers |
+| Package | In this tree | On npm (2026-11-27) | Downstream consumers |
 |---|---|---|---|
-| `@refract-org/evidence-graph` | 0.5.4 | 0.5.4 | every package; NextConsensus; `apps/ui` (types only, from this tree) |
-| `@refract-org/ingestion` | 0.3.5 | 0.3.5 | mcp, cli; NextConsensus |
-| `@refract-org/analyzers` | 0.5.4 | 0.5.4 | mcp, cli; NextConsensus |
-| `@refract-org/mcp` | 0.1.1 | 0.1.1 | cli |
-| `@refract-org/eval` | 0.2.3 | 0.2.3 | cli (optional) |
-| `@refract-org/cli` | 0.6.1 | 0.6.1 | `clients/python`, Docker image, operators |
+| `@refract-org/evidence-graph` | 0.5.6 | 0.5.6 | every package; NextConsensus; ism.wiki; `apps/ui` (types only, from this tree) |
+| `@refract-org/ingestion` | 0.5.1 | 0.5.1 | mcp, cli; NextConsensus; ism.wiki |
+| `@refract-org/analyzers` | 0.7.1 | 0.7.1 | mcp, cli; NextConsensus; ism.wiki |
+| `@refract-org/mcp` | 0.1.6 | 0.1.6 | cli |
+| `@refract-org/eval` | 0.2.4 | 0.2.4 | cli (optional) |
+| `@refract-org/cli` | 0.9.1 | 0.9.1 | `clients/python`, Docker image, operators; NextConsensus (run, not imported) |
 | `@refract-org/persistence` | 0.1.1 | private | cli `--cache` from a source checkout |
 
 The npm column is what the registry served on that date. The 0.6.0 tag published
 `evidence-graph`, `ingestion` and `analyzers` and then failed on `mcp`, so
-CLI 0.6.0 never reached npm. The 0.6.1 tag published all six public packages:
-`npm install @refract-org/cli@0.6.1` into an empty directory resolves the tree
-column, and `refract --version` prints 0.6.1. The CLI on npm before 0.5.17 was 0.5.7,
+CLI 0.6.0 never reached npm. The 0.6.1 tag published all six public packages.
+On 2026-11-27, `npm install @refract-org/cli@0.9.1` into an empty directory
+resolves the tree column, and `refract --version` prints 0.9.1. The CLI on npm
+before 0.5.17 was 0.5.7,
 which does not start: it declares `@refract-org/analyzers@^0.3.0` and imports code
 that only analyzers 0.5.0 has.
 
@@ -45,7 +46,8 @@ that only analyzers 0.5.0 has.
 
 | Repo/Dir | Depends On | Current Version | Update When |
 |---|---|---|---|
-| NextConsensus (`nextconsensus`, `nextconsensus-app`) | `@refract-org/analyzers@^0.5.0`, `@refract-org/evidence-graph@^0.5.0`, `@refract-org/ingestion@^0.3.1`, each through one adapter file per repo | 0.5.0 / 0.5.0 / 0.3.1 | any library release; see [docs/refract-and-nextconsensus.md](./docs/refract-and-nextconsensus.md) |
+| NextConsensus (`nextconsensus`, one repository; its app is at `apps/workbench`) | `@refract-org/analyzers@^0.7.1`, `@refract-org/evidence-graph@^0.5.6`, `@refract-org/ingestion@^0.5.1`, through one adapter file; some scripts run `@refract-org/cli@^0.9.1` | 0.7.1 / 0.5.6 / 0.5.1 (2026-11-27) | any library release, and any CLI minor release its scripts should reach; see [docs/refract-and-nextconsensus.md](./docs/refract-and-nextconsensus.md) |
+| ism.wiki (`ism-wiki`) | `@refract-org/analyzers@0.7.1`, `@refract-org/evidence-graph@0.5.6`, `@refract-org/ingestion@0.5.1`, pinned exactly and imported across `src/` | 0.7.1 / 0.5.6 / 0.5.1 (2026-11-27) | any library release |
 | `demo-data/` (monorepo) | JSONL format matching evidence-graph types | — | EvidenceEvent schema change |
 | `apps/ui` (monorepo) | `EventType` and `EvidenceEvent` imported from `packages/evidence-graph` as types only | this tree | checked on every evidence-graph change by `viewer.yml` |
 | `clients/python` (monorepo) | Wraps `@refract-org/cli` via subprocess | this tree | checked on every CLI, schema or `docs/examples` change by `python.yml` |
@@ -85,7 +87,9 @@ As documented in `schema.md`:
 
 | refract CLI | `@refract-org/evidence-graph` | `EVENT_SCHEMA_VERSION` |
 |---|---|---|
-| 0.6.1 | 0.5.4 | `"0.5.0"` |
+| 0.8.0–0.9.1 | 0.5.6 | `"0.5.0"` |
+| 0.7.0 | 0.5.5 | `"0.5.0"` |
+| 0.6.1–0.6.2 | 0.5.4 | `"0.5.0"` |
 | 0.6.0 | 0.5.3 | `"0.5.0"` |
 | 0.5.17 | 0.5.2 | `"0.5.0"` |
 | 0.5.15–0.5.16 | 0.5.1 | `"0.5.0"` |
