@@ -213,7 +213,9 @@ When consuming Refract events across different package versions, the `schemaVers
 
 | refract CLI | `@refract-org/evidence-graph` | `EVENT_SCHEMA_VERSION` | Key changes |
 |------------|------------------------------|-----------------------|-------------|
-| 0.6.1 | 0.5.4 | `"0.5.0"` | No `EventType` changes; `analyze` and `export` emit the cluster, spike and thread events; citation events name their section |
+| 0.8.0–0.9.1 | 0.5.6 | `"0.5.0"` | No `EventType` changes; editor names are removed from summary text, citation events count shortened footnotes, and from 0.9.0 `protection_changed` carries the level and a reason category as facts |
+| 0.7.0 | 0.5.5 | `"0.5.0"` | No `EventType` changes; citation events say which passage a reference supports |
+| 0.6.1–0.6.2 | 0.5.4 | `"0.5.0"` | No `EventType` changes; `analyze` and `export` emit the cluster, spike and thread events; citation events name their section |
 | 0.6.0 | 0.5.3 | `"0.5.0"` | No `EventType` changes |
 | 0.5.15–0.5.17 | 0.5.1–0.5.2 | `"0.5.0"` | No `EventType` changes; optional fields only |
 | 0.5.0–0.5.7 | 0.4.x–0.5.0 | `"0.4.0"` | `sentence_modified` event type, `FactProvenance.parameters`, `AnalyzerConfig`, `EVENT_SCHEMA_VERSION`, `CLAIM_IDENTITY_VERSION` |
